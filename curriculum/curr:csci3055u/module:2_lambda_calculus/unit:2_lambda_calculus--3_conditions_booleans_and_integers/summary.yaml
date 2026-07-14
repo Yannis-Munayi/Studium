@@ -1,0 +1,33 @@
+name: Encoding booleans, conditionals and natural numbers in the untyped λ-calculus
+oneliner: Introduce selector-based TRUE/FALSE and if-then-else; derive not/and/or
+  from conditionals; encode naturals with zero/succ, define iszero and pred; adopt
+  compact λ-notation.
+short: Show how to represent booleans as pair selectors and build conditionals and
+  boolean operators, then encode natural numbers as nested successor pairs with iszero
+  and predecessor, using concise surface syntax for definitions and application.
+long: "This unit develops practical encodings in the untyped λ-calculus for boolean\
+  \ values, conditional selection, derived boolean operators, and a simple pair-based\
+  \ encoding of natural numbers, together with convenient notational sugar for writing\
+  \ them.\n\n- Booleans and conditionals:\n  - Represent truth values by pair selectors\
+  \ (true = select_first, false = select_second).\n  - Define a conditional constructor\
+  \ cond = λe1.λe2.λc.((c e1) e2) so that cond e1 e2 true reduces to e1 and cond e1\
+  \ e2 false reduces to e2.\n  - Provide an if-then-else surface form as syntactic\
+  \ sugar for cond to make expressions clearer.\n\n- Boolean operators from conditionals:\n\
+  \  - Derive standard operators using the selector-based conditional: not = λx.((x\
+  \ false) true), and = λx.λy.((x y) false), or = λx.λy.((x true) y).\n  - Validate\
+  \ these definitions by reduction traces that reproduce truth tables.\n\n- Natural\
+  \ numbers (pair-based, Church-like style):\n  - Encode zero and successor so numbers\
+  \ are nested pairs: zero = identity; succ = λn.λs.((s false) n), producing one,\
+  \ two, etc., by repeated succ.\n  - Distinguish zero from successors via selector\
+  \ application: iszero = λn.(n select_first) yields true on zero and false on any\
+  \ succ.\n  - Define predecessor that returns zero on zero and otherwise strips one\
+  \ successor, implemented using the conditional form (pred uses iszero to select\
+  \ zero or the stored predecessor).\n\n- Notational conventions and practice:\n \
+  \ - Introduce left-associative application omission, definition shorthand (def name\
+  \ args = body) and if-then-else sugar to simplify expressions.\n  - Include worked\
+  \ examples and exercises asking for derived operators (implication, equivalence)\
+  \ and formal proofs of boolean identities to practice reasoning entirely within\
+  \ λ-abstraction and application syntax.\n\nThe unit emphasizes how a small set of\
+  \ selector-based primitives plus conditional structure suffices to express standard\
+  \ boolean logic and a workable numeral encoding, and it trains students to both\
+  \ construct these encodings and reason about them via reduction."

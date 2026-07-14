@@ -1,0 +1,819 @@
+element_id: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+level: document
+variant: default
+content:
+  summary:
+    name: Unifying Data with Sequences (Clojure Chapter 3)
+    oneliner: How Clojure exposes diverse collections as a single seq abstraction
+      and the sequence library for creation, filtering, transformation, and interop.
+    short: Introduces the seq abstraction, core seq ops (first/rest/cons/seq/next),
+      lazy and infinite sequences, sequence creation/filter/transform functions (map,
+      reduce, filter, for, take, drop, etc.), seq-able Java interop (arrays, regex,
+      files, XML), forcing evaluation (doall/dorun), and structure-specific functions
+      for lists, vectors, maps, and sets.
+    long: 'This chapter explains Clojure''s central unifying abstraction: the sequence
+      (seq). It defines the core seq capabilities (first, rest, cons, seq, next),
+      shows how all Clojure collections (lists, vectors, maps, sets), many Java collections,
+      strings, arrays, regex matches, file-system walks, and XML trees can be viewed
+      as seqs, and presents the rich sequence library of creation functions (range,
+      repeat, iterate, cycle, interleave, interpose, list/vector/hash-set/vec), filtering
+      and predicate helpers (filter, take, take-while, drop-while, split-at, some,
+      every?, not-any?, not-every?), transformation functions (map, reduce, sort/sort-by,
+      for comprehensions), and utilities for lazy/infinite sequences and forcing evaluation
+      (doall, dorun). It emphasizes immutability and laziness (allowing large or infinite
+      sequences), demonstrates practical interop use-cases (re-seq for regex, line-seq
+      and file-seq for IO, xml-seq for XML), and surveys structure-specific operations
+      (peek/pop for lists and vectors, get/assoc/subvec for vectors, keys/vals/contains?/assoc/dissoc/merge/merge-with
+      for maps, clojure.set operations and relational primitives such as select/project/join).
+      Examples show idiomatic composition of small predicates and sequence operations
+      to build utilities (e.g., clojure-loc). The chapter stresses that seq functions
+      return seqs (often lazy) and that sequence-processing idioms decouple algorithms
+      from concrete underlying data structures while structure-specific functions
+      exist for performance-sensitive cases.'
+  highlights:
+  - text: 'Explain the seq abstraction and core operations: first, rest, cons, seq,
+      next; understand that many collection types are seq-able and that seqs are immutable
+      and often lazy.'
+    concepts:
+    - concept:sequences
+    reference_id: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+  - text: Use sequence-creation functions (range, repeat, iterate, cycle, interleave,
+      interpose, list/vector/hash-set/vec) and understand how to form finite views
+      on infinite sequences with take.
+    concepts:
+    - concept:concept_forms
+    reference_id: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+  - text: 'Apply filtering and predicate utilities: filter, take-while, drop-while,
+      split-at, split-with, every?, some, not-every?, not-any? and reason about predicate
+      semantics (e.g., some returns the matching value).'
+    concepts:
+    - concept:concept_functions
+    reference_id: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+  - text: Transform sequences using map, reduce, sort/sort-by, and for comprehensions;
+      compose these to express complex data transformations without mutating state.
+    concepts:
+    - concept:concept_functions
+    - concept:concept_bindings
+    reference_id: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+  - text: 'Understand laziness and infinite sequences: most seqs are lazy, enabling
+      streaming and infinite structures; use doall/dorun to force realization when
+      side effects or full evaluation are required.'
+    concepts:
+    - concept:concept_lazy_evaluation
+    reference_id: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+  - text: 'Use Java interop with seqs: seq-able Java arrays, Collections, regex via
+      re-seq, file IO via line-seq and file-seq, and xml-seq for XML trees—treat these
+      uniformly with the sequence library.'
+    concepts:
+    - concept:concept_calling_java
+    - concept:concept_strings_and_characters
+    reference_id: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+  - text: 'Apply structure-specific functions when needed for semantics or performance:
+      peek/pop for lists and vectors, get/assoc/subvec for vectors, keys/vals/contains?/assoc/dissoc/merge/merge-with
+      for maps, and clojure.set operations (union, intersection, difference, select,
+      project, join) for relational-style data.'
+    concepts:
+    - concept:concept_maps_keywords_and_records
+    reference_id: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+  - text: 'Compose small predicates and seq functions to build utilities (example:
+      clojure-loc counts nonblank Clojure lines in a directory using file-seq, line-seq,
+      filter, with-open, and reduce).'
+    concepts:
+    - concept:concept_bindings
+    - concept:concept_namespaces
+    reference_id: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+  concepts:
+  - key: concept:sequences
+    introduced: true
+    summary:
+      name: Sequences
+      oneliner: Uniform abstraction (seq) that views many collections as logical lists.
+      short: The seq abstraction (pronounced "seek") is a logical list interface providing
+        first, rest, and cons; many Clojure and Java data structures are seq-able.
+      long: 'A seq is a logical (immutable) list abstraction in Clojure. Core operations:
+
+        - (first aseq) returns the first item or nil for empty/nil.
+
+        - (rest aseq) returns a seq of remaining items; returns an empty seq (not
+        nil) when no more items.
+
+        - (cons elem aseq) constructs a new seq by adding elem to the front.
+
+
+        The function (seq coll) returns a seq for any seq-able collection (or nil
+        for empty/nil). (next aseq) is equivalent to (seq (rest aseq)) and returns
+        nil for empty remainder. Many concrete collections (lists, vectors, maps,
+        sets, Java collections, arrays, strings, regex matches, filesystem trees,
+        IO streams, XML trees) can be viewed via the same seq abstraction, enabling
+        a single, powerful sequence library to operate uniformly across them. Seqs
+        are immutable and often lazy.'
+    note: Occurs throughout Chapter 3 as the central abstraction; examples include
+      lists, vectors, maps, sets, Java arrays, strings, file and XML traversal.
+    status: used
+  - key: concept:seq_able_collections
+    introduced: true
+    summary:
+      name: Seq-able collections
+      oneliner: Collections that can be viewed as seqs (Clojure and many Java types).
+      short: 'Definition and examples of seq-able: all Clojure collections, Java collections,
+        Java arrays, strings, regex matches, directory trees, I/O streams, XML trees.'
+      long: 'Many different collection types are "seq-able": they can be wrapped by
+        seq and processed by the sequence library. This includes Clojure built-in
+        collections (lists, vectors, maps, sets), Java Collections API types, Java
+        arrays and strings, regex match sequences (re-seq), file-system traversal
+        (file-seq), line/reader sequences (line-seq), and XML trees (xml-seq). Seq-able
+        wrappers are immutable views even if underlying data is mutable.'
+    note: Document shows numerous examples (vectors, maps, sets, Java arrays, System/getProperties,
+      strings, file lists, XML parse).
+    status: used
+  - key: concept:lazy_sequences
+    introduced: true
+    summary:
+      name: Lazy sequences
+      oneliner: Sequences whose elements are computed on demand.
+      short: 'Most Clojure sequences are lazy: elements are generated only when needed,
+        enabling representation of large or infinite sequences and delayed I/O/side-effects.'
+      long: 'Lazy sequences postpone computation of elements until they are consumed.
+        Benefits: avoid unnecessary work, represent infinite sequences (iterate, range,
+        repeat, cycle), operate on datasets larger than memory, delay I/O. Common
+        lazy producers: iterate, range, repeat (one-arg infinite), cycle, lazy-seq,
+        many seq-library functions (map, filter, etc.) return lazy sequences. Forcing
+        evaluation: doall (realize and retain elements) and dorun (realize but do
+        not retain).'
+    note: 'Examples: whole-numbers via (iterate inc 1), primes example, take/take-while
+      to limit infinite sequences, doall/dorun to force side effects.'
+    status: used
+  - key: concept:sequence_library_map_filter_reduce_sort_take_drop_etc
+    introduced: true
+    summary:
+      name: Sequence library (map, filter, reduce, sort, take, drop, etc.)
+      oneliner: Set of generic functions to create, filter, transform, and query seqs.
+      short: 'The sequence library provides functions that operate on any seq-able:
+        creators (range, repeat, iterate, cycle, interleave, interpose), filters (filter,
+        take, take-while, drop-while, split-at, split-with), predicates (every?, some,
+        not-every?, not-any?), transformations (map, reduce, sort, sort-by, for comprehensions),
+        and helpers (conj, into, seq, reverse, doall, dorun).'
+      long: 'Comprehensive set of generic, mostly-lazy functions for manipulating
+        sequences:
+
+        - Creation: range, repeat, iterate, cycle, interleave, interpose, list/vector/hash-set/hash-map,
+        vec, set.
+
+        - Filtering: filter, take, take-while, drop-while, split-at, split-with.
+
+        - Predicates: every?, some, not-every?, not-any?.
+
+        - Transformation: map (supports multiple collections), reduce, sort/sort-by
+        (optional comparator), for comprehensions (with :when and :while), reverse.
+
+        - Collection operations: conj (efficient insertion spot per type), into (bulk
+        add).
+
+        - Realization: doall, dorun for forcing evaluation.
+
+        These functions allow concise, high-level, and reusable manipulation of many
+        data sources via the seq abstraction.'
+    note: 'Used across chapter: many code examples demonstrating mapping, filtering,
+      reducing, sorting, comprehensions, and seq creation functions.'
+    status: used
+  - key: concept:core_seq_operations_first_rest_cons_next
+    introduced: true
+    summary:
+      name: 'Core seq operations: first/rest/cons/next'
+      oneliner: Primitive operations defining seq behavior and navigation.
+      short: first returns first element (or nil); rest returns seq of remainder (empty
+        seq when none); cons constructs new seq by prepending; next returns seq of
+        remainder or nil.
+      long: 'The minimal contract of ISeq (seq abstraction) exposes three core capabilities:
+
+        - (first aseq) — get first element; returns nil for empty/nil.
+
+        - (rest aseq) — get seq of remaining elements; returns empty seq when none
+        (not nil).
+
+        - (cons elem aseq) — construct a new seq with elem at the front.
+
+        Additionally, (next aseq) is like (seq (rest aseq)) but returns nil when there
+        are no remaining items (unlike rest which returns an empty seq). These primitives
+        underpin iteration and many seq functions.'
+    note: Explained early in chapter with examples on lists, vectors, maps, sets;
+      table clarifying rest/next behavior.
+    status: used
+  - key: concept:conj_and_into
+    introduced: true
+    summary:
+      name: conj and into
+      oneliner: Collection-building helpers that add elements efficiently according
+        to underlying structure.
+      short: conj adds one or more elements at an efficient insertion spot (front
+        for lists, back for vectors); into adds all items from one collection into
+        another, honoring efficient insertion semantics of the target.
+      long: 'conj and into construct new collections efficiently:
+
+        - (conj coll element & elements) — adds elements in an efficient spot for
+        the collection type (e.g., front for lists, back for vectors).
+
+        - (into to-coll from-coll) — adds all items from from-coll into to-coll with
+        target-appropriate efficiency.
+
+        Because these functions choose the efficient insertion point for the concrete
+        collection, code can be both generic and performant.'
+    note: Shown with examples demonstrating differing behavior for lists vs vectors
+      and interplay with seq printing.
+    status: used
+  - key: concept:infinite_sequences_and_iteration_iterate_repeat_cycle
+    introduced: true
+    summary:
+      name: Infinite sequences and iteration (iterate, repeat, cycle)
+      oneliner: Generators for infinite sequences and patterns for producing unbounded
+        data.
+      short: iterate applies function repeatedly to produce an infinite sequence;
+        repeat produces infinite repetition (or a finite count with two-arg form);
+        cycle repeats a finite collection forever; use take to view finite prefix.
+      long: 'iterate, repeat, and cycle are primitives to express infinite or repeating
+        sequences:
+
+        - (iterate f x) — yields x, (f x), (f (f x)), ... infinitely.
+
+        - (repeat x) or (repeat n x) — infinite or fixed-length repetition.
+
+        - (cycle coll) — repeats elements of coll infinitely.
+
+        Because these sequences are lazy, consumers use functions like take, take-while,
+        interleave, etc., to produce finite results when needed.'
+    note: 'Examples: whole-numbers via (iterate inc 1); (take 10 (cycle (range 3))).'
+    status: used
+  - key: concept:filtering_and_predicate_functions_filter_take_while_drop_while_split_with_every_some
+    introduced: true
+    summary:
+      name: Filtering and predicate functions (filter, take-while, drop-while, split-with,
+        every?, some)
+      oneliner: Functions to select or query elements of sequences based on predicates.
+      short: filter returns items satisfying pred; take-while and drop-while operate
+        while pred holds/doesn't; split-at and split-with partition sequences; every?
+        and some test predicates across sequences (some returns first non-false value).
+      long: 'Sequence filtering/primitives:
+
+        - (filter pred coll) — lazy subsequence of elements where pred is truthy.
+
+        - (take-while pred coll) / (drop-while pred coll) — take or drop prefix while
+        pred holds.
+
+        - (split-at n coll) / (split-with pred coll) — split into two collections
+        by index or predicate.
+
+        - (every? pred coll) — true if pred true for every element.
+
+        - (some pred coll) — returns first non-false/non-nil result of pred (not a
+        boolean predicate necessarily).
+
+        - (not-every? pred coll), (not-any? pred coll) — negated forms.
+
+        Careful with infinite sequences: predicates that require full traversal may
+        not terminate.'
+    note: 'Used in examples: filtering whole-numbers, vowel examples with complement
+      and set-as-function, and split/partition examples.'
+    status: used
+  - key: concept:transformations_map_reduce_sort_sort_by_reverse
+    introduced: true
+    summary:
+      name: 'Transformations: map, reduce, sort, sort-by, reverse'
+      oneliner: Common higher-order sequence transformers for projecting, aggregating,
+        and ordering data.
+      short: map applies a function over each element (supports multiple colls), reduce
+        aggregates via a binary function, sort and sort-by order elements (optional
+        comparator), reverse returns reversed sequence (seq view).
+      long: 'Transformation primitives:
+
+        - (map f coll) — lazily maps f over coll; supports multiple colls (stops at
+        shortest).
+
+        - (reduce f coll) — folds coll with binary f to produce a single value.
+
+        - (sort coll) / (sort comp coll) / (sort-by keyfn comp? coll) — return sorted
+        seqs by natural order or custom comparator / key function.
+
+        - (reverse coll) — returns a seq in reverse order.
+
+        These functions are the building blocks for many data processing pipelines.'
+    note: Examples include formatting HTML tags with map, computing sums/products
+      with reduce, and various sorts.
+    status: used
+  - key: concept:for_comprehensions
+    introduced: true
+    summary:
+      name: for (comprehensions)
+      oneliner: Sequence comprehensions for expressive generation with bindings and
+        filters.
+      short: for builds lazy sequence comprehensions with binding vectors, supports
+        :when and :while clauses, multiple bindings (nested iteration), and yields
+        expressions. More general than map/filter.
+      long: 'for is a lazy sequence comprehension macro:
+
+        (for [binding-form coll-expr filter-expr? ...] expr)
+
+        Bindings can be multiple (producing nested loops), and optional :when filters
+        and :while guards control selection and termination. Clojure iterates the
+        rightmost binding fastest. for can express map/filter-like operations and
+        cross products, and is suited for complex generation of sequences.'
+    note: 'Examples: HTML formatting, filtering even numbers from infinite sequences,
+      generating chessboard coordinates.'
+    status: used
+  - key: concept:forcing_realization_doall_and_dorun
+    introduced: true
+    summary:
+      name: 'Forcing realization: doall and dorun'
+      oneliner: Helpers to realize lazy sequences, useful when side effects are embedded.
+      short: doall walks and retains elements, returning realized sequence; dorun
+        walks but does not retain (returns nil), both forcing evaluation useful when
+        lazy seqs embed side effects.
+      long: 'Because lazy sequences defer work, side-effecting code inside seqs will
+        not run until realized. Use:
+
+        - (doall coll) — realize the sequence and return it (keeps references).
+
+        - (dorun coll) — realize for side-effects but do not keep references (returns
+        nil).
+
+        Use sparingly; they are primarily for dealing with side effects while the
+        rest of Clojure encourages purity.'
+    note: 'Example: for-comprehension printing i with println; doall/dorun used to
+      force printing.'
+    status: used
+  - key: concept:seq_ing_java_and_interop_re_seq_file_seq_line_seq_xml_seq
+    introduced: true
+    summary:
+      name: Seq-ing Java and interop (re-seq, file-seq, line-seq, xml-seq)
+      oneliner: Wrappers that expose Java/IO/XML/regex data as immutable seqs for
+        uniform processing.
+      short: re-seq makes regex matches a seq; file-seq walks directory trees; line-seq
+        produces seq of lines from a Reader; xml-seq views parsed XML as a seq of
+        nodes. These enable use of sequence library over Java/IO/XML resources.
+      long: 'Clojure provides seq-oriented adapters for common Java and IO patterns:
+
+        - (re-seq regexp string) — returns seq of regex matches (immutable view).
+
+        - (file-seq file) — returns a depth-first seq of java.io.File for recursive
+        traversal.
+
+        - (line-seq reader) — seq of lines from a java.io.Reader (use with with-open
+        to close resources).
+
+        - (xml-seq root) — view of parsed XML tree as a sequence of nodes (after clojure.xml/parse).
+
+        These adapters make complex interop tasks amenable to the same sequence processing
+        functions; note resource management (with-open) when using Readers.'
+    note: Chapter demonstrates re-seq for word matches, file-seq + reader + line-seq
+      for counting non-blank lines, xml-seq for extracting composer attributes.
+    status: used
+  - key: concept:structure_specific_functions_peek_pop_get_assoc_subvec_keys_vals_contains_merge_with_select_keys
+    introduced: true
+    summary:
+      name: Structure-specific functions (peek, pop, get, assoc, subvec, keys, vals,
+        contains?, merge-with, select-keys)
+      oneliner: APIs that target concrete collection types for performance or convenience.
+      short: 'Examples: peek/pop for lists (front) and vectors (end), get for associative
+        lookups (with optional default), assoc/dissoc for maps, subvec for efficient
+        vector slices, keys/vals for maps, contains? to test presence, merge-with
+        to combine maps with a custom combiner, select-keys to project maps.'
+      long: 'Clojure supplies functions that operate on particular concrete types
+        to provide performance or semantics not available in generic seq ops:
+
+        - Lists/Vectors: peek and pop behave differently (lists: front; vectors: end).
+        pop on empty list throws.
+
+        - Vectors: get (index, optional nil if out-of-bounds), assoc (set by index),
+        subvec (fast subvector).
+
+        - Maps: keys, vals, get (with optional default), contains? distinguishes missing
+        key vs nil value, assoc/dissoc, select-keys, merge, merge-with (combine values
+        for duplicate keys).
+
+        These functions let you take advantage of concrete-structure properties when
+        needed.'
+    note: Chapter shows many examples manipulating lists, vectors and maps, building
+      new maps with merge-with/concat to combine values, and using contains? vs get-with-default.
+    status: used
+  - key: concept:sets_and_relational_operations_union_intersection_difference_select_project_join_rename
+    introduced: true
+    summary:
+      name: Sets and relational operations (union, intersection, difference, select,
+        project, join, rename)
+      oneliner: Set-theoretic and relational-algebra-like operations available on
+        sets/maps for data-querying.
+      short: clojure.set provides union, intersection, difference, select (predicate-based),
+        plus relational primitives project, rename, join to operate on sets of maps
+        (relations). join supports key-mapping for differing key names.
+      long: 'The clojure.set namespace supplies both set-theory operations and relational
+        algebra primitives:
+
+        - union, intersection, difference, select for predicate-based selection.
+
+        - project to keep only specified keys from relation (set of maps).
+
+        - rename to change key names in a relation.
+
+        - join to combine relations on shared keys (or via a keymap) producing combined
+        maps (akin to DB joins).
+
+        These operations allow using Clojure sets as in-memory relational tables and
+        combining them with seq functions for powerful data queries.'
+    note: 'Examples: union/intersection/difference on language/beverage sets; join
+      compositions with composers and nations; project/select to emulate SQL-like
+      queries.'
+    status: used
+  - key: concept:regular_expressions_re_seq_and_re_matcher_re_find
+    introduced: true
+    summary:
+      name: Regular expressions (re-seq and re-matcher/re-find)
+      oneliner: Regex matching accessible as seqs via re-seq; lower-level mutable
+        matcher via re-matcher and re-find.
+      short: re-seq returns an immutable seq of matches for a regexp; re-matcher/re-find
+        expose java.util.regex.Matcher for imperative iteration but are mutable. Prefer
+        re-seq to integrate regex results into seq pipelines.
+      long: 'Clojure builds on java.util.regex:
+
+        - (re-seq regex string) — returns an immutable sequence of matches suitable
+        for sequence operations (map, sort, drop, etc.).
+
+        - Lower-level: (re-matcher regex string) returns a Matcher; (re-find matcher)
+        advances and returns next match but uses a mutable API and is less idiomatic.
+
+        re-seq is the preferred, seq-friendly way to work with regex matches.'
+    note: Chapter contrasts manual loop with re-matcher/re-find vs idiomatic re-seq
+      usage; demonstrates mapping and sorting over words from re-seq.
+    status: used
+  - key: concept:files_and_i_o_file_seq_line_seq_with_open_reader
+    introduced: true
+    summary:
+      name: Files and I/O (file-seq, line-seq, with-open, reader)
+      oneliner: File-system and stream utilities that produce seqs and require proper
+        resource management.
+      short: file-seq returns depth-first traversal of a directory; line-seq returns
+        seq of lines from a Reader; use clojure.java.io/reader and with-open to manage
+        resources (close readers).
+      long: 'Clojure provides IO utilities for working with file systems and streams
+        in a seq-friendly manner:
+
+        - (file-seq (java.io.File. path)) — depth-first sequence of files/directories.
+
+        - (line-seq reader) — sequence of lines from a Reader (use clojure.java.io/reader).
+
+        - (with-open [rdr (reader ...)] ...) — ensures Reader/stream is closed after
+        use.
+
+        Combine these with sequence functions (filter, map, reduce, count) to build
+        file-processing utilities (e.g., counting non-blank lines across .clj files
+        while excluding .svn directories).'
+    note: Chapter includes clojure-loc example that filters file-seq by predicates,
+      opens readers with with-open, counts non-blank lines using line-seq.
+    status: used
+  - key: concept:strings_and_characters
+    introduced: false
+    summary: null
+    note: Strings are seq-able (seq of characters); examples show (first \"Hello\"),
+      (rest \"Hello\"), and using (apply str (reverse \"hello\")).
+    status: used
+  - key: concept:calling_java
+    introduced: false
+    summary: null
+    note: 'Java interop examples: (.getBytes \"hello\"), (System/getProperties), (java.io.File.
+      \"path\"), importing java.io.File, and calling Java methods like .lastModified
+      and .getName.'
+    status: used
+  - key: concept:maps_keywords_and_records
+    introduced: false
+    summary: null
+    note: Maps as seqs of key/value pairs; keywords as functions for lookup; map operations
+      shown (get, assoc, dissoc, keys, vals, contains?, merge, merge-with, select-keys).
+    status: used
+  - key: concept:functions
+    introduced: false
+    summary: null
+    note: 'Functions used extensively: map/reduce/filter/use of anonymous functions
+      (#(...)), defn to define whole-numbers and predicates, passing predicates like
+      even? and complement.'
+    status: used
+  - key: concept:anonymous_functions
+    introduced: false
+    summary: null
+    note: 'Anonymous function shorthand (#(...)) appears in examples (e.g., #(format
+      \"<p>%s</p>\" %) and predicate lambdas in for and filter).'
+    status: used
+  topics:
+  - key: topic:sequences_seq
+    summary:
+      name: Sequences (seq)
+      oneliner: 'The central abstraction unifying many Clojure and Java collections:
+        logical lists with first/rest/cons semantics.'
+      short: Seqs are logical lists providing uniform access (first/rest/cons/next)
+        to many underlying collection types.
+      long: 'The sequence (seq) abstraction is the unifying interface that lets diverse
+        data structures
+
+        be treated as logical lists. This topic groups the core seq contract, the
+        sequence
+
+        library (creators, filters, transforms, predicates), lazy/infinite sequences,
+        and the
+
+        practical interop adapters (regex, files, IO, XML, Java collections). It emphasizes
+
+        immutability, laziness, and reuse of a single rich set of functions over many
+        data types.'
+    entities:
+    - key: definition:core_seq_operations
+      kind: definition
+      summary:
+        name: Core seq operations
+        oneliner: first, rest, cons, and next define the seq contract.
+        short: 'Defines first/rest/cons semantics: first returns the first item or
+          nil; rest returns a seq (empty seq, not nil) for no more items; cons constructs
+          a new seq with an element prepended; next behaves like (seq (rest ...))
+          returning nil when no more items.'
+        long: 'The core seq contract exposes three fundamental capabilities:
+
+          - (first aseq): returns the first element or nil for empty/nil.
+
+          - (rest aseq): returns a seq of remaining elements; returns an empty seq
+          (not nil) when exhausted.
+
+          - (cons elem aseq): constructs a new seq by prepending elem.
+
+          Additionally, (next aseq) is equivalent to (seq (rest aseq)) and returns
+          nil when there are no further items.
+
+          These operations are declared by clojure.lang.ISeq and are the base for
+          treating many structures uniformly.'
+      fact_kind: null
+      related_to:
+      - type: same_as
+        target_key: concept:core_seq_operations_first_rest_cons_next
+    - key: definition:seq_able_collections
+      kind: definition
+      summary:
+        name: Seq-able collections
+        oneliner: 'Which collections can be viewed as seqs: Clojure collections, Java
+          collections, arrays, strings, regex matches, filesystem trees, I/O streams,
+          XML.'
+        short: 'Many collection types are seq-able: all Clojure collections, Java
+          Collections API types, Java arrays and strings, regex matches (re-seq),
+          file system trees (file-seq), readers (line-seq), and parsed XML trees (xml-seq).'
+        long: 'Seq-able means a collection can be viewed through the seq abstraction.
+          Examples:
+
+          - Clojure lists, vectors, maps, sets.
+
+          - Java collections and arrays; strings (sequence of characters).
+
+          - Regex matches via re-seq (immutable seq of matches).
+
+          - File system traversal via file-seq.
+
+          - Reader lines via line-seq and clojure.java.io/reader (use with-open to
+          manage resources).
+
+          - Parsed XML via xml-seq.
+
+          Because seqs are produced lazily and are immutable wrappers, sequence functions
+          operate uniformly over these varied data sources.'
+      fact_kind: null
+      related_to:
+      - type: same_as
+        target_key: concept:seq_able_collections
+    - key: definition:sequence_library_creators_filters_transforms_predicates
+      kind: definition
+      summary:
+        name: Sequence library (creators, filters, transforms, predicates)
+        oneliner: Map, filter, reduce, sort, take, drop, for comprehensions, and creators
+          like range/iterate/repeat/cycle.
+        short: The sequence library offers creation (range, repeat, iterate, cycle,
+          interleave, interpose), filtering (filter, take, take-while, drop-while,
+          split-at, split-with), predicates (every?, some, not-every?, not-any?),
+          transformations (map, reduce, sort, sort-by, reverse), comprehensions (for),
+          and helpers (conj, into, seq, reverse, doall, dorun).
+        long: 'This library is the principal API for working with seq-able data. Highlights:
+
+          - Creators: (range start? end step?), (iterate f x) for infinite iteration,
+          (repeat x) and (repeat n x), (cycle coll), (interleave ...) and (interpose
+          sep coll).
+
+          - Filters and partitions: filter, take, take-while, drop-while, split-at,
+          split-with.
+
+          - Predicates across sequences: every?, some, not-every?, not-any?.
+
+          - Transformations: map (supports multiple collections), reduce, sort, sort-by,
+          reverse.
+
+          - Comprehensions: for with bindings and :when/:while clauses, generalizing
+          map+filter and supporting nested iteration.
+
+          - Helpers: conj and into (efficient insertion based on target collection),
+          seq to obtain a seq view, and realization helpers doall/dorun to force evaluation.
+
+          Most functions are lazy where appropriate, enabling composition over large
+          or infinite datasets.'
+      fact_kind: null
+      related_to:
+      - type: same_as
+        target_key: concept:sequence_library_map_filter_reduce_sort_take_drop_etc
+      - type: part_of
+        target_key: concept:conj_and_into
+      - type: part_of
+        target_key: concept:for_comprehensions
+    - key: definition:lazy_and_infinite_sequences
+      kind: definition
+      summary:
+        name: Lazy and infinite sequences
+        oneliner: 'Lazy realization: elements produced only when needed; enables infinite
+          sequences like iterate/repeat/cycle.'
+        short: Most sequence functions return lazy sequences; iterate creates infinite
+          sequences by repeatedly applying a function; use take to get finite prefixes.
+          Laziness defers computation and side effects.
+        long: 'Laziness is fundamental: sequences compute elements on demand. Consequences:
+
+          - You can represent very large or infinite series (e.g., whole numbers with
+          (iterate inc 1)).
+
+          - Compose lazy producers with filters/transforms without computing unused
+          elements.
+
+          - Be careful with side effects: computations do not run until realized.
+
+          Use take/take-while to safely observe prefixes of infinite sequences. Force
+          realization when required with doall (keeps the realized sequence) or dorun
+          (walks without retaining, suitable for side-effecting walks).'
+      fact_kind: null
+      related_to:
+      - type: same_as
+        target_key: concept:lazy_sequences
+      - type: related_to
+        target_key: concept:infinite_sequences_and_iteration_iterate_repeat_cycle
+      - type: related_to
+        target_key: concept:forcing_realization_doall_and_dorun
+    - key: definition:seq_ing_java_regex_files_io_and_xml_interop
+      kind: definition
+      summary:
+        name: Seq-ing Java, regex, files, IO, and XML (interop)
+        oneliner: 'Adapters that expose Java/IO/XML results as seqs: re-seq, file-seq,
+          line-seq, xml-seq.'
+        short: Use re-seq for regex matches, file-seq for directory trees, line-seq
+          with clojure.java.io/reader (+ with-open) for file lines, and xml-seq after
+          clojure.xml/parse for XML nodes to bring them into seq pipelines.
+        long: 'Clojure wraps many Java APIs to make them seq-able:
+
+          - Regular expressions: prefer (re-seq regexp string) which returns an immutable
+          seq of matches; avoid imperative re-matcher/re-find unless necessary.
+
+          - File system: (.listFiles (File. ".")) can be viewed via seq; (file-seq
+          (File. ".")) performs DFS traversal.
+
+          - I/O: (line-seq reader) yields a seq of lines; use clojure.java.io/reader
+          and with-open to ensure resources are closed.
+
+          - XML: clojure.xml/parse returns a nested map/vector tree; xml-seq returns
+          a seq of nodes for comprehension/processing.
+
+          These adapters allow reuse of the sequence library across many resource
+          types.'
+      fact_kind: null
+      related_to:
+      - type: same_as
+        target_key: concept:seq_ing_java_and_interop_re_seq_file_seq_line_seq_xml_seq
+      - type: related_to
+        target_key: concept:regular_expressions_re_seq_and_re_matcher_re_find
+      - type: related_to
+        target_key: concept:files_and_i_o_file_seq_line_seq_with_open_reader
+    - key: definition:structure_specific_functions_and_performance_minded_ops
+      kind: definition
+      summary:
+        name: Structure-specific functions and performance-minded ops
+        oneliner: APIs tailored to lists, vectors, maps, sets for efficiency and convenience
+          (peek/pop/get/assoc/subvec/keys/vals/contains?/merge-with).
+        short: 'While sequence functions are general, Clojure supplies structure-specific
+          operations: peek/pop behave differently for lists (front) vs vectors (end);
+          get/assoc/dissoc/select-keys/merge/merge-with for maps; subvec for efficient
+          vector slicing; keys/vals/contains? for map introspection; clojure.set for
+          set and relational operations.'
+        long: 'Use structure-specific functions when you want semantics or performance
+          tied to a concrete collection:
+
+          - Lists: peek returns first, pop removes first (pop throws on empty).
+
+          - Vectors: peek/pop operate on the tail; get returns by index (or nil/default);
+          assoc updates by index immutably; subvec produces efficient subvectors.
+
+          - Maps: keys, vals, get (with optional default), contains? to test presence
+          even if value is nil; assoc/dissoc to add/remove; select-keys and merge/merge-with
+          for combining maps with custom resolution.
+
+          - Sets and relational ops: clojure.set provides union, intersection, difference,
+          select (predicate), project, rename, and join (with optional keymaps) to
+          perform relational-style queries on sets of maps.
+
+          These functions complement the sequence library by offering efficient, intent-revealing
+          operations.'
+      fact_kind: null
+      related_to:
+      - type: same_as
+        target_key: concept:structure_specific_functions_peek_pop_get_assoc_subvec_keys_vals_contains_merge_with_select_keys
+      - type: related_to
+        target_key: concept:sets_and_relational_operations_union_intersection_difference_select_project_join_rename
+    - key: example:counting_nonblank_clojure_source_lines_in_a_directory_clojure_loc
+      kind: example
+      summary:
+        name: Counting nonblank Clojure source lines in a directory (clojure-loc)
+        oneliner: An example combining file-seq, filter, line-seq, with-open, reduce/for
+          to count nonblank .clj lines, excluding .svn.
+        short: Defines predicates non-blank?, non-svn?, clojure-source? and a clojure-loc
+          function that uses file-seq, for comprehension, with-open, reader, and count/filter
+          to sum nonblank lines across Clojure source files.
+        long: 'This practical example illustrates composing seq tools and interop:
+
+          - Build predicates: (non-blank? line) checks for non-space chars, (non-svn?
+          file) filters out ''.svn'' paths, (clojure-source? file) checks ".clj" suffix.
+
+          - Iterate directory tree: (file-seq base-file).
+
+          - For each matching file, open a reader with with-open, produce (line-seq
+          rdr), filter non-blank? and count lines.
+
+          - Combine results with reduce + or by returning counts from a for comprehension
+          and summing.
+
+          It demonstrates safe resource management, seq-ing files and readers, and
+          composing lazy pipelines into a concrete numeric result.'
+      fact_kind: null
+      related_to:
+      - type: depends_on
+        target_key: concept:seq_ing_java_and_interop_re_seq_file_seq_line_seq_xml_seq
+      - type: related_to
+        target_key: concept:forcing_realization_doall_and_dorun
+    - key: example:using_for_comprehensions_chessboard_and_html_wrapping_examples
+      kind: example
+      summary:
+        name: 'Using for comprehensions: chessboard and HTML wrapping examples'
+        oneliner: for used to generate chessboard coordinates and to format sequences
+          into HTML tags.
+        short: 'Examples: (for [file "ABCDEFGH" rank (range 1 9)] (format "%c%d" file
+          rank)) and (for [word ["the" "quick" "brown" "fox"]] (format "<p>%s</p>"
+          word)) showing nested iteration and simple mapping.'
+        long: 'for comprehensions generalize map and filter:
+
+          - Nested bindings produce Cartesian products in a controlled order (rightmost
+          binding iterates fastest unless order reversed).
+
+          - :when acts as a filter, :while limits continuation.
+
+          - Example uses: generate board squares in algebraic notation (file × rank)
+          and produce HTML-wrapped strings from words.
+
+          These examples show clear, declarative sequence transformations that remain
+          lazy until realized.'
+      fact_kind: null
+      related_to:
+      - type: same_as
+        target_key: concept:for_comprehensions
+      - type: related_to
+        target_key: concept:transformations_map_reduce_sort_sort_by_reverse
+    related_to:
+    - type: is_a
+      target_key: concept:sequences
+    - type: part_of
+      target_key: concept:core_seq_operations_first_rest_cons_next
+    - type: part_of
+      target_key: concept:sequence_library_map_filter_reduce_sort_take_drop_etc
+    - type: part_of
+      target_key: concept:lazy_sequences
+    - type: related_to
+      target_key: concept:seq_able_collections
+    - type: related_to
+      target_key: concept:seq_ing_java_and_interop_re_seq_file_seq_line_seq_xml_seq
+    subtopics:
+    - key: subtopic:sequence_predicates_and_filters
+      summary:
+        name: Sequence predicates and filters
+        oneliner: Predicates like every?, some and filters like filter, take-while,
+          drop-while, split-with.
+        short: Discusses testing predicates across sequences and filtering/partitioning
+          operations.
+        long: 'Covers:
+
+          - (filter pred coll) to select elements.
+
+          - (take n coll), (take-while pred coll) and (drop-while pred coll) for prefix
+          operations.
+
+          - (split-at idx coll) and (split-with pred coll) to partition into two sequences.
+
+          - Predicates: (every? pred coll) returns true iff pred true for all elements;
+          (some pred coll) returns first truthy result (not strictly boolean); not-every?
+          and not-any? convenience inverses.
+
+          Be cautious applying these to infinite sequences (may not terminate).'
+      entities: []
+      related_to:
+      - type: same_as
+        target_key: concept:filtering_and_predicate_functions_filter_take_while_drop_while_split_with_every_some
+      subtopics: []

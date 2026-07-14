@@ -1,0 +1,19 @@
+name: Turing Machines and the Limits of Computation
+oneliner: Turing machine model · machine construction and language decision/recognition
+  · decidability, reductions, and canonical undecidable problems
+short: 'Study of Turing machines as a formal model: designing machines for languages,
+  comparing expressive power with DFA/PDA, and exploring decidability, semi‑decidability,
+  and classical undecidability proofs.'
+long: This module centers on Turing machines as the fundamental formalization of computation
+  and develops both practical machine‑construction skills and deeper theoretical understanding
+  of computational limits. It introduces the formal model of Turing machines and techniques
+  for building machines that decide or recognize specific languages, situating their
+  expressive power relative to simpler models such as deterministic finite automata
+  and pushdown automata. Building on this foundation, the module treats computable
+  functions and classifications of languages as decidable or semi‑decidable, and presents
+  core proof methods—machine construction, diagonalization, and reductions—to establish
+  decidability or undecidability. Canonical undecidable problems (e.g., the Post correspondence
+  problem) are used to illustrate how unsolvability results propagate across decision
+  problems. By combining hands‑on examples of machine design with rigorous proofs
+  about what can and cannot be computed, the module equips learners to reason about
+  the capabilities and inherent limits of algorithmic computation.

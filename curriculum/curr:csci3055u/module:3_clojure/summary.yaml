@@ -1,0 +1,53 @@
+name: 'Clojure Fundamentals: Sequences, Functional Patterns, and State & Concurrency'
+oneliner: Core language forms and interop; the seq abstraction and lazy sequence idioms;
+  practical functional patterns for JVM recursion, laziness, and performance; and
+  Clojure's reference types/STM for managing state and concurrency
+short: 'An integrated, example-driven foundation in idiomatic Clojure: language essentials
+  and REPL workflow, the unifying seq library and lazy programming, pragmatic functional
+  patterns (recursion, memoization, memory-care), and the four reference types/STM
+  with practical concurrency guidance.'
+long: 'This module gives a cohesive, practical grounding in idiomatic Clojure by combining
+  four complementary areas.
+
+
+  Language essentials: the module covers Clojure''s core data/forms (numbers, strings,
+  lists, vectors, maps, sets, symbols, keywords, records, booleans, nil), reader forms
+  and macros, function and binding patterns (defn, arities, variadic functions, anonymous
+  fns, def, let, destructuring), namespaces and tooling, expression-oriented control
+  flow, Java interop, and use of metadata for docs and optimization—all taught through
+  REPL-driven, example-led comparisons between imperative and idiomatic solutions.
+
+
+  Sequences and the seq library: it emphasizes Clojure''s unifying seq abstraction—how
+  diverse collections and inputs (lists, vectors, maps/keys/vals, sets, arrays, regex
+  matches, file and XML trees) are viewed as seqs—and demonstrates creation (range,
+  iterate, repeat, cycle), core ops (first/rest/cons/seq/next), transformation and
+  aggregation (map, reduce, sort/sort-by, for), predicate/filter utilities, and structure-specific
+  operations for semantics or performance. Laziness and infinite sequences are treated
+  in depth, including when to force realization (doall/dorun) and how to compose streaming
+  pipelines and interoperate with Java/IO.
+
+
+  Practical functional patterns: guidance for writing pure, composable functions over
+  persistent immutable data, with JVM-aware recursion strategies (loop/recur, trampoline,
+  replacing recursion with laziness), common sequence idioms (partition, take/drop,
+  map/filter), memoization and caching patterns, and advice to avoid accidental retention
+  of lazy-seq heads. The unit articulates rules of thumb for choosing laziness vs
+  explicit recursion and for building memory- and performance-conscious solutions.
+
+
+  State and concurrency: a focused tour of Clojure''s model of mutable identity via
+  refs (STM), atoms, agents, and dynamic vars. It explains STM semantics (dosync,
+  alter, commute, MVCC and retries), atom/agent APIs and error/validator behaviors,
+  trade-offs between coordination and asynchrony, and practical rules for selecting
+  the right reference type. It stresses avoiding irreversible side effects in transactional
+  contexts and shows how to structure applications with a pure core plus a minimal
+  mutable layer. A worked Snake game ties these ideas together, illustrating design
+  patterns for pure logic, a small mutable state surface, background agents or refs,
+  and a UI/REPL-driven workflow.
+
+
+  Across the module the emphasis is on composition, immutability, and leveraging Clojure''s
+  sequence abstractions and concurrency primitives to build clear, correct, and performant
+  JVM applications—balancing abstraction, real-world performance, and interop needs
+  while demonstrating patterns through concrete examples and tooling-friendly workflows.'

@@ -1,0 +1,194 @@
+concepts:
+  concept:functional_programming:
+    key: concept:functional_programming
+    summary:
+      name: Functional programming
+      oneliner: Programming paradigm based on function calls and immutability.
+      short: An approach to programming where computation is expressed by composing
+        and evaluating functions; names are bound once and there is no assignment.
+      long: Functional programming is a programming paradigm in which function application
+        and function composition are the primary building blocks. Names (formal parameters)
+        are bound to values by function calls and are not reassigned; there is no
+        assignment statement or mutable variables in the pure form. Repetition is
+        achieved by recursion rather than loops, data structures are treated as whole
+        values (immutable), and functions are first-class values that can be passed
+        and returned. The paradigm highlights evaluation-order independence and a
+        close connection with the λ (lambda) calculus and recursive function theory.
+    introduced_by: chunk:gjm_lambda_book--1_introduction
+  concept:imperative_programming:
+    key: concept:imperative_programming
+    summary:
+      name: Imperative programming
+      oneliner: Programming style based on commands, mutable variables and assignment.
+      short: An approach to programming consisting of sequences of commands that change
+        program state via assignment to variables; execution order is crucial.
+      long: Imperative programming models computation as sequences of commands (statements)
+        that update mutable state. Variables (names) represent changeable associations
+        to values and assignment (<name> := <expression>) modifies those associations.
+        Control structures (loops, conditionals) describe command sequencing; execution
+        order matters because commands can alter shared state. Examples include Pascal,
+        FORTRAN and COBOL.
+    introduced_by: chunk:gjm_lambda_book--1_introduction
+  concept:calculus:
+    key: concept:calculus
+    summary:
+      name: λ calculus
+      oneliner: Minimal formal system using abstraction and application to model computation.
+      short: A simple but powerful formal system based on function abstraction ($\lambda$-abstraction)
+        and function application, used as a foundation for functional programming
+        and semantics.
+      long: The λ calculus is a formal system whose syntax and computation rules are
+        built from variable names, function abstraction ($\lambda x.\,E$) and application
+        ($E_1\,E_2$). It can encode data and control structures and serves as a universal
+        model for computation equivalent to Turing machines and recursive functions.
+        Important properties include evaluation-order independence, the Church–Rosser
+        confluence property, and its use as a basis for language design, operational
+        and denotational semantics, and implementations (e.g. via the SECD machine).
+        Representations for booleans, numbers, pairs and lists are developed from
+        the λ calculus.
+    introduced_by: chunk:gjm_lambda_book--1_introduction
+  concept:names_and_values:
+    key: concept:names_and_values
+    summary:
+      name: Names and values
+      oneliner: How names are associated with values in programs; differing rules
+        in paradigms.
+      short: Concept of using names to stand for values in programs; in imperative
+        languages names can be reassigned, while in functional languages names (formal
+        parameters) are bound once by calls and immutable.
+      long: Names (identifiers) are program-level references to values. Imperative
+        languages use variables as changeable associations between a name and successive
+        values via assignment. Functional languages introduce names only as formal
+        parameters for functions; once bound to actual parameter values they are not
+        reassigned. This distinction underpins differences in execution order sensitivity,
+        repetition mechanisms, and data-structure manipulation.
+    introduced_by: chunk:gjm_lambda_book--1_introduction
+  concept:evaluation_order:
+    key: concept:evaluation_order
+    summary:
+      name: Evaluation order
+      oneliner: Order in which expressions/commands are evaluated and its effect on
+        results.
+      short: 'The sequencing of evaluation (execution order): imperative languages
+        depend on a fixed command order, while pure functional languages are evaluation-order
+        independent (different orders yield the same result when they terminate).'
+      long: 'Evaluation order refers to the sequence in which expressions or commands
+        are evaluated. Imperative programs rely on a fixed ordering because assignments
+        change shared state. Pure functional programs, where functions cannot change
+        shared names, are evaluation-order independent: rearranging the order of independent
+        function calls does not affect final results. λ calculus has confluence properties
+        (Church–Rosser) guaranteeing that if different reduction orders terminate,
+        they produce the same normal form; some orders are more likely to terminate
+        (e.g., normal order).'
+    introduced_by: chunk:gjm_lambda_book--1_introduction
+  concept:recursion:
+    key: concept:recursion
+    summary:
+      name: Recursion
+      oneliner: Function calls that reference themselves to express repetition.
+      short: Technique for repetition in functional programming where a function calls
+        itself with updated parameters to produce iterative behaviour without assignment.
+      long: 'Recursion is the mechanism by which repetition and iterative computation
+        are expressed in functional languages: a function invokes itself with new
+        arguments to progress toward a base case. Each recursive call creates new
+        local bindings; previous activations become inaccessible until results are
+        returned. Recursive definitions correspond closely to mathematical induction
+        and primitives in recursive function theory. Recursion replaces imperative
+        loops in pure functional code (example: summing array elements via SUM(A,I,N)
+        calling SUM(A,I+1,N)).'
+    introduced_by: chunk:gjm_lambda_book--1_introduction
+  concept:data_structures_lists_vs_arrays:
+    key: concept:data_structures_lists_vs_arrays
+    summary:
+      name: Data structures (lists vs arrays)
+      oneliner: Representation and manipulation of structured values in functional
+        languages, favouring immutable lists over mutable arrays.
+      short: Functional languages favour immutable nested structures like lists; arrays
+        requiring in-place updates are awkward without assignment. Lists are recursively
+        defined and align with function recursive processing.
+      long: Because pure functional languages lack assignment, modifying parts of
+        large structures by destructive updates is not available. Instead entire structures
+        are constructed with desired changes; nested recursive data (lists, trees)
+        are natural and efficiently processed by recursive functions. Lists provide
+        a standard, uniform representation (as in LISP) for both data and code, simplifying
+        printing, I/O, and program-manipulation. Arrays and destructive updates are
+        an imperative facility and are not primary in pure functional style.
+    introduced_by: chunk:gjm_lambda_book--1_introduction
+  concept:functions_as_values_higher_order_functions:
+    key: concept:functions_as_values_higher_order_functions
+    summary:
+      name: Functions as values (higher-order functions)
+      oneliner: Functions can be passed and returned like other values, enabling higher-order
+        programming.
+      short: 'In functional languages functions are first-class: they can be created,
+        passed as actual parameters, returned as results, and stored in data structures.'
+      long: 'Higher-order functions treat functions as data: functions may construct
+        new functions, return them as results, or accept them as arguments. This enables
+        powerful abstraction mechanisms (e.g., ARITH(OP) returning an arithmetic function
+        such that ARITH(ADD)(3,4) computes 7). Many imperative languages allow passing
+        subroutines but do not treat subprograms uniformly as first-class values.'
+    introduced_by: chunk:gjm_lambda_book--1_introduction
+  concept:lisp:
+    key: concept:lisp
+    summary:
+      name: LISP
+      oneliner: An early list-processing language influenced by λ calculus and recursion.
+      short: LISP is an early high-level language based on list processing, with minimal
+        syntax, programs-as-data (code is a list), and both functional and imperative
+        features; influential in AI and functional language design.
+      long: LISP (LISt Processing) was developed by McCarthy and is based on recursive
+        functions that operate on lists of symbols and numbers. Variables are untyped,
+        programs are represented as lists (enabling program manipulation), and the
+        language mixes functional and imperative features. LISP influenced many later
+        functional languages and implementations; dialects include COMMON LISP.
+    introduced_by: chunk:gjm_lambda_book--1_introduction
+  concept:computability_theory:
+    key: concept:computability_theory
+    summary:
+      name: Computability theory
+      oneliner: Formal study of what can be computed (Turing, Church, Kleene).
+      short: Field studying formal models of computation (Turing machines, recursive
+        functions, λ calculus), their equivalence, and limits like undecidability.
+      long: Computability theory developed formalizations of computation—Turing machines,
+        Kleene's recursive functions, and Church's λ calculus—showing their equivalence
+        and providing a foundation for reasoning about algorithms and languages. It
+        addresses decidability and undecidability results (e.g., the halting problem)
+        and motivates semantic descriptions and language design. Church's thesis (informal)
+        posits that these formalizations capture all effectively computable functions.
+    introduced_by: chunk:gjm_lambda_book--1_introduction
+highlights:
+  chunk:gjm_lambda_book--1_introduction:
+  - text: Explain how functional programming treats names as single, immutable associations
+      and how this contrasts with imperative variable assignment.
+    concepts:
+    - concept:functional_programming
+    - concept:variable_assignment
+    reference_id: chunk:gjm_lambda_book--1_introduction
+  - text: Describe recursion and nested function calls as the mechanism for repetition
+      and state evolution in functional programs (replacing loops and reassignment).
+    concepts:
+    - concept:recursion
+    reference_id: chunk:gjm_lambda_book--1_introduction
+  - text: 'Understand first-class functions: functions can be constructed, returned
+      and passed as values.'
+    concepts:
+    - concept:first_class_functions
+    reference_id: chunk:gjm_lambda_book--1_introduction
+  - text: Summarise the $λ$-calculus as a minimal formal system (abstraction and application)
+      that can represent programming constructs and reason about evaluation.
+    concepts:
+    - concept:lambda_calculus
+    reference_id: chunk:gjm_lambda_book--1_introduction
+  - text: Explain evaluation-order independence, Church–Rosser confluence, and the
+      relation between evaluation order and termination/efficiency.
+    concepts:
+    - concept:evaluation_order
+    - concept:confluence_church_rosser
+    reference_id: chunk:gjm_lambda_book--1_introduction
+  - text: Relate theoretical models (Turing machines, recursive functions, $λ$-calculus)
+      to language design and semantics (operational and denotational), and survey
+      historically important functional languages.
+    concepts:
+    - concept:denotational_semantics
+    - concept:operational_semantics
+    reference_id: chunk:gjm_lambda_book--1_introduction

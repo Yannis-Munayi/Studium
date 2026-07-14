@@ -1,0 +1,923 @@
+element_id: chunk:programming_clojure_2nd_edition--5_state
+level: document
+variant: default
+content:
+  summary:
+    name: 'State and Concurrency in Clojure: Refs, Atoms, Agents, and Vars'
+    oneliner: 'How Clojure models mutable identity and time: STM refs, atoms, agents,
+      dynamic vars, and a Snake example that combines pure functions with small mutable
+      state.'
+    short: Explains Clojure's four reference types (refs, atoms, agents, vars), their
+      semantics (transactional vs synchronous vs asynchronous vs thread-local), MVCC-based
+      STM details (alter vs commute), validators, error handling, and a worked Snake
+      game demonstrating layering of pure and mutable code.
+    long: 'This chapter defines "state" as the value of an identity over time and
+      presents Clojure''s explicit reference model for mutable identity: refs (coordinated,
+      synchronous via software transactional memory), atoms (uncoordinated, synchronous),
+      agents (asynchronous, queued updates), and dynamic vars (thread-local bindings).
+      It motivates the design by contrasting concurrency and parallelism and the pitfalls
+      of lock-based mutable models. The STM implementation is described (MVCC, transaction
+      points, retries), with practical primitives: dosync, ref-set, alter, commute
+      (and when commute is appropriate), validators on refs, and trade-offs (ACI vs
+      ACID / in-memory vs durable). Atoms and their operations reset! and swap! are
+      presented for single-value updates. Agents and send/send-off, await/await-for,
+      agent-errors and clear-agent-errors show how to perform asynchronous work and
+      how to enqueue agent actions from transactions exactly once. Dynamic vars and
+      binding (plus set! for interop) show thread-local rebinding for cases such as
+      Java callback handlers, and memoize is demonstrated with dynamic rebinding to
+      alter runtime behavior. Finally, a complete Snake game example illustrates layering:
+      pure functional model (movement, collision, eating), a small mutable model built
+      from refs and transactions to coordinate snake and apple updates, and a Swing-based
+      GUI that ties it together; alternatives (atom-based single-game-state) are discussed.
+      Practical guidance: prefer alter to commute unless commutativity is guaranteed;
+      use refs when coordination is required, atoms for isolated state, agents for
+      asynchronous side effects, and vars for thread-local dynamic scope.'
+  highlights:
+  - text: 'Understand Clojure''s STM and refs: how dosync, ref-set, alter and commute
+      work, MVCC retry semantics, and when to use refs to coordinate synchronous updates.'
+    concepts:
+    - concept:persistent_data_structures
+    reference_id: chunk:programming_clojure_2nd_edition--5_state
+  - text: Know atoms for uncoordinated synchronous updates and their operations reset!
+      and swap!, and why swap! functions must be side-effect-free because they can
+      be retried.
+    concepts:
+    - concept:persistent_data_structures
+    reference_id: chunk:programming_clojure_2nd_edition--5_state
+  - text: Use agents for asynchronous, queued updates (send/send-off), how to await
+      completion (await/await-for), and how to inspect and clear agent errors.
+    concepts: []
+    reference_id: chunk:programming_clojure_2nd_edition--5_state
+  - text: Use dynamic vars and binding for thread-local state and interop with single-threaded
+      Java callback APIs; set! is for rare, controlled mutation within that thread-local
+      scope.
+    concepts:
+    - concept:vars
+    - concept:bindings
+    reference_id: chunk:programming_clojure_2nd_edition--5_state
+  - text: 'Recognize trade-offs: Clojure STM provides ACI (not durable D), commute
+      can reorder updates (must be commutative), and durable storage requires an external
+      database.'
+    concepts: []
+    reference_id: chunk:programming_clojure_2nd_edition--5_state
+  - text: 'Apply the ideas in a concrete project: structure a GUI game (Snake) into
+      a pure functional core, a small mutable reference layer (refs or an atom for
+      combined state), and a UI layer that drives updates and rendering.'
+    concepts:
+    - concept:multimethods
+    - concept:persistent_data_structures
+    reference_id: chunk:programming_clojure_2nd_edition--5_state
+  - text: 'Practical rule of thumb summary: prefer alter (refs) for coordinated updates,
+      use atoms for single-value state, use agents for asynchronous side effects,
+      and use dynamic vars sparingly for thread-local behavioral changes.'
+    concepts: []
+    reference_id: chunk:programming_clojure_2nd_edition--5_state
+  concepts:
+  - key: concept:refs_and_software_transactional_memory
+    introduced: true
+    summary:
+      name: Refs and Software Transactional Memory
+      oneliner: Coordinated, synchronous mutable references managed via in-memory
+        transactions (STM).
+      short: 'Refs are mutable reference cells that participate in Clojure''s Software
+        Transactional Memory (STM). Updates to one or more refs are made inside transactions
+        (dosync) which provide atomicity, consistency (via validators), and isolation;
+        durability is not guaranteed (ACI only). Primary update idioms: ref-set (direct
+        set), alter (apply update function to current in-transaction value), and commute
+        (commutative updates allowing reordering and better concurrency).'
+      long: 'Refs are first-class mutable reference cells in Clojure intended for
+        coordinated, synchronous updates of shared state. Refs do not expose mutation
+        directly; instead, changes occur inside STM transactions (dosync), which provide:
+
+        - Atomicity: all ref updates in a transaction appear to take effect together.
+
+        - Consistency: refs can have :validator functions that validate new states
+        and cause the transaction to abort if violated.
+
+        - Isolation: transactions observe private in-transaction copies; concurrent
+        transactions do not see partially-completed work.
+
+
+        Clojure''s STM is in-memory (no durability guarantee), so it provides ACI
+        (not full ACID). The implementation uses Multiversion Concurrency Control
+        (MVCC): each transaction gets a "point" (timestamp) and works against effectively
+        private snapshots; conflicting commits cause transactions to retry.
+
+
+        Primary ref operations:
+
+        - (ref initial-state) — create a ref.
+
+        - (dosync expr...) — start a transaction.
+
+        - (deref ref) or @ref — read current value (deref within or outside transactions).
+
+        - (ref-set ref newval) — set ref to newval (must be called inside dosync).
+
+        - (alter ref update-fn & args) — apply a function to the in-transaction value;
+        returns the new in-transaction value.
+
+        - (commute ref update-fn & args) — optimized variant for commutative updates;
+        may be reordered by STM and will not cause transaction restart on conflicts,
+        but cannot be used when ordering matters (e.g., counters requiring unique
+        sequential values).
+
+
+        Because transactions may be retried, transaction bodies should avoid side
+        effects; when side effects are needed upon successful commit, they should
+        be queued via agents from inside the transaction so the action is sent exactly
+        once if the transaction commits.'
+    note: Document uses refs for the Snake game to coordinate snake and apple updates;
+      demonstrates ref creation, deref/@, ref-set failing outside dosync, alter vs
+      ref-set, commute trade-offs, validators on refs, and interaction with agents
+      for side effects on commit.
+    status: used
+  - key: concept:atoms
+    introduced: true
+    summary:
+      name: Atoms
+      oneliner: Lightweight synchronous, uncoordinated mutable references updated
+        via functions (swap! / reset!).
+      short: Atoms provide uncoordinated, synchronous updates to a single mutable
+        location. They do not participate in STM transactions. Use reset! to set a
+        new value and swap! to apply a pure update function that may be retried. Atoms
+        support optional :validator functions.
+      long: 'Atoms are a simpler mutable reference type for when only one value needs
+        to be updated without coordination with other refs. Key points:
+
+        - (atom initial-state) creates an atom; dereference with @ or deref.
+
+        - (reset! atom newval) sets the atom immediately to newval (no transaction).
+
+        - (swap! atom f & args) applies f to the current value and sets the atom to
+        the result; swap! may retry if concurrent updates occur, so f should be free
+        of side effects.
+
+        - Atoms may take options like :validator and :meta at creation.
+
+
+        Use atoms when coordinated updates across multiple refs are not required.
+        To emulate coordination, one can store compound state (map with multiple fields)
+        in a single atom and update that map atomically with swap!.'
+    note: 'Examples: current-track stored in an atom; reset! and swap! shown; recommendation
+      to prefer refs for coordinated updates and atoms for isolated updates; demonstrates
+      modeling multiple fields (title/composer) inside one atom to update both at
+      once.'
+    status: used
+  - key: concept:agents
+    introduced: true
+    summary:
+      name: Agents
+      oneliner: Asynchronous, uncoordinated updates executed on thread pools; send/send-off
+        enqueue functions to run later.
+      short: Agents represent state that is updated asynchronously by functions queued
+        for execution. send enqueues non-blocking actions on a fixed thread pool;
+        send-off enqueues potentially blocking actions on an expanding pool. Agents
+        can carry validators and can enter an error state if actions throw; agent-errors
+        and clear-agent-errors inspect/clear errors. await and await-for let callers
+        block until actions sent from the current thread are processed.
+      long: 'Agents are designed for independent background processing of state updates:
+
+        - (agent initial-state) creates an agent; deref/@ returns current value (which
+        may lag behind due to asynchrony).
+
+        - (send agent f & args) queues a non-blocking update function to run on a
+        fixed thread pool; returns immediately with the agent.
+
+        - (send-off agent f & args) queues potentially blocking functions on a separate
+        thread pool designed for blocking tasks (e.g., I/O).
+
+        - (await & agents) and (await-for timeout-millis & agents) allow waiting for
+        actions initiated from the current thread/agent to complete.
+
+        - Agents may be created with :validator and :meta options.
+
+        - If an agent action throws, the agent enters an error state; agent-errors
+        returns the thrown exceptions; clear-agent-errors resets the agent''s error
+        state.
+
+
+        Agents integrate with STM transactions: sending to an agent from inside a
+        transaction will enqueue the action exactly once if and only if the transaction
+        successfully commits; this allows post-commit side effects to be scheduled
+        safely (but the actual agent action is not part of the transaction''s ACI
+        guarantees).'
+    note: Used in examples to perform backups when a transaction commits (send-off
+      to write file), demonstrates agent error handling and await/await-for semantics.
+    status: used
+  - key: concept:software_transactional_memory_stm
+    introduced: true
+    summary:
+      name: Software Transactional Memory (STM)
+      oneliner: An in-memory transactional system providing atomic, consistent, isolated
+        updates to refs (ACI).
+      short: Clojure's STM implements in-memory transactions for refs using MVCC.
+        Transactions are defined with dosync; Clojure guarantees atomicity, consistency
+        (via validators), and isolation, but not durability. STM retries transactions
+        when conflicts are detected.
+      long: 'Clojure''s Software Transactional Memory (STM) offers a higher-level
+        approach to coordinating concurrent state changes than traditional lock-based
+        programming. Characteristics:
+
+        - Transactions are opened with (dosync ...), and refs updated within participate
+        in the transaction.
+
+        - STM guarantees Atomicity, Consistency (via :validator functions), and Isolation
+        — together ACI. Durability (D) is not provided because STM is in-memory.
+
+        - Implementation uses Multiversion Concurrency Control (MVCC): transactions
+        take a logical "point" (timestamp) and operate on private in-transaction values
+        (cheaply provided by persistent data structures). If a transaction detects
+        a conflicting commit (another transaction committed a change to a ref it wants
+        to modify), it will retry (re-execute) unless an exception is thrown to abort.
+
+        - Because transactions may be retried, transaction bodies should avoid side
+        effects. When side effects are required on success, send/send-off to agents
+        from inside the transaction is the recommended pattern (the send is enqueued
+        only if the transaction ultimately commits).
+
+        - STM provides optimizations like commute for commutative operations to reduce
+        contention.
+
+
+        STM simplifies reasoning about concurrent coordinated updates by removing
+        explicit locks and letting the runtime manage conflicts and retries.'
+    note: Explained with examples and used as the primary coordination mechanism for
+      the Snake game's mutable model.
+    status: used
+  - key: concept:multiversion_concurrency_control_mvcc
+    introduced: true
+    summary:
+      name: Multiversion Concurrency Control (MVCC)
+      oneliner: 'STM implementation technique: transactions work on private snapshots;
+        conflicts detected at commit cause retries.'
+      short: 'Clojure''s STM uses MVCC: each transaction obtains a point (timestamp)
+        and accesses private in-transaction copies of refs; commits make writes visible
+        at a single point; conflicts detected when another transaction commits a ref
+        touched by the current transaction cause retry.'
+      long: 'MVCC is the concurrency-control strategy underpinning Clojure''s STM.
+        Key ideas:
+
+        - Each transaction operates against a snapshot associated with a logical timestamp
+        ("point"), giving it an effectively private copy of refs it reads.
+
+        - Reads and modifications within the transaction operate on these in-transaction
+        values.
+
+        - When committing, the STM checks for conflicts: if another transaction has
+        committed changes to any ref this transaction intends to modify since the
+        transaction''s snapshot, this transaction must retry.
+
+        - Using persistent immutable data structures makes creating and managing these
+        snapshots efficient (structural sharing avoids full copies).
+
+        - MVCC enables snapshot isolation semantics and allows many readers to proceed
+        without blocking writers; writers may still cause retries on conflicts.
+
+
+        This approach avoids many of the pitfalls of lock-based concurrency (deadlocks,
+        fine-grained locking complexity), but requires attention to transactional
+        semantics (no side effects, potential for retries).'
+    note: The text explains MVCC in the context of Clojure STM and why alter may cause
+      retries while commute can be reordered to avoid some restarts.
+    status: used
+  - key: concept:transactions_dosync_and_transactional_operations
+    introduced: true
+    summary:
+      name: Transactions (dosync) and transactional operations
+      oneliner: dosync opens STM transactions; modify refs inside with ref-set, alter,
+        or commute.
+      short: (dosync & exprs) defines a transaction. Use ref-set, alter, and commute
+        inside transactions to change refs. Transactions can retry on conflicts; they
+        must avoid side effects.
+      long: '(dosync ...) is the construct for creating STM transactions in Clojure.
+        Within a dosync:
+
+        - Use ref-set for unconditional assignment to a ref (ref-set requires being
+        inside a transaction).
+
+        - Use alter to apply an update function to a ref''s current in-transaction
+        value; alter is the general, ordering-respecting update primitive.
+
+        - Use commute for commutative updates where order does not matter; commute
+        allows the STM to reorder and retry-less apply commutative actions, but the
+        in-transaction view returned by commute may not reflect final committed values.
+
+        - Transactions may be retried transparently if conflicting commits occur;
+        throwing an exception out of dosync aborts without retry.
+
+        - Because of possible retries, avoid side effects inside transactions; to
+        perform side effects on successful commit, send actions to agents from inside
+        the transaction.
+
+
+        This transactional model coordinates multiple refs and preserves consistency
+        across them, making it possible to express complex state updates atomically
+        and without explicit locks.'
+    note: 'Illustrated with examples: failing ref-set outside dosync, coordinated
+      updates to track and composer, add-message with alter vs commute, and usage
+      of send-off to enqueue backup writes upon transaction commit.'
+    status: used
+  - key: concept:commute_vs_alter_commutativity_optimization
+    introduced: true
+    summary:
+      name: commute vs alter (commutativity optimization)
+      oneliner: commute allows reordering of commutative updates for higher concurrency;
+        alter preserves ordering and correctness.
+      short: alter applies an update function with transaction semantics and may cause
+        retries on conflicts; commute is optimized for commutative updates, can be
+        rerun/reordered by STM without restarting the entire transaction, and should
+        be used only when ordering doesn't matter.
+      long: 'In Clojure STM, alter and commute are both ways to update refs within
+        a transaction:
+
+        - alter ref f & args: calls f on the current in-transaction value and sets
+        the ref to the returned value. alter respects ordering and the transaction''s
+        private view; if another transaction commits a change to the same ref, the
+        transaction may be retried.
+
+        - commute ref f & args: optimized for commutative updates where the final
+        result is independent of the order of application (e.g., adding items to a
+        set or appending messages to a log where order can be relaxed). commute gives
+        the STM the freedom to reorder and to reapply the function against different
+        values without restarting the transaction. The in-transaction value seen from
+        commute is not guaranteed to be the final committed value.
+
+
+        Trade-offs:
+
+        - Prefer alter when ordering or exact intermediate values matter (counters,
+        unique ID generation).
+
+        - Use commute only when the operation is truly commutative and reordering
+        is acceptable; misuse can introduce subtle concurrency bugs.'
+    note: Document demonstrates with chat messages (commute acceptable practically)
+      and counter example (must use alter).
+    status: used
+  - key: concept:validators_on_refs_and_atoms
+    introduced: true
+    summary:
+      name: Validators on refs and atoms
+      oneliner: :validator functions enforce invariants and abort transactions/updates
+        on failure.
+      short: When creating refs or atoms you can supply a :validator function that
+        must return true for any new state; if the validator fails, the transaction/update
+        is aborted and an Invalid reference state exception is raised.
+      long: 'Both refs and atoms accept an optional :validator option at creation
+        time:
+
+        (ref initial-state :validator validate-fn)
+
+        (atom initial-state :validator validate-fn)
+
+
+        The validator is a function invoked with a candidate new state; if it returns
+        logical false, the update is rejected:
+
+        - For refs, a failing validator causes the transaction to abort and roll back.
+
+        - For atoms, reset! or swap! that produce an invalid state will throw.
+
+
+        Validators let you encode application-level invariants (e.g., message maps
+        must contain :sender and :text). They act like key constraints in database
+        transactions, helping maintain consistency.'
+    note: Used in the chat example to ensure messages have non-nil :sender and :text;
+      showed an invalid add-message raising an exception and leaving messages unchanged.
+    status: used
+  - key: concept:concurrency_and_parallelism_and_locking_pitfalls
+    introduced: true
+    summary:
+      name: Concurrency and Parallelism (and Locking pitfalls)
+      oneliner: Concurrency means multiple things happening; parallelism is doing
+        work concurrently to speed execution; naive locks lead to races, deadlocks
+        and complexity.
+      short: Concurrent programs model multiple observers/threads; parallel programs
+        divide operations for speed. Lock-based mutable models require careful selection
+        of locking granularity and are prone to race conditions and deadlocks. Clojure's
+        reference model (refs/atoms/agents/vars) provides safer alternatives to ad-hoc
+        locks.
+      long: 'The document distinguishes concurrency (modeling multiple things happening
+        at once; multiple observers of data) from parallelism (splitting work to run
+        simultaneously for performance). It lists motivations for concurrency/parallelism:
+        multicore hardware, expensive computations, blocked tasks, responsive UIs,
+        and independent operations.
+
+
+        Traditional lock-based approaches to shared mutable state are error-prone:
+
+        - Selecting where and when to lock is difficult.
+
+        - Incorrect locking can lead to race conditions (data corruption) or deadlocks
+        (system stalls).
+
+        - Defensive copying helps but has performance/complexity costs.
+
+
+        Clojure''s approach reduces the surface area of mutable state: most code is
+        functional/pure, and the limited mutable parts choose among four well-defined
+        reference models (refs, atoms, agents, vars) that have clear semantics and
+        safer composition properties than raw locks.'
+    note: Introduces motivation for Clojure reference types and argues against lock-based
+      designs; used to motivate STM and other models.
+    status: used
+  - key: concept:swap_and_reset_atom_operations
+    introduced: true
+    summary:
+      name: swap! and reset! (atom operations)
+      oneliner: swap! applies a function to an atom's current value (may retry); reset!
+        sets value immediately.
+      short: swap! updates an atom by calling a provided function on its current value
+        (and possibly retrying on contention); reset! sets an atom to a new value
+        immediately. Functions passed to swap! should be side-effect-free.
+      long: 'Atom update primitives:
+
+        - (reset! atom newval) updates the atom''s value immediately and returns newval.
+
+        - (swap! atom f & args) obtains the current value, calls (apply f current
+        & args), and attempts to atomically set the atom to the result; if another
+        thread updates the atom concurrently, swap! will retry calling f on the latest
+        value until it succeeds. Because of possible retries, f must be pure (no side
+        effects) to avoid duplicated effects.
+
+
+        These operations are synchronous from the caller''s perspective: when reset!
+        or a successful swap! returns, the atom''s value has been updated.'
+    note: Demonstrated in the music example for updating a nested map of title and
+      composer and in the Snake atom-based variant.
+    status: used
+  - key: concept:await_await_for_and_agent_error_handling
+    introduced: true
+    summary:
+      name: await / await-for and agent error handling
+      oneliner: Functions to wait for agent actions and APIs to inspect/clear agent
+        errors.
+      short: await and await-for block the caller until actions sent from the current
+        thread to agents complete (await-for has timeout). agent-errors returns exceptions
+        from failed agent actions; clear-agent-errors resets the agent to usable state.
+      long: 'Agents execute actions asynchronously on thread pools. Control and diagnostics
+        APIs include:
+
+        - (await & agents) blocks until all actions sent from the current thread (or
+        agent) to the given agents have completed; it can block indefinitely.
+
+        - (await-for timeout-ms & agents) blocks up to timeout-ms milliseconds and
+        returns nil on timeout.
+
+        - (agent-errors agent) returns a sequence of exceptions thrown during agent
+        actions, if any.
+
+        - (clear-agent-errors agent) clears the agent''s error state, allowing further
+        actions and queries.
+
+
+        Agents enter an error state when an action throws; dereferencing an agent
+        with errors will throw. These APIs let you detect and recover from agent-side
+        failures and coordinate synchronous waits when necessary.'
+    note: 'Shown in the counter agent example: sending an invalid update leads to
+      agent-errors and requires clear-agent-errors to recover; await/await-for semantics
+      are explained w.r.t. REPL races.'
+    status: used
+  - key: concept:persistent_data_structures
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:structural_sharing
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:vars
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:bindings
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:memoization
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  topics:
+  - key: topic:state_and_identity_in_clojure
+    summary:
+      name: State and Identity in Clojure
+      oneliner: Overview of Clojure's models for mutable identity and how they fit
+        with immutable values.
+      short: Clojure separates identity (mutable reference) from value (immutable).
+        Provides refs, atoms, agents, and vars to manage different state/update semantics.
+      long: 'This topic summarizes the chapter''s central theme: most data in Clojure
+        are immutable values, and mutable "identity" is represented explicitly with
+        a small set of reference types. The chapter motivates the separation (values
+        vs identities), discusses concurrency/parallelism issues with mutable state,
+        and introduces the four reference models (refs, atoms, agents, vars) and when
+        to use each. It also presents a worked example (a Snake game) that mixes a
+        functional model with minimal mutable state.'
+    entities:
+    - key: definition:value_vs_identity
+      kind: definition
+      summary:
+        name: Value vs Identity
+        oneliner: 'Distinction: values are immutable persistent data; identities are
+          references to values that change over time.'
+        short: Values = immutable; identities = mutable references to values (explicit
+          in Clojure).
+        long: 'A value is an immutable, persistent data structure. An identity is
+          the notion of "the same conceptual entity over time" whose current value
+          can change. Clojure separates these: nearly everything is a value; identities
+          are explicit via refs, atoms, agents, or vars. Updates to identities do
+          not destroy previous values — old values remain accessible.'
+      fact_kind: null
+      related_to:
+      - type: related_to
+        target_key: concept:vars
+    related_to:
+    - type: depends_on
+      target_key: concept:concurrency_and_parallelism_and_locking_pitfalls
+    subtopics:
+    - key: subtopic:concurrency_and_parallelism_motivation
+      summary:
+        name: Concurrency and Parallelism Motivation
+        oneliner: Why concurrency/parallelism matter and the pitfalls of lock-based
+          mutable models.
+        short: Hardware trends and application needs motivate concurrency; lock-based
+          approaches are error-prone (races, deadlocks).
+        long: Concurrent programs model multiple observers or happening-together activities;
+          parallel programs break work into concurrent pieces for speed. Reasons include
+          multicore hardware, responsiveness, and independent tasks. The chapter explains
+          why lock-based mutable models complicate reasoning and lead to common errors
+          (race conditions, deadlocks), motivating Clojure's explicit reference models
+          that minimize ad-hoc locking.
+      entities:
+      - key: other:locking_pitfalls_motivation
+        kind: other
+        summary:
+          name: Locking pitfalls (motivation)
+          oneliner: Locking complexity motivates alternative designs like STM and
+            immutable values.
+          short: Choosing what/where to lock is hard; mistakes cause corruption or
+            deadlock.
+          long: The text uses analogies (bank ledger, guards) to explain locking and
+            defensive copying. It emphasizes the implementation-level difficulties
+            of locks and motivates using functional code plus a small, explicit mutable
+            layer to minimize these problems.
+        fact_kind: null
+        related_to:
+        - type: related_to
+          target_key: concept:concurrency_and_parallelism_and_locking_pitfalls
+      related_to:
+      - type: same_as
+        target_key: concept:concurrency_and_parallelism_and_locking_pitfalls
+      subtopics: []
+    - key: subtopic:software_transactional_memory_stm_and_refs
+      summary:
+        name: Software Transactional Memory (STM) and Refs
+        oneliner: 'Refs + STM: coordinated, synchronous updates via dosync; MVCC implementation;
+          primitives ref-set, alter, commute; validators.'
+        short: Refs are mutable reference cells participating in STM (dosync) implemented
+          with MVCC. Use alter/ref-set/commute and supply :validator for consistency
+          checks.
+        long: 'Refs are reference cells that must be updated inside transactions (dosync).
+          STM guarantees atomicity, consistency (validators), and isolation (ACI without
+          durability). Implementation uses MVCC: each transaction has a point (timestamp)
+          and works with in-transaction copies; conflicts cause retries. Primary operations:
+
+          - ref-set: direct set (inside dosync).
+
+          - alter: apply an update function to the current in-transaction value; preferred
+          for non-commutative updates.
+
+          - commute: optimized for commutative updates; STM can reorder/re-run commute
+          calls without retrying the whole transaction.
+
+          Validators (provided when creating refs) enforce invariants and abort transactions
+          when violated.'
+      entities:
+      - key: fact:transactional_properties_aci
+        kind: fact
+        summary:
+          name: Transactional properties (ACI)
+          oneliner: STM provides atomicity, consistency (via validators), and isolation;
+            not durable.
+          short: Clojure STM provides ACI (no D/durability).
+          long: 'Like database transactions, Clojure''s STM guarantees:
+
+            - Atomic updates across multiple refs within a dosync.
+
+            - Consistency via :validator functions attached to refs.
+
+            - Isolation: running transactions don''t see partially completed changes
+            from other transactions.
+
+            Because Clojure''s STM is in-memory, it does not guarantee durability;
+            using a database is required for durable transactions.'
+        fact_kind: fact
+        related_to:
+        - type: depends_on
+          target_key: concept:refs_and_software_transactional_memory
+        - type: depends_on
+          target_key: concept:software_transactional_memory_stm
+      - key: example:chat_messages_example_alter_vs_commute
+        kind: example
+        summary:
+          name: Chat messages example (alter vs commute)
+          oneliner: Using a ref of a message list and updating it with alter or commute.
+          short: add-message uses (dosync (alter messages conj msg)); commute variant
+            shows trade-offs in reordering.
+          long: 'A ref messages holds a list of Message records. To add a message:
+
+            - Safe: (dosync (alter messages conj msg)) — alter reads and updates in
+            one transactional step.
+
+            - Optimized: (dosync (commute messages conj msg)) — commute allows reordering
+            and retry avoidance; use only when ordering doesn''t matter (e.g., acceptable
+            for chat because external latencies already reorder messages).
+
+            The example shows why alter is the default and commute is a specialized
+            optimization.'
+        fact_kind: null
+        related_to:
+        - type: depends_on
+          target_key: concept:refs_and_software_transactional_memory
+        - type: depends_on
+          target_key: concept:commute_vs_alter_commutativity_optimization
+      related_to:
+      - type: same_as
+        target_key: concept:refs_and_software_transactional_memory
+      - type: related_to
+        target_key: concept:software_transactional_memory_stm
+      - type: related_to
+        target_key: concept:multiversion_concurrency_control_mvcc
+      - type: related_to
+        target_key: concept:transactions_dosync_and_transactional_operations
+      - type: related_to
+        target_key: concept:commute_vs_alter_commutativity_optimization
+      - type: related_to
+        target_key: concept:validators_on_refs_and_atoms
+      subtopics: []
+    - key: subtopic:atoms_uncoordinated_synchronous_updates
+      summary:
+        name: 'Atoms: Uncoordinated Synchronous Updates'
+        oneliner: Atoms manage single-location synchronous updates without transactions;
+          use reset! and swap!.
+        short: Atoms are for uncoordinated updates to a single value; swap! applies
+          a function (may retry), reset! sets directly; validators allowed.
+        long: 'Atoms provide a lightweight mutable reference for a single value and
+          do not participate in STM. Key operations:
+
+          - reset!: set an atom to a new value immediately.
+
+          - swap!: apply a function to the current value and set the result; may be
+          retried on contention, so the function should be side-effect-free.
+
+          Atoms accept :validator like refs.
+
+          If you need to coordinate updates across multiple values, use refs; otherwise
+          atoms are simpler and sufficient.'
+      entities:
+      - key: example:current_track_as_an_atom
+        kind: example
+        summary:
+          name: Current-track as an atom
+          oneliner: Store {:title :composer} map in an atom and update with swap!
+            assoc to change only :title.
+          short: (def current-track (atom {:title \"...\" :composer \"...\"})) then
+            (swap! current-track assoc :title \"...\")
+          long: Shows modeling multiple related pieces (title and composer) inside
+            a single atom map so updates to both fields can be effected together with
+            reset! or updated safely with swap!/assoc for modifying only one key without
+            needing coordinated refs.
+        fact_kind: null
+        related_to:
+        - type: depends_on
+          target_key: concept:atoms
+        - type: depends_on
+          target_key: concept:swap_and_reset_atom_operations
+      related_to:
+      - type: same_as
+        target_key: concept:atoms
+      - type: related_to
+        target_key: concept:swap_and_reset_atom_operations
+      - type: related_to
+        target_key: concept:validators_on_refs_and_atoms
+      subtopics: []
+    - key: subtopic:agents_asynchronous_updates_and_side_effects
+      summary:
+        name: 'Agents: Asynchronous Updates and Side Effects'
+        oneliner: Agents run update functions asynchronously on thread pools; use
+          send/send-off, await/await-for, and handle agent errors.
+        short: Agents queue functions to update state asynchronously. Use send for
+          non-blocking tasks, send-off for potentially blocking ones; inspect errors
+          with agent-errors and reset with clear-agent-errors.
+        long: 'Agents represent state updated by actions executed later on a thread
+          pool. Key ideas:
+
+          - send enqueues a nonblocking action on a fixed pool.
+
+          - send-off enqueues potentially blocking actions on an expanding pool.
+
+          - deref/@ reads current value; send returns immediately (does not return
+          new value).
+
+          - await/await-for block current thread until actions sent from the current
+          thread are complete (await-for supports timeout).
+
+          - Agents can accept validators and can become errored if an action throws;
+          use agent-errors to inspect and clear-agent-errors to recover.
+
+          Agents can be used in conjunction with transactions: sends made within a
+          dosync are guaranteed to be sent exactly once if the transaction commits
+          — useful for side effects that should occur only when a transaction succeeds
+          (e.g., file backups), but those side effects are not part of the transaction''s
+          atomic/durable guarantees.'
+      entities:
+      - key: example:backup_agent_sent_within_transaction
+        kind: example
+        summary:
+          name: Backup agent sent within transaction
+          oneliner: Use (send-off backup-agent (fn [filename] (spit filename snapshot)
+            filename)) inside dosync to enqueue durable side-effect on transaction
+            success.
+          short: Inside a transaction, compute snapshot (commute) then send-off an
+            agent to write it to disk; agent action runs after transaction commits.
+          long: 'Demonstrates pattern: inside dosync use commute to get a snapshot
+            and (send-off backup-agent ...) to write to disk. The agent action is
+            enqueued exactly once on successful commit. But the write itself is not
+            protected by STM (no durability guarantee); power loss after commit and
+            before agent write can lose the backup.'
+        fact_kind: null
+        related_to:
+        - type: depends_on
+          target_key: concept:agents
+        - type: related_to
+          target_key: concept:commute_vs_alter_commutativity_optimization
+        - type: related_to
+          target_key: concept:transactions_dosync_and_transactional_operations
+      related_to:
+      - type: same_as
+        target_key: concept:agents
+      - type: related_to
+        target_key: concept:await_await_for_and_agent_error_handling
+      subtopics: []
+    - key: subtopic:vars_and_dynamic_binding
+      summary:
+        name: Vars and Dynamic Binding
+        oneliner: Vars provide root bindings and optionally per-thread dynamic rebinding
+          via binding; set! for thread-local mutation in interop cases.
+        short: def/defn create vars with root bindings; ^:dynamic vars can be rebound
+          per-thread with binding. set! is available for thread-local mutation in
+          specific interop use (e.g., SAX handlers).
+        long: Vars (created by def/defn) have a root binding visible to all threads.
+          Vars marked ^:dynamic can be thread-locally rebound using binding, which
+          creates dynamic scope visible to callees on that thread only. This enables
+          "action at a distance" (e.g., temporarily swapping implementations such
+          as memoized functions), but it breaks referential transparency and should
+          be used sparingly (mainly for interop with single-threaded callback APIs).
+          set! mutates thread-local vars and is used rarely (e.g., SAX ContentHandler
+          internals).
+      entities:
+      - key: example:dynamic_rebinding_of_a_slow_function_for_memoization
+        kind: example
+        summary:
+          name: Dynamic rebinding of a slow function for memoization
+          oneliner: Temporarily bind slow-double to (memoize slow-double) so callers
+            see faster behavior without changing callers' code.
+          short: (binding [slow-double (memoize slow-double)] (calls-slow-double))
+          long: Shows using binding to alter the behavior of existing code by rebinding
+            a dynamic var to a memoized version of a function. Useful for testing
+            or performance tweaks but demonstrates action-at-a-distance risks.
+        fact_kind: null
+        related_to:
+        - type: depends_on
+          target_key: concept:vars
+        - type: related_to
+          target_key: concept:memoization
+      related_to:
+      - type: same_as
+        target_key: concept:vars
+      - type: related_to
+        target_key: concept:bindings
+      - type: related_to
+        target_key: concept:memoization
+      subtopics: []
+    - key: subtopic:unified_update_model
+      summary:
+        name: Unified Update Model
+        oneliner: 'Refs, atoms, and agents share a unified update model: applying
+          functions to previous state; ancillary ops reflect semantic differences.'
+        short: 'Common pattern: update by applying a function to prior state. Refs:
+          alter/commute/ref-set; Atoms: swap!/reset!; Agents: send/send-off.'
+        long: 'Clojure presents a unified conceptual model: update a reference by
+          supplying a function that computes the new value from the old. Differences
+          are mainly operational: refs support coordinated transactions and commute
+          optimizations; atoms update synchronously on the caller''s thread; agents
+          apply updates asynchronously on thread pools (send vs send-off). This model
+          helps reason about state changes consistently across reference types.'
+      entities:
+      - key: table:update_primitives_summary
+        kind: table
+        summary:
+          name: Update primitives summary
+          oneliner: Tabular summary of update functions per reference type.
+          short: 'Ref: alter/commute/ref-set; Atom: swap!/reset!; Agent: send/send-off.'
+          long: 'Summary:
+
+            - Ref: alter (function application), commute (commutative function, reorderable),
+            ref-set (simple setter inside dosync).
+
+            - Atom: swap! (function application, may retry), reset! (simple setter).
+
+            - Agent: send (nonblocking update), send-off (for blocking operations).
+
+            This table emphasizes the semantic differences that determine which model
+            to choose.'
+        fact_kind: null
+        related_to:
+        - type: related_to
+          target_key: concept:swap_and_reset_atom_operations
+        - type: related_to
+          target_key: concept:commute_vs_alter_commutativity_optimization
+      related_to:
+      - type: related_to
+        target_key: concept:refs_and_software_transactional_memory
+      - type: related_to
+        target_key: concept:atoms
+      - type: related_to
+        target_key: concept:agents
+      subtopics: []
+    - key: subtopic:example_snake_game_putting_it_together
+      summary:
+        name: 'Example: Snake Game (Putting it together)'
+        oneliner: 'Small application demonstrating layering: pure functional model
+          + small mutable layer (refs or atom) + Swing UI.'
+        short: Functional pure model for game logic; refs (or atom alternative) for
+          mutable state; Swing GUI and timer/keyboard input tie it together.
+        long: 'The Snake example divides the program into:
+
+          1. Functional model: pure functions for points, move, turn, win?/lose?/eats?
+          etc.
+
+          2. Mutable model: minimal refs (snake and apple) updated inside dosync with
+          alter/ref-set/update-positions; an atom-based variant is also presented
+          where the entire game state is a single atom and updated with swap!.
+
+          3. GUI: Swing JPanel via proxy, Timer triggers actionPerformed to call update-positions
+          and repaint; key events update direction.
+
+          The example illustrates choosing refs when coordinated updates (snake+apple)
+          are required, or an atom when bundling state into one value removes that
+          need.'
+      entities:
+      - key: example:mutable_model_with_refs_reset_game_update_positions_update_direction
+        kind: example
+        summary:
+          name: 'Mutable model with refs: reset-game / update-positions / update-direction'
+          oneliner: reset-game uses dosync/ref-set; update-positions checks eats?
+            and uses alter move :grow; update-direction uses dosync alter turn.
+          short: Three small transactional functions implement the mutable core of
+            the game.
+          long: 'reset-game: (dosync (ref-set apple (create-apple)) (ref-set snake
+            (create-snake)))
+
+            update-direction: (when newdir (dosync (alter snake turn newdir)))
+
+            update-positions: (dosync (if (eats? @snake @apple) (do (ref-set apple
+            (create-apple)) (alter snake move :grow)) (alter snake move)))
+
+            These keep mutable logic localized and coordinated via STM.'
+        fact_kind: null
+        related_to:
+        - type: depends_on
+          target_key: concept:transactions_dosync_and_transactional_operations
+        - type: depends_on
+          target_key: concept:refs_and_software_transactional_memory
+      - key: example:atom_based_alternative
+        kind: example
+        summary:
+          name: Atom-based alternative
+          oneliner: Combine snake and apple into one game map stored in an atom and
+            update with swap!.
+          short: Single-atom model removes need for coordination across multiple refs.
+          long: An alternative implementation uses a single atom game with keys :snake
+            and :apple. update-positions becomes a pure function returning a new game
+            map; GUI uses (swap! game update-positions). This demonstrates that packaging
+            related state into one atomic location can simplify concurrency needs.
+        fact_kind: null
+        related_to:
+        - type: depends_on
+          target_key: concept:atoms
+        - type: related_to
+          target_key: concept:swap_and_reset_atom_operations
+      related_to:
+      - type: depends_on
+        target_key: concept:refs_and_software_transactional_memory
+      - type: related_to
+        target_key: concept:atoms
+      - type: related_to
+        target_key: concept:agents
+      subtopics: []

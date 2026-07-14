@@ -1,0 +1,917 @@
+element_id: chunk:gjm_lambda_book--5_types
+level: document
+variant: default
+content:
+  summary:
+    name: Types and Typed Representations in a Functional Language
+    oneliner: Introduction of types, typed object representations, typed booleans/numbers/characters,
+      typed operations, IF notation, infix operators, and case/structure matching
+      in a simple functional language
+    short: 'Describes adding types to a minimal functional notation: representing
+      typed values as type/value pairs, error handling for type errors, typed booleans,
+      numbers and characters, typed conditionals, and convenient notations (infix,
+      IF...THEN...ELSE, case matching).'
+    long: 'This chapter develops a practical approach to adding types to a simple
+      functional language built from functions (λ-abstractions and applications).
+      It motivates types by showing the problems of untyped function application,
+      then gives a representation of typed objects as type/value pairs, with numeric
+      codes used for types and accessors to extract type and value. It introduces
+      an error type and a canonical ERROR object and prescribes that operations must
+      return typed error objects on type mismatches. Using the pair representation
+      the chapter constructs typed booleans, numbers and characters, together with
+      typed operations: NOT, AND, typed conditional COND/IF (which returns a typed
+      boolean or BOOL_ERROR), numeric constructors (MAKE_NUMB, SUCC, PRED), arithmetic
+      (+, *, / with zero-divisor handling), and character operations (CHAR, ORD, CHAR_LESS,
+      CHAR_EQUAL) by mapping characters to numeric values (ASCII). It explains the
+      performance problems of repetitive dynamic type checks and contrasts dynamic
+      (run-time) checking with static (compile-time) typing, noting that static checking
+      can eliminate redundant checks. Finally, the chapter extends notation to allow
+      bracketed infix operators and concise case definitions / structure matching
+      for booleans and numbers (e.g., def NOT TRUE = FALSE, rec POWER X 0 = 1), and
+      summarizes the role of types, typed representations, error handling and the
+      new notations. Throughout the approach untyped primitives are used only to define
+      basic typed functions; subsequent programming should use the typed interfaces
+      to avoid violating checks.'
+  highlights:
+  - text: Explain why untyped function application can produce meaningless but well-formed
+      functions and motivate the need for types to constrain operations to meaningful
+      combinations.
+    concepts:
+    - concept:calculus
+    - concept:functional_programming
+    reference_id: chunk:gjm_lambda_book--5_types
+  - text: Represent typed values as explicit type/value pairs, and provide constructors
+      and selectors (make_obj, type, value) for manipulating them.
+    concepts:
+    - concept:names_and_values
+    - concept:functions_as_values_higher_order_functions
+    reference_id: chunk:gjm_lambda_book--5_types
+  - text: Introduce an error type and canonical ERROR objects; specify that operations
+      return typed error objects on type mismatches and show how iserror detects them.
+    concepts:
+    - concept:types_and_values
+    reference_id: chunk:gjm_lambda_book--5_types
+  - text: Define a typed boolean type (bool_type), typed booleans TRUE/FALSE, typed
+      operations NOT and AND, and a typed conditional COND/IF that enforces boolean-typed
+      conditions.
+    concepts:
+    - concept:functional_programming
+    reference_id: chunk:gjm_lambda_book--5_types
+  - text: Define a typed numeric type (numb_type) and numeric constructors (MAKE_NUMB,
+      0, SUCC), typed numeric predicates (ISNUMB, ISZERO) and arithmetic (+, *, /)
+      that return NUMB_ERROR on invalid inputs or zero division.
+    concepts:
+    - concept:recursion
+    - concept:functional_programming
+    reference_id: chunk:gjm_lambda_book--5_types
+  - text: Represent characters as a char_type whose values are mapped to untyped numeric
+      ASCII codes; provide CHAR and ORD conversions and character comparisons implemented
+      via numeric comparison.
+    concepts:
+    - concept:data_structures_lists_vs_arrays
+    reference_id: chunk:gjm_lambda_book--5_types
+  - text: Show the cost of repetitive dynamic type checks (many nested IF/ISNUMB checks)
+      and contrast dynamic (run-time) checking with static (compile-time) typing to
+      avoid redundant checks.
+    concepts:
+    - concept:evaluation_order
+    - concept:computability_theory
+    reference_id: chunk:gjm_lambda_book--5_types
+  - text: 'Introduce syntactic conveniences: bracketed infix operators for binary
+      functions, and case definitions / structure matching (e.g. def NOT TRUE = FALSE,
+      rec POWER X 0 = 1) for clearer pattern-based definitions.'
+    concepts:
+    - concept:calculus
+    reference_id: chunk:gjm_lambda_book--5_types
+  concepts:
+  - key: concept:functional_programming
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:calculus
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:recursion
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:evaluation_order
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:names_and_values
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:lisp
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:types
+    introduced: true
+    summary:
+      name: Types
+      oneliner: Classification of program values into categories that restrict valid
+        operations and enable static or dynamic checking.
+      short: Types specify classes of objects (e.g. booleans, numbers, characters)
+        and the operations valid on them; they can be introduced to ensure meaningful
+        argument use and to allow either dynamic or static checking.
+      long: 'A type is presented as a specification of a class of objects together
+        with the operations defined on them. The document explains types both extensionally
+        (by listing values, e.g. TRUE/FALSE for booleans) and inductively/constructively
+        (e.g. numbers: 0 and SUCC N). Types are used to:
+
+        - control use of operations so only meaningful combinations occur;
+
+        - define predicates and operations by case (exhaustive enumeration) or constructive
+        recursion.
+
+        The chapter contrasts weakly typed systems (runtime object tags, variables
+        untyped) and strongly typed systems (variables declared with types), and distinguishes
+        dynamic (runtime) checking from static (compile-time) checking. It also shows
+        how typed functions can be layered on top of untyped lambda-style representations
+        by encoding typed objects and performing explicit checks.'
+    note: Central topic of the document; motivates representing typed objects atop
+      untyped functions and describes both dynamic and static checking.
+    status: used
+  - key: concept:type_checking
+    introduced: true
+    summary:
+      name: Type checking
+      oneliner: Mechanisms and trade-offs for verifying that program operands match
+        expected types, either at run time (dynamic) or before execution (static).
+      short: Describes dynamic (per-operation runtime checks leading to error objects)
+        versus static (symbolic/compile-time) checking, and the performance cost of
+        repetitive runtime checks in pure typed function compositions.
+      long: The document explains dynamic type checking implemented by each typed
+        operation testing its arguments' types at runtime and returning error objects
+        on mismatch. It highlights the inefficiency of repetitive runtime checks in
+        layered typed definitions (many nested IF/ISNUMB/ISZERO checks during recursion)
+        and contrasts this with static type checking where consistency is validated
+        before execution, eliminating redundant runtime checks. Examples show how
+        an outer check can guard an auxiliary recursive routine to avoid repeated
+        checks, but also note that symbolic/static checking is needed to be confident
+        in large programs.
+    note: Discussed in sections 5.10–5.11 with examples (ADD, ADD1) showing repetitive
+      runtime checks and the motivation for static checking.
+    status: used
+  - key: concept:typed_objects_type_value_pairs
+    introduced: true
+    summary:
+      name: Typed objects (type/value pairs)
+      oneliner: Representation of typed values as pairs whose first component encodes
+        the type and second the untyped value.
+      short: 'Defines make_obj, type and value selectors, and istype to encode typed
+        objects as functions/pairs: make_obj type value = λs.(s type value); type
+        obj = obj select_first; value obj = obj select_second.'
+      long: 'The document presents an encoding of typed objects on top of an untyped
+        lambda-style core by representing each object as a type/value pair. The constructor
+        is:
+
+        make_obj type value = λs.(s type value)
+
+        Selectors:
+
+        type obj = obj select_first
+
+        value obj = obj select_second
+
+        A type tester is implemented numerically via:
+
+        istype t obj = equal (type obj) t
+
+        This representation is used uniformly for booleans, numbers, characters and
+        errors, enabling typed operations to extract untyped values, perform underlying
+        (untyped) computation, and wrap results back into typed objects.'
+    note: Provides the basic encoding used throughout the chapter for booleans, numbers,
+      characters and errors; examples show expansion of constructors and selectors.
+    status: used
+  - key: concept:error_objects
+    introduced: true
+    summary:
+      name: Error objects
+      oneliner: Typed error values returned on type mismatches; encoded as objects
+        of an error_type.
+      short: Introduces an error_type (zero), a MAKE_ERROR constructor, a canonical
+        ERROR object and conventions that operations return typed error objects (of
+        the expected result type) when arguments are of incorrect types.
+      long: 'The chapter defines a dedicated error type and constructors so that type
+        errors are represented as first-class objects. Definitions:
+
+        def error_type = zero
+
+        def MAKE_ERROR = make_obj error_type
+
+        def ERROR = MAKE_ERROR error_type
+
+        An operation receiving an argument of the wrong type returns an error object
+        corresponding to the expected result type (e.g. NUMB_ERROR, BOOL_ERROR, CHAR_ERROR),
+        allowing errors to propagate as typed values and be detected by iserror tests.
+        The text traces example expansions showing how ERROR has type error_type and
+        value error_type.'
+    note: Used to signal type mismatches consistently across typed operations; examples
+      include NUMB_ERROR, BOOL_ERROR, CHAR_ERROR.
+    status: used
+  - key: concept:boolean_type
+    introduced: true
+    summary:
+      name: Boolean type
+      oneliner: Typed booleans constructed and tested via the bool_type tag and MAKE_BOOL
+        wrapper, with typed NOT, AND, IF and helpers.
+      short: Defines bool_type, MAKE_BOOL, TRUE, FALSE, isbool/ISBOOL, BOOL_ERROR
+        and typed boolean operators (NOT, AND) that check argument types, extract
+        untyped boolean values, perform untyped boolean ops, and rewrap results.
+      long: 'Booleans are encoded with a dedicated type tag:
+
+        def bool_type = one
+
+        def MAKE_BOOL = make_obj bool_type
+
+        def TRUE = MAKE_BOOL true
+
+        def FALSE = MAKE_BOOL false
+
+        Type test:
+
+        def isbool = istype bool_type
+
+        Typed operations follow the pattern: check isbool on args, extract with value,
+        apply untyped operation (not, and), and wrap result with MAKE_BOOL; otherwise
+        return BOOL_ERROR. A typed conditional COND/IF is provided which returns BOOL_ERROR
+        if the condition is not a boolean. The document also shows how higher-level
+        boolean ops can be expressed using IF and ISBOOL to avoid explicit checks
+        in every operator.'
+    note: Section 5.6–5.7; includes worked example AND TRUE FALSE showing the expansion
+      through type checks and value extraction.
+    status: used
+  - key: concept:typed_conditional_if_then_else
+    introduced: true
+    summary:
+      name: Typed conditional (IF ... THEN ... ELSE ...)
+      oneliner: A conditional that checks that its condition is a typed boolean and
+        returns a typed boolean or BOOL_ERROR.
+      short: Defines COND E1 E2 C which verifies that C is a boolean (isbool C), branches
+        on its untyped value, and otherwise returns BOOL_ERROR; IF ... THEN ... ELSE
+        ... is syntactic sugar for this COND form.
+      long: "The typed conditional is defined to integrate type checking with control\
+        \ flow:\ndef COND E1 E2 C =\n  if isbool C\n  then if value C then E1 else\
+        \ E2\n  else BOOL_ERROR\nThe notation:\nIF <condition> THEN <expr1> ELSE <expr2>\n\
+        is introduced as syntactic sugar for:\nCOND <expr1> <expr2> <condition>\n\
+        The document also defines ISERROR and ISBOOL as typed boolean wrappers around\
+        \ the untyped iserror and isbool predicates to be usable directly within IF\
+        \ expressions."
+    note: Used to ensure condition expressions are typed booleans; discussed in 5.7.
+    status: used
+  - key: concept:number_type
+    introduced: true
+    summary:
+      name: Number type
+      oneliner: Typed natural numbers represented with a numb_type tag and untyped
+        Peano-like values as payloads; typed arithmetic wraps untyped operations.
+      short: Defines numb_type, MAKE_NUMB, NUMB_ERROR, isnumb/ISNUMB, typed constructors
+        for 0, SUCC, PRED, ISZERO, and typed arithmetic (+, *, /, EQUAL) that check
+        arguments and operate on underlying untyped numeric values.
+      long: 'Numbers are encoded similarly to booleans:
+
+        def numb_type = two
+
+        def MAKE_NUMB = make_obj numb_type
+
+        def NUMB_ERROR = MAKE_ERROR numb_type
+
+        def isnumb = istype numb_type
+
+        def ISNUMB N = MAKE_BOOL (isnumb N)
+
+        0 and successors:
+
+        def 0 = MAKE_NUMB zero
+
+        def SUCC N = if isnumb N then MAKE_NUMB (succ (value N)) else NUMB_ERROR
+
+        Predicates and operations (PRED, ISZERO, +, *, /, EQUAL) are implemented by
+        first testing argument types (both_numbs), extracting untyped numeric payloads
+        (value X), invoking untyped arithmetic primitives (add, mult, div1, equal),
+        and wrapping results back into typed numbers or typed booleans as appropriate,
+        returning NUMB_ERROR on type failures. Example expansions show SUCC 0 -> MAKE_NUMB
+        one -> typed 1.'
+    note: Sections 5.8–5.9; highlights returning NUMB_ERROR for non-number or invalid
+      cases (e.g., division by zero).
+    status: used
+  - key: concept:character_type
+    introduced: true
+    summary:
+      name: Character type
+      oneliner: Characters encoded as typed objects whose payloads are untyped numeric
+        codes (ASCII), enabling ordering and conversion to/from numbers.
+      short: Defines char_type, MAKE_CHAR, CHAR_ERROR, ischar/ISCHAR, concrete character
+        constructors mapping characters to numeric code values (e.g. 'A' -> sixty_five),
+        and typed operations CHAR_LESS, ORD, CHAR and CHAR_EQUAL built atop numeric
+        comparisons.
+      long: 'Characters are introduced as a new type:
+
+        def char_type = four
+
+        def MAKE_CHAR = make_obj char_type
+
+        def CHAR_ERROR = MAKE_ERROR char_type
+
+        def ischar = istype char_type
+
+        Characters are represented by mapping to untyped numeric ASCII codes stored
+        as the object''s payload, e.g.:
+
+        def ''0'' = MAKE_CHAR forty_eight
+
+        def ''A'' = MAKE_CHAR sixty_five
+
+        Conversions and comparisons leverage numeric operations:
+
+        def ORD C = if ischar C then MAKE_NUMB (value C) else CHAR_ERROR
+
+        def CHAR N = if isnumb N then MAKE_CHAR (value N) else NUMB_ERROR
+
+        def CHAR_LESS C1 C2 = if and (ischar C1) (ischar C2) then MAKE_BOOL (less
+        (value C1) (value C2)) else CHAR_ERROR
+
+        This allows lexicographic ordering and equality checks via underlying numeric
+        order/equality.'
+    note: Sections 5.9–5.10; shows example ORD 'A' -> numeric 65 and CHAR 98 -> 'b'.
+    status: used
+  - key: concept:infix_operators
+    introduced: true
+    summary:
+      name: Infix operators
+      oneliner: Notation allowing binary operator names to appear between their operands,
+        as syntactic sugar for prefix application.
+      short: Introduces strict infix notation where <expr1> + <expr2> is syntax for
+        + <expr1> <expr2>; no precedence or implicit associativity is assumed (explicit
+        bracketing required).
+      long: 'The document permits using certain binary function names as infix operators
+        for readability:
+
+        <expression1> AND <expression2>  == AND <expression1> <expression2>
+
+        <expression1> + <expression2>    == + <expression1> <expression2>
+
+        etc.
+
+        To avoid ambiguity, operator precedence and associativity are not introduced:
+        nested infix expressions require explicit parentheses, e.g. 7 + (8 * 9). This
+        is offered as syntactic sugar only, not changing semantics beyond notation.'
+    note: Section 5.12; emphasizes strict bracketing and lack of precedence rules
+      in this notation.
+    status: used
+  - key: concept:case_definitions_and_structure_matching
+    introduced: true
+    summary:
+      name: Case definitions and structure matching
+      oneliner: Syntax and semantics for multi-case function definitions that match
+        argument structure or constructors to select the appropriate case.
+      short: Introduces pattern-style definitions (e.g., def NOT TRUE = FALSE or rec
+        POWER X 0 = 1) where arguments are matched against patterns from first to
+        last; when matched, bound variables are instantiated to substructures. This
+        simplifies writing definitions for booleans and inductive types like numbers.
+      long: 'The chapter extends the function definition notation to allow multiple
+        cases written as patterns, enabling direct structure matching:
+
+        def <name> <pattern1> = <expr1>
+
+        or <name> <pattern2> = <expr2>
+
+        ...
+
+        Patterns may include constants (TRUE, FALSE, 0) and constructors (SUCC), so
+        numeric recursion can be written as:
+
+        rec POWER X 0 = 1
+
+        or POWER X (SUCC Y) = X * (POWER X Y)
+
+        Matching is attempted in order; on a successful match the corresponding case''s
+        variables are bound to matched substructures for use in the right-hand side.
+        This replaces many explicit IF/ISZERO branching constructs and selects cases
+        by structure rather than by nested conditionals.'
+    note: Section 5.13; describes rewriting IF-based definitions into pattern/case-based
+      definitions and notes ordering matters.
+    status: used
+  - key: concept:static_and_dynamic_typing
+    introduced: true
+    summary:
+      name: Static and dynamic typing
+      oneliner: Comparison of runtime (dynamic) type checking versus compile-time
+        (static) type checking and their implications for runtime overhead and program
+        safety.
+      short: Explains dynamic checking (every operation ensures its operands' types
+        at runtime) and static checking (symbolic/type-system verification before
+        execution), notes trade-offs in efficiency and error detection, and situates
+        their analogies to languages like LISP/Prolog (dynamic) and ML/Pascal (static).
+      long: 'The document contrasts two approaches:
+
+        - Dynamic typing/checking: operations test operand types at runtime and return
+        typed error objects on mismatch. This is analogous to LISP/Prolog and leads
+        to repetitive checks and runtime overhead.
+
+        - Static typing/checking: types are part of the language syntax or inferred;
+        consistency is verified before execution (as in ML, Pascal), removing the
+        need for runtime checks and improving performance and early error detection.
+
+        Examples (e.g., repeated ISNUMB/ISZERO checks in ADD/ADD1) illustrate the
+        inefficiency of purely dynamic checking in deeply recursive or composed operations.
+        The discussion motivates when and why static checking is preferable and mentions
+        languages that provide type inference or declarations.'
+    note: Sections 5.10–5.11 summarize the trade-offs and show examples demonstrating
+      repetitive runtime checks.
+    status: used
+  topics:
+  - key: topic:types_overview_and_motivation
+    summary:
+      name: 'Types: overview and motivation'
+      oneliner: Why types are introduced and their role in programming
+      short: 'Discusses motivations for types: restrict meaningless combinations,
+        enable error detection, and contrast typeless vs typed languages.'
+      long: 'This topic explains the role of types in programming: types classify
+        objects and the operations valid on them, preventing meaningless applications
+        (e.g. applying arithmetic to booleans). It contrasts untyped/weakly typed
+        practice (machine code, BCPL, early C, LISP/Prolog) with strongly typed languages
+        (ML, Pascal), and frames types as a mechanism for dynamic or static enforcement
+        to catch mismatches during execution or at compile time.'
+    entities:
+    - key: definition:type_informal
+      kind: definition
+      summary:
+        name: Type (informal)
+        oneliner: Type specifies a class of objects and their valid operations.
+        short: 'Informal definition: types list values or give constructors and define
+          operations (case or constructive definitions).'
+        long: 'A type is presented either by enumerating base values (e.g. booleans
+          TRUE/FALSE) or by specifying constructors from base values (e.g. natural
+          numbers 0, SUCC N). Operations on types can be given exhaustively by cases
+          (for base values) or constructively with base and inductive clauses (for
+          numbers: PRED, ADD, MULT, etc.). The text uses these forms to motivate typed
+          definitions built atop untyped primitives.'
+      fact_kind: null
+      related_to:
+      - type: depends_on
+        target_key: concept:case_definitions_and_structure_matching
+    - key: other:motivating_examples_and_warnings
+      kind: other
+      summary:
+        name: Motivating examples and warnings
+        oneliner: Examples showing misinterpretation of untyped functions and portability/bugs
+          from typeless manipulation.
+        short: Shows e.g., iszero true producing a meaningful but semantically wrong
+          function; warns about low-level hacks and portability issues (endianness)
+          in typeless code.
+        long: Examples demonstrate that untyped functions can yield well-formed results
+          that are semantically inappropriate (e.g., treating a boolean as a numeral).
+          The discussion highlights portability and correctness hazards when operations
+          assume underlying representations (byte-order, pointer arithmetic), arguing
+          for disciplined typing to avoid such errors.
+      fact_kind: null
+      related_to:
+      - type: related_to
+        target_key: concept:types
+    related_to:
+    - type: is_a
+      target_key: concept:types
+    - type: related_to
+      target_key: concept:static_and_dynamic_typing
+    - type: related_to
+      target_key: concept:functional_programming
+    subtopics:
+    - key: subtopic:typed_objects_as_type_value_pairs
+      summary:
+        name: Typed objects as type/value pairs
+        oneliner: Encoding typed values as pairs with selectors and tests.
+        short: Defines make_obj, selectors type/value, and istype to test types; basis
+          for all typed constructs in the document.
+        long: 'Typed objects are represented by functions encoding a type/value pair:
+          make_obj type value = λs.(s type value). Selectors extract the type and
+          value: type obj = obj select_first and value obj = obj select_second. The
+          primitive istype t obj = equal (type obj) t is used to test membership.
+          This representation underpins construction of typed booleans, numbers, characters,
+          and error handling.'
+      entities:
+      - key: definition:make_obj_type_value_istype
+        kind: definition
+        summary:
+          name: make_obj / type / value / istype
+          oneliner: Construct and inspect typed objects.
+          short: 'Core constructors and selectors: make_obj, type, value, and istype.'
+          long: 'make_obj type value = λs.(s type value)
+
+            type obj = obj select_first
+
+            value obj = obj select_second
+
+            istype t obj = equal (type obj) t
+
+
+            These primitives encode typed objects as pairs and enable subsequent typed
+            operations by pattern-testing the stored type number.'
+        fact_kind: null
+        related_to:
+        - type: same_as
+          target_key: concept:typed_objects_type_value_pairs
+      related_to:
+      - type: is_a
+        target_key: concept:typed_objects_type_value_pairs
+      subtopics: []
+    - key: subtopic:error_objects_and_error_handling
+      summary:
+        name: Error objects and error handling
+        oneliner: Representation and use of error objects when type checks fail.
+        short: Defines error_type, MAKE_ERROR, ERROR canonical object, and convention
+          that wrong-type operands cause operations to return typed error objects.
+        long: Errors are represented as typed objects of a designated error_type (zero).
+          MAKE_ERROR builds an error object for a target type; ERROR is a canonical
+          universal error (MAKE_ERROR error_type). When an operation detects a type
+          mismatch it returns a typed error object (usually with the expected type
+          as the error value). iserror is defined as istype error_type to test for
+          error objects. Operations propagate or produce error objects rather than
+          raising exceptions.
+      entities:
+      - key: definition:make_error_error_iserror
+        kind: definition
+        summary:
+          name: MAKE_ERROR, ERROR, iserror
+          oneliner: Construct and test error objects.
+          short: Defines canonical error construction and predicate.
+          long: 'def error_type = zero
+
+            def MAKE_ERROR = make_obj error_type
+
+            def ERROR = MAKE_ERROR error_type   ; canonical error object with type
+            and value both error_type
+
+            def iserror = istype error_type
+
+
+            These let typed operations return structured error objects and detect
+            propagated errors.'
+        fact_kind: null
+        related_to:
+        - type: same_as
+          target_key: concept:error_objects
+      related_to:
+      - type: is_a
+        target_key: concept:error_objects
+      subtopics: []
+    - key: subtopic:boolean_type_and_typed_boolean_operations
+      summary:
+        name: Boolean type and typed boolean operations
+        oneliner: Typed booleans built from untyped booleans with type checks for
+          operations.
+        short: Defines bool_type, MAKE_BOOL, TRUE/FALSE, isbool/ISBOOL, BOOL_ERROR,
+          and typed NOT/AND that check input types and wrap results.
+        long: 'Boolean type is encoded as a numeric type tag (bool_type = one). MAKE_BOOL
+          prefixes values with the tag to produce typed booleans (TRUE, FALSE). Type
+          testers (isbool, ISBOOL) check the tag. Boolean operations (NOT, AND) implement
+          the pattern: check argument types, extract untyped boolean values, perform
+          untyped operation (not/and), and rewrap with MAKE_BOOL; otherwise return
+          BOOL_ERROR. Examples show evaluation of AND TRUE FALSE yielding FALSE via
+          unwrapping and rewrapping.'
+      entities:
+      - key: definition:make_bool_true_false_isbool_bool_error
+        kind: definition
+        summary:
+          name: MAKE_BOOL, TRUE, FALSE, isbool, BOOL_ERROR
+          oneliner: Construction and test utilities for typed booleans.
+          short: Core boolean constructors and error object.
+          long: 'def bool_type = one
+
+            def MAKE_BOOL = make_obj bool_type
+
+            def TRUE = MAKE_BOOL true
+
+            def FALSE = MAKE_BOOL false
+
+            def isbool = istype bool_type
+
+            def BOOL_ERROR = MAKE_ERROR bool_type
+
+
+            These provide the basis for typed boolean logic.'
+        fact_kind: null
+        related_to:
+        - type: same_as
+          target_key: concept:boolean_type
+      - key: definition:typed_not_and_and
+        kind: definition
+        summary:
+          name: Typed NOT and AND
+          oneliner: NOT and AND that validate argument types and return BOOL_ERROR
+            if invalid.
+          short: Implementations check isbool on arguments, then operate on value
+            X / Y and wrap results with MAKE_BOOL.
+          long: "def NOT X =\n  if isbool X\n  then MAKE_BOOL (not (value X))\n  else\
+            \ BOOL_ERROR\n\ndef AND X Y =\n  if and (isbool X) (isbool Y)\n  then\
+            \ MAKE_BOOL (and (value X) (value Y))\n  else BOOL_ERROR\n\nThese follow\
+            \ the standard pattern: type-check inputs, perform untyped op, rewrap\
+            \ or return typed error."
+        fact_kind: null
+        related_to:
+        - type: depends_on
+          target_key: concept:boolean_type
+      related_to:
+      - type: is_a
+        target_key: concept:boolean_type
+      - type: related_to
+        target_key: concept:typed_conditional_if_then_else
+      subtopics: []
+    - key: subtopic:typed_conditional_if_then_else
+      summary:
+        name: 'Typed conditional: IF ... THEN ... ELSE ...'
+        oneliner: Typed conditional defined to accept typed booleans or return BOOL_ERROR.
+        short: Defines COND E1 E2 C which checks that C is a boolean, branches on
+          value C, else returns BOOL_ERROR; IF syntax is sugar for COND.
+        long: Typed conditional COND E1 E2 C checks isbool C; if true, it inspects
+          the untyped boolean value (value C) and selects E1 or E2; otherwise returns
+          BOOL_ERROR. The syntactic form IF <condition> THEN <expr1> ELSE <expr2>
+          is introduced as sugar for COND <expr1> <expr2> <condition>. Also ISERROR
+          and ISBOOL are provided to create typed boolean results (MAKE_BOOL wrapped
+          predicates).
+      entities:
+      - key: definition:cond_and_if_sugar
+        kind: definition
+        summary:
+          name: COND and IF sugar
+          oneliner: COND implements typed branching; IF ... THEN ... ELSE ... is syntactic
+            sugar.
+          short: COND checks condition is a typed boolean and returns BOOL_ERROR for
+            non-boolean conditions; IF is notation for COND.
+          long: "def COND E1 E2 C =\n  if isbool C\n  then if value C then E1 else\
+            \ E2\n  else BOOL_ERROR\n\nNotation:\nIF <condition>\nTHEN <expression1>\n\
+            ELSE <expression2>\nis equivalent to:\nCOND <expression1> <expression2>\
+            \ <condition>"
+        fact_kind: null
+        related_to:
+        - type: same_as
+          target_key: concept:typed_conditional_if_then_else
+      related_to:
+      - type: is_a
+        target_key: concept:typed_conditional_if_then_else
+      - type: depends_on
+        target_key: concept:boolean_type
+      subtopics: []
+    - key: subtopic:number_type_and_typed_arithmetic
+      summary:
+        name: Number type and typed arithmetic
+        oneliner: Representation of numbers as typed values and typed arithmetic operations.
+        short: Defines numb_type, MAKE_NUMB, NUMB_ERROR, isnumb/ISNUMB, typed 0/SUCC/PRED/ISZERO
+          and binary ops +, *, /, EQUAL that validate arguments and operate on untyped
+          numeric values.
+        long: Numbers are represented with a numeric type tag (numb_type = two) and
+          MAKE_NUMB wraps untyped numeric values. Typed zero and successors are defined
+          (0 = MAKE_NUMB zero, SUCC checks isnumb and wraps succ (value N)). Predicates
+          ISZERO and ISNUMB are provided. Binary arithmetic operations perform both-argument
+          checks (both_numbs) and either return NUMB_ERROR or construct a MAKE_NUMB
+          result based on underlying untyped operations (add, mult, div1, equal).
+          Division additionally checks for zero divisors and returns NUMB_ERROR if
+          dividing by zero.
+      entities:
+      - key: definition:make_numb_0_succ_pred_iszero
+        kind: definition
+        summary:
+          name: MAKE_NUMB, 0, SUCC, PRED, ISZERO
+          oneliner: Constructors and basic numeric operations with typed checks.
+          short: Typed numeric constructors and basic unary operations that return
+            NUMB_ERROR on bad input.
+          long: "def numb_type = two\ndef MAKE_NUMB = make_obj numb_type\ndef NUMB_ERROR\
+            \ = MAKE_ERROR numb_type\ndef isnumb = istype numb_type\ndef ISNUMB N\
+            \ = MAKE_BOOL (isnumb N)\n\n0 = MAKE_NUMB zero\n\ndef SUCC N =\n  if isnumb\
+            \ N then MAKE_NUMB (succ (value N)) else NUMB_ERROR\n\ndef PRED N =\n\
+            \  if isnumb N\n  then if iszero (value N) then NUMB_ERROR else MAKE_NUMB\
+            \ ((value N) select_second)\n  else NUMB_ERROR\n\ndef ISZERO N =\n  if\
+            \ isnumb N then MAKE_BOOL (iszero (value N)) else NUMB_ERROR"
+        fact_kind: null
+        related_to:
+        - type: same_as
+          target_key: concept:number_type
+      - key: definition:typed_binary_arithmetic_equal
+        kind: definition
+        summary:
+          name: 'Typed binary arithmetic: +, *, /, EQUAL'
+          oneliner: Binary ops that check both arguments are numbers and wrap results
+            or return NUMB_ERROR.
+          short: Use both_numbs X Y = and (isnumb X) (isnumb Y) then operate on value
+            X and value Y via untyped add/mult/div1/equal.
+          long: "def both_numbs X Y = and (isnumb X) (isnumb Y)\n\ndef + X Y =\n \
+            \ if both_numbs X Y then MAKE_NUMB (add (value X) (value Y)) else NUMB_ERROR\n\
+            \ndef * X Y =\n  if both_numbs X Y then MAKE_NUMB (mult (value X) (value\
+            \ Y)) else NUMB_ERROR\n\ndef / X Y =\n  if both_numbs X Y\n  then if iszero\
+            \ (value Y) then NUMB_ERROR else MAKE_NUMB (div1 (value X) (value Y))\n\
+            \  else NUMB_ERROR\n\ndef EQUAL X Y =\n  if both_numbs X Y then MAKE_BOOL\
+            \ (equal (value X) (value Y)) else NUMB_ERROR"
+        fact_kind: null
+        related_to:
+        - type: depends_on
+          target_key: concept:number_type
+        - type: depends_on
+          target_key: concept:typed_objects_type_value_pairs
+      related_to:
+      - type: is_a
+        target_key: concept:number_type
+      subtopics: []
+    - key: subtopic:character_type_and_operations
+      summary:
+        name: Character type and operations
+        oneliner: Characters encoded as typed objects whose values are numeric codes;
+          comparisons and conversions use numeric ops.
+        short: Defines char_type, MAKE_CHAR, ischar/ISCHAR, CHAR_ERROR, concrete character
+          constructors (mapping to ASCII numeric values), and typed CHAR_LESS, ORD,
+          CHAR, CHAR_EQUAL built on numeric comparisons.
+        long: 'Characters are given a type tag char_type and constructed with MAKE_CHAR,
+          with the stored untyped value being the numeric code (ASCII). Concrete characters
+          like ''0'', ''A'', ''a'' are defined by MAKE_CHAR applied to numeric constants
+          (forty_eight, sixty_five, ninety_seven, etc.). Typed character ordering
+          and conversions reuse numeric operations: CHAR_LESS checks both are ischar
+          and then MAKE_BOOL (less (value C1) (value C2)), ORD maps a character to
+          a MAKE_NUMB of its numeric code, CHAR converts a numeric MAKE_NUMB to a
+          MAKE_CHAR if the argument is a number.'
+      entities:
+      - key: definition:make_char_char_error_ischar_ord_char
+        kind: definition
+        summary:
+          name: MAKE_CHAR, CHAR_ERROR, ischar, ORD, CHAR
+          oneliner: Character constructors, tests, and conversions to/from numeric
+            codes.
+          short: Maps characters to numeric underlying values (ASCII) and defines
+            typed ops using numeric functions.
+          long: "def char_type = four\ndef MAKE_CHAR = make_obj char_type\ndef CHAR_ERROR\
+            \ = MAKE_ERROR char_type\ndef ischar = istype char_type\ndef ISCHAR C\
+            \ = MAKE_BOOL (ischar C)\n\ndef CHAR_LESS C1 C2 =\n  if and (ischar C1)\
+            \ (ischar C2)\n  then MAKE_BOOL (less (value C1) (value C2))\n  else CHAR_ERROR\n\
+            \ndef ORD C =\n  if ischar C then MAKE_NUMB (value C) else CHAR_ERROR\n\
+            \ndef CHAR N =\n  if isnumb N then MAKE_CHAR (value N) else NUMB_ERROR\n\
+            \ndef CHAR_EQUAL C1 C2 =\n  if and (ischar C1) (ischar C2) then MAKE_BOOL\
+            \ (equal (value C1) (value C2)) else CHAR_ERROR"
+        fact_kind: null
+        related_to:
+        - type: same_as
+          target_key: concept:character_type
+      related_to:
+      - type: is_a
+        target_key: concept:character_type
+      - type: depends_on
+        target_key: concept:number_type
+      subtopics: []
+    - key: subtopic:repetitive_type_checking_and_efficiency_concerns
+      summary:
+        name: Repetitive type checking and efficiency concerns
+        oneliner: Dynamic checking at each operation causes repeated type tests; this
+          motivates static checking.
+        short: Illustrates exponential/redundant checks in recursive computations
+          (e.g., ADD 1 2) when using fully dynamic typed operations and explains that
+          outer checks plus untyped inner recursions improve efficiency.
+        long: 'The document analyses how composing fully typed operations leads to
+          repetitive runtime checks: outer argument checks, then checking results
+          of helper predicates (ISNUMB, ISZERO), and repeated checks at each recursive
+          step. Example ADD 1 2 shows many redundant checks due to naive normal-order
+          evaluation and typed wrappers. This motivates separating argument validation
+          (performed once) from inner recursive untyped computation to improve performance,
+          and leads to the discussion of static type checking as an alternative.'
+      entities:
+      - key: other:pattern_outer_check_inner_unchecked_recursion
+        kind: other
+        summary:
+          name: 'Pattern: outer check, inner unchecked recursion'
+          oneliner: Use a non-recursive outer function for checks and an auxiliary
+            recursive function that operates on untyped values.
+          short: Shows ADD X Y implemented as an outer IF that checks ISNUMB then
+            calls recursive ADD1 without repeated checks.
+          long: 'Example design: def ADD X Y = IF AND (ISNUMB X) (ISNUMB Y) THEN ADD1
+            X Y ELSE NUMB_ERROR
+
+            rec ADD1 X Y = IF ISZERO Y THEN X ELSE ADD1 (SUCC X) (PRED Y)
+
+            This separates validation from the recursive loop, avoiding repeated type
+            tests inside ADD1.'
+        fact_kind: null
+        related_to:
+        - type: depends_on
+          target_key: concept:number_type
+        - type: related_to
+          target_key: concept:type_checking
+      related_to:
+      - type: related_to
+        target_key: concept:type_checking
+      - type: depends_on
+        target_key: concept:static_and_dynamic_typing
+      subtopics: []
+    - key: subtopic:static_vs_dynamic_typing
+      summary:
+        name: Static vs dynamic typing
+        oneliner: Discusses trade-offs between runtime checks and compile-time type
+          systems.
+        short: Dynamic checking (LISP/Prolog style) performs checks at runtime for
+          each operation; static checking (ML/Pascal) verifies consistency before
+          execution, avoiding runtime checks.
+        long: 'The text explains analogies: using untyped functions is like programming
+          in typeless environments; using fully typed functions with runtime checks
+          parallels dynamic languages. Static typing pushes checks to symbolic/compile-time
+          where many runtime checks become redundant, improving efficiency and early
+          error detection. It notes that practical languages mix approaches (ML and
+          Miranda infer types; C/Pascal use explicit declarations) and that theory
+          of types underlies these systems.'
+      entities:
+      - key: fact:trade_off_between_early_detection_and_runtime_cost
+        kind: fact
+        summary:
+          name: Trade-off between early detection and runtime cost
+          oneliner: Static checking reduces runtime checks but requires symbolic type
+            reasoning; dynamic checking defers validation to runtime and can be simpler
+            to implement.
+          short: Static typing can eliminate repetitive runtime checks; dynamic typing
+            simplifies programming model at cost of runtime overhead and later error
+            discovery.
+          long: Static typing enables the compiler/interpreter to verify type consistency
+            before execution so many runtime checks are unnecessary; dynamic typing
+            performs checks during execution, which can catch errors originating from
+            dynamic composition but incurs repeated checks and potential runtime error
+            objects. The chapter positions the implemented typed wrappers as an example
+            of dynamic checking and motivates static approaches for efficiency.
+        fact_kind: fact
+        related_to:
+        - type: same_as
+          target_key: concept:static_and_dynamic_typing
+      related_to:
+      - type: is_a
+        target_key: concept:static_and_dynamic_typing
+      - type: related_to
+        target_key: concept:type_checking
+      subtopics: []
+    - key: subtopic:notation_extensions_infix_operators_and_case_definitions_structure_matching
+      summary:
+        name: 'Notation extensions: infix operators and case definitions/structure
+          matching'
+        oneliner: Introduce infix notation and pattern/case-based definitions for
+          succinctness.
+        short: Defines strict infix notation with no precedence and introduces case
+          definitions/pattern matching for booleans and inductive types like numbers.
+        long: The document extends notation to allow infix use of binary operator
+          names (e.g., <expr1> + <expr2> is + <expr1> <expr2>) while requiring explicit
+          bracketing (no precedence assumed). It also adds case definitions and structure
+          matching so functions can be written with pattern cases (def NOT TRUE =
+          FALSE; PRED 0 = 0; PRED (SUCC X) = X). Matching proceeds top-to-bottom and
+          binds pattern variables to substructures when a case matches, simplifying
+          definitions over inductive types.
+      entities:
+      - key: notation:infix_operator_notation
+        kind: notation
+        summary:
+          name: Infix operator notation
+          oneliner: Operator between operands rewrites to prefix form with explicit
+            bracketing requirement.
+          short: No precedence; <a> + <b> == + <a> <b>.
+          long: 'Introduces infix usage for logical and arithmetic names:
+
+            <expression1> AND <expression2> == AND <expression1> <expression2>
+
+            <expression1> + <expression2> == + <expression1> <expression2>
+
+            Strict bracketing is required for nested infix expressions to avoid ambiguity.'
+        fact_kind: null
+        related_to:
+        - type: same_as
+          target_key: concept:infix_operators
+      - key: definition:case_definitions_and_structure_matching
+        kind: definition
+        summary:
+          name: Case definitions and structure matching
+          oneliner: Pattern-based multiple-case function definitions with matching
+            order semantics.
+          short: Allows defining functions by cases (constants, constructors, bound
+            variables); matching binds variables and selects the first successful
+            case.
+          long: 'Functions may be given as multiple cases, e.g.:
+
+            def NAME PAT1 = EXPR1
+
+            or PAT2 = EXPR2
+
+            ...
+
+            When applied, the argument is matched against patterns in order; on success,
+            pattern variables are bound to substructures and the corresponding expression
+            is evaluated. This is used to write succinct boolean and numeric cases
+            (NOT TRUE = FALSE, PRED 0 = 0, PRED (SUCC X) = X). For recursive cases
+            rec is used in place of def.'
+        fact_kind: null
+        related_to:
+        - type: same_as
+          target_key: concept:case_definitions_and_structure_matching
+      related_to:
+      - type: is_a
+        target_key: concept:infix_operators
+      - type: is_a
+        target_key: concept:case_definitions_and_structure_matching
+      subtopics: []

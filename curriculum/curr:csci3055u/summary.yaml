@@ -1,0 +1,35 @@
+name: 'Foundations and Practice of Functional Computation: Computability, Lambda Calculus,
+  and Clojure'
+oneliner: 'Computability theory (Turing machines, decidability), the λ‑calculus and
+  functional programming foundations, and practical Clojure: seqs, idioms, state and
+  concurrency'
+short: An integrated curriculum connecting formal models of computation and the λ‑calculus
+  with practical functional programming on the JVM—teaching what can be computed,
+  how to express computation functionally, and how to build real systems idiomatically
+  in Clojure.
+long: 'This curriculum unifies three complementary perspectives on computation: (1)
+  formal limits and models—Turing machines as the central model, constructions showing
+  what is computable, comparisons with weaker machines, and proof techniques (diagonalization,
+  reductions, canonical undecidable problems) that delineate decidability vs. undecidability;
+  (2) the theoretical foundation for functional programming—the pure untyped λ‑calculus
+  (syntax, binding, α/β/η rules), data and control encodings, fixed‑point constructions
+  for recursion, evaluation‑order concerns, and a path to typed value representations
+  and minimal language design; and (3) practical, idiomatic functional programming
+  on the JVM using Clojure—core forms and REPL workflow, the seq abstraction and lazy/infinite
+  sequence patterns, performance‑aware recursion and memory practices, and Clojure’s
+  four reference types/STM for managing state and concurrency.
+
+
+  Students learn to reason about and construct machines and reductions that establish
+  computability or its impossibility, to represent and manipulate data and control
+  in the λ‑calculus (including concrete encodings of booleans, numbers, and recursive
+  algorithms), and to translate those functional principles into working, performant
+  code and systems using Clojure’s idioms, interop, and concurrency primitives. The
+  program emphasizes hands‑on constructions (Turing machine design, λ‑reduction proofs,
+  interpreter/abstract‑machine thinking), practical evaluation and performance tradeoffs
+  (evaluation strategies, lazy vs strict, realization and memory retention), and disciplined
+  state management (purity at the core, a small mutable surface via atoms/refs/agents/dynamic
+  vars). By blending formal theory, language design, and applied tooling/workflows,
+  the curriculum equips learners to reason about what computation is possible, to
+  design and verify functional languages and programs, and to implement robust, concurrent
+  applications in a modern functional JVM language.'

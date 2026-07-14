@@ -1,0 +1,68 @@
+source:
+  id: programming_clojure_2nd_edition
+  title: programming-clojure-2nd-edition
+  note: null
+  pdf: ../curricula/programming-languages/3_clojure/programming-clojure-2nd-edition.pdf
+  citation: null
+  link: null
+chunks:
+- title: 1. Getting Started
+  name: 1_getting_started
+  pages:
+    start: 20
+    end: 39
+  pdf: 1_getting_started.pdf
+- title: 2. Exploring Clojure
+  name: 2_exploring_clojure
+  pages:
+    start: 40
+    end: 72
+  pdf: 2_exploring_clojure.pdf
+- title: 3. Unifying Data with Sequences
+  name: 3_unifying_data_with_sequences
+  pages:
+    start: 73
+    end: 102
+  pdf: 3_unifying_data_with_sequences.pdf
+- title: 4. Functional Programming
+  name: 4_functional_programming
+  pages:
+    start: 103
+    end: 130
+  pdf: 4_functional_programming.pdf
+- title: 5. State
+  name: 5_state
+  pages:
+    start: 131
+    end: 160
+  pdf: 5_state.pdf
+- title: 6. Protocols and Datatypes
+  name: 6_protocols_and_datatypes
+  pages:
+    start: 161
+    end: 181
+  pdf: 6_protocols_and_datatypes.pdf
+- title: 7. Macros
+  name: 7_macros
+  pages:
+    start: 182
+    end: 202
+  pdf: 7_macros.pdf
+- title: 8. Multimethods
+  name: 8_multimethods
+  pages:
+    start: 203
+    end: 217
+  pdf: 8_multimethods.pdf
+- title: 9. Java Down and Dirty
+  name: 9_java_down_and_dirty
+  pages:
+    start: 218
+    end: 241
+  pdf: 9_java_down_and_dirty.pdf
+- title: 10. Building an Application
+  name: 10_building_an_application
+  pages:
+    start: 242
+    end: 266
+  pdf: 10_building_an_application.pdf

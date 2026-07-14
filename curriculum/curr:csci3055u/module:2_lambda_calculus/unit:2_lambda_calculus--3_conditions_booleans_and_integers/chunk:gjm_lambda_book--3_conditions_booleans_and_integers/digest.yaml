@@ -1,0 +1,397 @@
+element_id: chunk:gjm_lambda_book--3_conditions_booleans_and_integers
+level: document
+variant: default
+content:
+  summary:
+    name: Conditional expressions, booleans and natural numbers in the untyped λ-calculus
+    oneliner: Representation of booleans, conditional selection, boolean operators
+      and a simple Church-like natural-number encoding with zero, successor, predecessor
+      and auxiliary notations
+    short: Shows how to encode TRUE/FALSE as pair-selectors, derive not/and/or, and
+      represent natural numbers as nested successor pairs with iszero and pred; introduces
+      compact notation and an if-then-else form.
+    long: "This document develops untyped λ-calculus encodings for conditional expressions,\
+      \ boolean values and natural numbers, together with convenient notations for\
+      \ writing them.\n\n- Booleans and conditional selection:\n  - Uses pair selectors\
+      \ select_first and select_second to represent truth values:\n    def true =\
+      \ select_first\n    def false = select_second\n  - Defines a conditional constructor\
+      \ cond = λe1.λe2.λc.((c e1) e2) so that cond e1 e2 c selects e1 when c = true\
+      \ and e2 when c = false.\n  - Introduces an if-then-else surface form corresponding\
+      \ to cond: if <condition> then <true choice> else <false choice>.\n\n- Boolean\
+      \ operators derived from conditionals:\n  - not = λx.((x false) true)\n  - and\
+      \ = λx.λy.((x y) false)\n  - or  = λx.λy.((x true) y)\n  The document shows\
+      \ reduction traces for each operator against true/false to validate the truth\
+      \ tables.\n\n- Natural numbers (a pair-based encoding):\n  - Represents zero\
+      \ as identity and successor as a function that nests a pair with false first\
+      \ and the previous number second:\n    def zero = identity\n    def succ = λn.λs.((s\
+      \ false) n)\n    so one = succ zero = λs.((s false) zero), two = succ one, etc.\n\
+      \  - Tests selector application to distinguish zero from non-zero:\n    iszero\
+      \ = λn.(n select_first)\n    because (zero select_first) = select_first (i.e.\
+      \ true), while any successor applied to select_first yields false.\n  - Defines\
+      \ a predecessor that yields zero on zero and otherwise strips one successor:\n\
+      \    pred = λn.(((iszero n) zero) (n select_second))\n    (equivalently written\
+      \ using conditional surface syntax).\n\n- Notational simplifications:\n  - Left-associative\
+      \ application omission: f a b c ≡ ((f a) b) c\n  - Definition shorthand: def\
+      \ name args = body (dropping explicit λ/.)\n  - if-then-else sugar for cond.\n\
+      \nThe chapter includes worked examples and exercises asking the reader to define\
+      \ implication and equivalence in the same encoding and to prove various boolean-equivalence\
+      \ identities. All definitions and reductions are given in λ-calculus form using\
+      \ $\\lambda$-abstraction and application notation."
+  highlights:
+  - text: Encode truth values and conditional selection in the λ-calculus so that
+      a condition selects one of two expressions (if-then-else via cond).
+    concepts:
+    - concept:concept_calculus
+    reference_id: chunk:gjm_lambda_book--3_conditions_booleans_and_integers
+  - text: Derive standard boolean operators (not, and, or) from the conditional/pair-selector
+      representation and verify them against truth tables.
+    concepts:
+    - concept:concept_calculus
+    - concept:concept_functions_as_values_higher_order_functions
+    reference_id: chunk:gjm_lambda_book--3_conditions_booleans_and_integers
+  - text: Represent natural numbers as nested successor pairs (zero and succ), implement
+      iszero and pred, and handle the zero predecessor case via conditional logic.
+    concepts:
+    - concept:concept_calculus
+    - concept:concept_computability_theory
+    reference_id: chunk:gjm_lambda_book--3_conditions_booleans_and_integers
+  - text: 'Apply compact surface syntax: omit parentheses in applications, shorten
+      λ-definitions into def name args = body, and use if-then-else as syntactic sugar
+      for cond.'
+    concepts:
+    - concept:concept_names_and_values
+    - concept:concept_evaluation_order
+    reference_id: chunk:gjm_lambda_book--3_conditions_booleans_and_integers
+  - text: 'Practice formal reasoning: prove boolean identities and define derived
+      operators (implies, equiv) using the same selector-based encodings.'
+    concepts:
+    - concept:concept_calculus
+    - concept:concept_recursion
+    reference_id: chunk:gjm_lambda_book--3_conditions_booleans_and_integers
+  concepts:
+  - key: concept:functional_programming
+    introduced: false
+    summary: null
+    note: Document develops untyped λ-calculus representations for booleans, conditional
+      expressions, and natural numbers; demonstrates function composition and immutable
+      binding typical of functional programming.
+    status: used
+  - key: concept:calculus
+    introduced: false
+    summary: null
+    note: 'The chapter works directly in the λ-calculus: λ-abstraction, application,
+      and reduction are used to define true/false, cond, not/and/or, zero, succ, iszero,
+      pred, and to discuss bracketing and notation.'
+    status: used
+  - key: concept:names_and_values
+    introduced: false
+    summary: null
+    note: Shows binding of names in definitions (def name = λ...) and explains moving
+      bound variables to the left of '='; discusses identity, selectors, and representation
+      of values as functions.
+    status: used
+  - key: concept:evaluation_order
+    introduced: false
+    summary: null
+    note: Explains selector-based conditional evaluation (cond takes condition last)
+      and illustrates reduction sequences when applying cond, showing the effect of
+      choosing select_first vs select_second.
+    status: used
+  - key: concept:functions_as_values_higher_order_functions
+    introduced: false
+    summary: null
+    note: Numbers and booleans are represented as functions that accept selector arguments;
+      succ builds function-valued numbers and cond takes functions as parameters —
+      all using higher-order functions.
+    status: used
+  topics:
+  - key: topic:conditional_expressions_and_booleans_in_calculus
+    summary:
+      name: Conditional expressions and Booleans in λ-calculus
+      oneliner: Representation of truth values and conditional selection using pair/selectors.
+      short: Defines TRUE/FALSE as selectors, cond as a three-argument selector-based
+        conditional, and boolean operators built from these.
+      long: 'This topic covers modelling conditional expressions in the untyped λ-calculus
+        using pair/selector functions.
+
+        Definitions:
+
+        - cond = λe1.λe2.λc.((c e1) e2)  (condition is last argument)
+
+        - true = select_first, false = select_second
+
+        From these:
+
+        - not = λx.((x false) true)
+
+        - and = λx.λy.((x y) false)
+
+        - or  = λx.λy.((x true) y)
+
+        The topic shows reductions demonstrating the truth tables for NOT, AND, OR
+        and presents the if-then-else shorthand: if <condition> then <true choice>
+        else <false choice> == cond <true choice> <false choice> <condition>.'
+    entities:
+    - key: definition:cond_conditional_constructor
+      kind: definition
+      summary:
+        name: cond — conditional constructor
+        oneliner: cond e1 e2 c = ((c e1) e2), with condition last.
+        short: Three-argument function selecting e1 if c is true, else e2.
+        long: cond = λe1.λe2.λc.((c e1) e2). When applied as cond e1 e2 c it reduces
+          to (c e1) e2 and selecting e1 or e2 via c modeled as selectors (select_first/select_second).
+      fact_kind: null
+      related_to:
+      - type: depends_on
+        target_key: concept:calculus
+    - key: definition:boolean_values_true_and_false
+      kind: definition
+      summary:
+        name: 'Boolean values: true and false'
+        oneliner: true = select_first, false = select_second (pair selectors).
+        short: Represent booleans as the two selector functions so they can choose
+          branches.
+        long: Define true as select_first (λfirst.λsecond.first) and false as select_second
+          (λfirst.λsecond.second). These serve as conditions applied to branch expressions
+          via cond.
+      fact_kind: null
+      related_to:
+      - type: depends_on
+        target_key: concept:calculus
+    - key: definition:boolean_operators_not_and_or
+      kind: definition
+      summary:
+        name: 'Boolean operators: not, and, or'
+        oneliner: not x = (x false) true; and x y = (x y) false; or x y = (x true)
+          y.
+        short: Derived directly from cond and selector encoding of booleans; examples
+          reduce to truth-table results.
+        long: 'Using cond and selectors:
+
+          not = λx.((x false) true) — selects false when x is true, true when x is
+          false.
+
+          and = λx.λy.((x y) false) — if x is true returns y, else false.
+
+          or  = λx.λy.((x true) y) — if x is true returns true, else y.
+
+          The document shows reductions verifying these implementations satisfy the
+          respective truth tables.'
+      fact_kind: null
+      related_to:
+      - type: depends_on
+        target_key: concept:calculus
+    - key: other:if_then_else_notation
+      kind: other
+      summary:
+        name: If-then-else notation
+        oneliner: 'Shorthand: if c then e1 else e2 == cond e1 e2 c.'
+        short: An alternative, more readable notation for cond-based conditionals.
+        long: 'The conditional cond e1 e2 c is expressed as:
+
+          if c
+
+          then e1
+
+          else e2
+
+          This mirrors common programming syntax and is used to re-write definitions
+          (e.g., not, and, pred). It relies on the prior selector-based boolean encoding.'
+      fact_kind: null
+      related_to:
+      - type: related_to
+        target_key: concept:calculus
+      - type: related_to
+        target_key: concept:names_and_values
+    related_to:
+    - type: depends_on
+      target_key: concept:calculus
+    - type: depends_on
+      target_key: concept:functions_as_values_higher_order_functions
+    - type: related_to
+      target_key: concept:names_and_values
+    subtopics: []
+  - key: topic:natural_numbers_church_like_pair_representation
+    summary:
+      name: Natural numbers (Church-like pair representation)
+      oneliner: Representation of non-negative integers via zero and succ using pair
+        selectors; definitions of iszero and pred.
+      short: Numbers encoded as nested pair-like functions built by succ; zero = identity;
+        iszero and pred operate via selectors.
+      long: 'Numbers are represented as functions that expect a selector argument:
+
+        - zero = identity (λx.x)
+
+        - succ = λn.λs.((s false) n)
+
+        Thus one = succ zero = λs.((s false) zero), two = succ one = λs.((s false)
+        one), etc.
+
+        iszero is defined as λn.(n select_first) — applying the number to select_first
+        yields true for zero and false for non-zero.
+
+        A predecessor is given (with zero mapped to zero) as:
+
+        pred = λn.(((iszero n) zero) (n select_second))
+
+        This uses select_second to extract the stored previous number when not zero.
+
+        Notes caution about pred on zero and the choice to return zero rather than
+        undefined.'
+    entities:
+    - key: definition:zero_and_succ_number_constructors
+      kind: definition
+      summary:
+        name: zero and succ (number constructors)
+        oneliner: zero = identity; succ = λn.λs.((s false) n).
+        short: Build natural numbers as nesting of succ applied to zero; each number
+          is a function expecting a selector.
+        long: 'zero = identity (λx.x). succ constructs a new function wrapping the
+          previous number with false as first component and the old number as second:
+          succ = λn.λs.((s false) n). Repeated succ yields one, two, three as nested
+          λs.'
+      fact_kind: null
+      related_to:
+      - type: depends_on
+        target_key: concept:calculus
+    - key: definition:iszero_and_pred
+      kind: definition
+      summary:
+        name: iszero and pred
+        oneliner: iszero = λn.(n select_first); pred = λn.(((iszero n) zero) (n select_second)).
+        short: iszero tests for zero by applying selector; pred extracts predecessor
+          using second selector, with zero handled by conditional.
+        long: 'iszero applies the numeric function to select_first: iszero = λn.(n
+          select_first) which yields true for zero and false otherwise.
+
+          An attempted pred1 = λn.(n select_second) extracts the predecessor component
+          but fails on zero; the document presents pred = λn.(((iszero n) zero) (n
+          select_second)) so pred zero reduces to zero, otherwise returns the extracted
+          predecessor.'
+      fact_kind: null
+      related_to:
+      - type: depends_on
+        target_key: concept:calculus
+      - type: related_to
+        target_key: concept:functions_as_values_higher_order_functions
+    - key: example:examples_of_one_two_three_reductions
+      kind: example
+      summary:
+        name: Examples of one, two, three reductions
+        oneliner: Shows succ applications yielding λs.((s false) zero) etc.
+        short: Concrete reductions of succ applied to zero produce readable nested
+          forms for small naturals.
+        long: 'Demonstrates:
+
+          one = (succ zero) => λs.((s false) zero)
+
+          two = (succ one) => λs.((s false) λs.((s false) zero))
+
+          three = (succ two) => λs.((s false) λs.((s false) λs.((s false) zero)))
+
+          These illustrate the representation pattern used by iszero and pred.'
+      fact_kind: null
+      related_to:
+      - type: related_to
+        target_key: concept:functions_as_values_higher_order_functions
+    related_to:
+    - type: depends_on
+      target_key: concept:calculus
+    - type: depends_on
+      target_key: concept:functions_as_values_higher_order_functions
+    subtopics: []
+  - key: topic:simplified_notations_and_syntactic_sugar
+    summary:
+      name: Simplified notations and syntactic sugar
+      oneliner: Shorthand for application associativity, def-style function declarations
+        and if-then-else form.
+      short: Rules to omit brackets in left-associative application, simplified def
+        syntax moving λ-bound names to left of =, and use of if ... then ... else.
+      long: 'To reduce bracketing overhead the document adopts:
+
+        - Left-associative application: f a b c == (((f a) b) c)
+
+        - Allow dropping explicit λ and . in top-level named definitions: def names
+        = λx.body  ==> def names x = body
+
+        - Use if <condition> then <true choice> else <false choice> as shorthand for
+        cond <true choice> <false choice> <condition>
+
+        Several standard definitions are re-written using the shorthand (identity,
+        apply, select_first/second, make_pair, cond, boolean ops). This simplifies
+        reading and writing λ-expressions.'
+    entities:
+    - key: notation:application_associativity_and_def_shorthand
+      kind: notation
+      summary:
+        name: Application associativity and def shorthand
+        oneliner: 'Omit brackets: function application associates left; def shorthand
+          moves bound variables left of =.'
+        short: Provides concise concrete syntax for multi-argument applications and
+          named definitions.
+        long: 'Application: (...((f a1) a2) ... aN) == f a1 a2 ... aN with function
+          applied to nearest right argument first.
+
+          Definition shorthand: def <names> = λ<name>.<expr>  becomes def <names>
+          <name> = <expr>.
+
+          Examples: def select_first first second = first; def and x y = x y false.'
+      fact_kind: null
+      related_to:
+      - type: related_to
+        target_key: concept:calculus
+    related_to:
+    - type: related_to
+      target_key: concept:calculus
+    - type: related_to
+      target_key: concept:names_and_values
+    subtopics: []
+  - key: topic:exercises_and_boolean_algebra_identities
+    summary:
+      name: Exercises and boolean algebra identities
+      oneliner: Exercises asking for implies, equiv definitions and equivalence proofs
+        of boolean expressions.
+      short: 'Defines exercise problems: implication, equivalence, and demonstrating
+        equivalences between λ-expressions representing boolean formulas.'
+      long: 'The exercises request λ-calculus encodings and proofs:
+
+        1) Define implies = λx.λy.... satisfying implication truth table.
+
+        2) Define equiv = λx.λy.... satisfying equivalence truth table.
+
+        3) Show equivalences between pairs of λ-expressions for booleans, e.g. De
+        Morgan style identities, double-negation relations, and that equiv equals
+        conjunction of mutual implication.
+
+        These are presented as exercises (not formal theorems) for the reader to reduce
+        and verify.'
+    entities:
+    - key: other:exercise_set_implies_equiv_and_equivalence_proofs
+      kind: other
+      summary:
+        name: 'Exercise set: implies, equiv, and equivalence proofs'
+        oneliner: Problems to define implication and equivalence in selector-based
+          booleans and to prove expression equivalences.
+        short: Includes requests to define implies/equiv and to demonstrate equivalences
+          such as De Morgan laws and characterisations of equiv.
+        long: 'Exercises:
+
+          - Provide λ-encodings for implication and equivalence consistent with truth
+          tables.
+
+          - Prove equivalences between provided λ-expressions, e.g. λx.λy.(and (not
+          x) (not y))  vs  λx.λy.(not (or x y)), and that equiv == and (implies x
+          y) (implies y x), etc.
+
+          These are practical exercises in reduction and reasoning with the encodings
+          introduced earlier.'
+      fact_kind: null
+      related_to:
+      - type: depends_on
+        target_key: concept:calculus
+    related_to:
+    - type: depends_on
+      target_key: concept:calculus
+    - type: related_to
+      target_key: concept:functions_as_values_higher_order_functions
+    subtopics: []

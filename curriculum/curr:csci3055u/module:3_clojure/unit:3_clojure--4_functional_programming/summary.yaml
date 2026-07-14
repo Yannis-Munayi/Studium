@@ -1,0 +1,22 @@
+name: Practical Functional Programming Patterns in Clojure
+oneliner: Pure functions; immutability & persistent data; lazy sequences & sequence-library
+  idioms; recursion strategies (recur, trampoline, lazy); memoization & memory-care.
+short: 'Guidance and idioms for writing idiomatic, efficient Clojure: prefer pure
+  functions and persistent data, use lazy sequences and the sequence library for composability,
+  pick JVM-friendly recursion patterns, and apply memoization and memory-awareness
+  for performance.'
+long: 'This unit presents pragmatic functional-programming techniques for Clojure,
+  centered on writing pure functions over immutable, persistent data and composing
+  work with the sequence library. It explains why immutability and structural sharing
+  matter, summarizes guiding rules for Clojure FP, and demonstrates how lazy sequences
+  let you represent infinite or large computations while realizing only what’s needed.
+  The unit surveys practical recursion strategies on the JVM—self-tail recursion via
+  loop/recur, trampoline for mutual recursion, and replacing recursion with laziness
+  when appropriate—and shows common sequence-library idioms (map, filter, partition,
+  iterate, take, drop, etc.) that produce concise, composable solutions. It also covers
+  performance and correctness considerations: avoiding inadvertent retention of lazy-sequence
+  heads (and using doall/dorun or functionally exposing sequences), applying memoization
+  and incremental caches for expensive mutual recursion, and choosing the right pattern
+  (laziness vs recur vs trampoline) per the Six Rules of Clojure FP. Overall the emphasis
+  is on building robust, composable, JVM-aware functional code by leveraging laziness,
+  the sequence abstraction, and targeted recursion/memoization techniques.'

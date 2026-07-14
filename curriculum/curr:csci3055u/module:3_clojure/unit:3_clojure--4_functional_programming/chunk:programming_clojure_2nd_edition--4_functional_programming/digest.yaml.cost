@@ -1,0 +1,6 @@
+model: openai/gpt-5-mini
+n_calls: 4
+prompt_tokens: 55387
+completion_tokens: 14344
+cost: 0.035737950000000004
+complete: true

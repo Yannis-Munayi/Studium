@@ -1,0 +1,16 @@
+name: Algorithmic Solvability and the Limits of Computation
+oneliner: Turing machines; decidable vs. undecidable languages; computable functions;
+  diagonalization; Post correspondence problem; implications of unsolvability
+short: Foundations and limits of computation via Turing machines, decidability/semidecidability,
+  proof techniques, and canonical undecidable problems.
+long: This unit develops the foundational theory of algorithmic solvability by centering
+  on Turing machines and their role in formalizing computation. It frames computable
+  functions and the classifications of languages as Turing-decidable (decidable) or
+  Turing-semi-decidable (recognizable), and it surveys classical proof techniques—construction
+  of Turing machines, diagonalization, and reductions—to establish decidability or
+  undecidability. Canonical examples and problems, including the Post correspondence
+  problem, are used to demonstrate algorithmic unsolvability and to illustrate how
+  undecidability results propagate to other decision problems. The unit emphasizes
+  both technical competence (designing and reasoning about Turing machines and proofs)
+  and conceptual insight into the inherent limits of mechanical computation and their
+  consequences for computer science.

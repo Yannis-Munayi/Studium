@@ -1,0 +1,88 @@
+source:
+  citation: null
+  link: null
+  id: doc:programming_clojure_2nd_edition
+  title: programming-clojure-2nd-edition
+  note: null
+  pdf: ../curricula/programming-languages/3_clojure/programming-clojure-2nd-edition.pdf
+chunks:
+- id: chunk:programming_clojure_2nd_edition--1_getting_started
+  title: 1. Getting Started
+  document: programming_clojure_2nd_edition
+  name: 1_getting_started
+  pages:
+    start: 20
+    end: 39
+  pdf: 1_getting_started.pdf
+- id: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  title: 2. Exploring Clojure
+  document: programming_clojure_2nd_edition
+  name: 2_exploring_clojure
+  pages:
+    start: 40
+    end: 72
+  pdf: 2_exploring_clojure.pdf
+- id: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+  title: 3. Unifying Data with Sequences
+  document: programming_clojure_2nd_edition
+  name: 3_unifying_data_with_sequences
+  pages:
+    start: 73
+    end: 102
+  pdf: 3_unifying_data_with_sequences.pdf
+- id: chunk:programming_clojure_2nd_edition--4_functional_programming
+  title: 4. Functional Programming
+  document: programming_clojure_2nd_edition
+  name: 4_functional_programming
+  pages:
+    start: 103
+    end: 130
+  pdf: 4_functional_programming.pdf
+- id: chunk:programming_clojure_2nd_edition--5_state
+  title: 5. State
+  document: programming_clojure_2nd_edition
+  name: 5_state
+  pages:
+    start: 131
+    end: 160
+  pdf: 5_state.pdf
+- id: chunk:programming_clojure_2nd_edition--6_protocols_and_datatypes
+  title: 6. Protocols and Datatypes
+  document: programming_clojure_2nd_edition
+  name: 6_protocols_and_datatypes
+  pages:
+    start: 161
+    end: 181
+  pdf: 6_protocols_and_datatypes.pdf
+- id: chunk:programming_clojure_2nd_edition--7_macros
+  title: 7. Macros
+  document: programming_clojure_2nd_edition
+  name: 7_macros
+  pages:
+    start: 182
+    end: 202
+  pdf: 7_macros.pdf
+- id: chunk:programming_clojure_2nd_edition--8_multimethods
+  title: 8. Multimethods
+  document: programming_clojure_2nd_edition
+  name: 8_multimethods
+  pages:
+    start: 203
+    end: 217
+  pdf: 8_multimethods.pdf
+- id: chunk:programming_clojure_2nd_edition--9_java_down_and_dirty
+  title: 9. Java Down and Dirty
+  document: programming_clojure_2nd_edition
+  name: 9_java_down_and_dirty
+  pages:
+    start: 218
+    end: 241
+  pdf: 9_java_down_and_dirty.pdf
+- id: chunk:programming_clojure_2nd_edition--10_building_an_application
+  title: 10. Building an Application
+  document: programming_clojure_2nd_edition
+  name: 10_building_an_application
+  pages:
+    start: 242
+    end: 266
+  pdf: 10_building_an_application.pdf

@@ -1,0 +1,76 @@
+concepts:
+  concept:turing_machine:
+    key: concept:turing_machine
+    summary:
+      name: Turing machine
+      oneliner: A theoretical model of computation that defines an abstract machine.
+      short: A computing model proposed by Alan Turing.
+      long: A Turing machine consists of an infinite tape, a tape head that can read
+        and write symbols, and a finite state control. It formalizes the concept of
+        computation by simulating human problem-solving processes.
+    introduced_by: doc:1_turingmachines
+  concept:computation:
+    key: concept:computation
+    summary:
+      name: computation
+      oneliner: The process by which a Turing machine processes input to produce output.
+      short: Execution of operations based on input.
+      long: Computation involves sequences of configurations of a Turing machine as
+        it reads input, transitions between states, and eventually produces an output.
+    introduced_by: doc:1_turingmachines
+  concept:input:
+    key: concept:input
+    summary:
+      name: input
+      oneliner: The data fed into a Turing machine for processing.
+      short: Symbols provided to a machine.
+      long: Input is a finite sequence of symbols placed on the tape of the Turing
+        machine prior to its operation.
+    introduced_by: doc:1_turingmachines
+  concept:output:
+    key: concept:output
+    summary:
+      name: output
+      oneliner: The result produced by a Turing machine after processing input.
+      short: Results from computation.
+      long: Output represents the final state of the tape after the computation is
+        complete, showing the result of the processed input.
+    introduced_by: doc:1_turingmachines
+  concept:state:
+    key: concept:state
+    summary:
+      name: state
+      oneliner: A specific condition or situation of a Turing machine during computation.
+      short: Configuration of the machine at a given time.
+      long: States denote the various conditions of a Turing machine that dictate
+        its actions based on the current input symbol being read.
+    introduced_by: doc:1_turingmachines
+highlights:
+  doc:1_turingmachines:
+  - text: Understand the role of Turing Machines in modeling human computation processes.
+    concepts: []
+    reference_id: doc:1_turingmachines
+  - text: Construct Turing Machines for specific languages and problem scenarios.
+    concepts: []
+    reference_id: doc:1_turingmachines
+  - text: Differentiate between the computational powers of Turing Machines, DFAs,
+      and PDAs.
+    concepts: []
+    reference_id: doc:1_turingmachines
+  doc:2_algorithmicallyunsolvableproblems:
+  - text: Understand the concept of Turing-decidable and undecidable languages.
+    concepts: []
+    reference_id: doc:2_algorithmicallyunsolvableproblems
+  - text: Develop proficiency in identifying Turing-computable functions.
+    concepts: []
+    reference_id: doc:2_algorithmicallyunsolvableproblems
+  - text: Explain the significance of Turing machines in establishing algorithmic
+      solvability.
+    concepts: []
+    reference_id: doc:2_algorithmicallyunsolvableproblems
+  - text: Prove the uncountability of decision problems using diagonalization.
+    concepts: []
+    reference_id: doc:2_algorithmicallyunsolvableproblems
+  - text: Apply the Post correspondence problem to demonstrate algorithmic unsolvability.
+    concepts: []
+    reference_id: doc:2_algorithmicallyunsolvableproblems

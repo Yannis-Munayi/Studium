@@ -1,0 +1,10 @@
+programming-clojure-2nd-edition.pdf:
+  citation: > 
+    Halloway, Stuart, Alex Miller, and Aaron Bedra. "Programming Clojure." (2018)
+  link: https://pragprog.com/titles/shcloj4/programming-clojure-fourth-edition/
+
+TheJoyofClojure:
+  citation: > 
+    Fogus, Michael, and Chris Houser. The joy of Clojure. Manning, 2014.
+  link: https://www.manning.com/books/the-joy-of-clojure
+

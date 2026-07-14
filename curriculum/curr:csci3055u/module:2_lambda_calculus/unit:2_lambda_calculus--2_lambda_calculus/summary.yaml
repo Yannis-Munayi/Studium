@@ -1,0 +1,26 @@
+name: Abstraction and the Lambda Calculus
+oneliner: 'Core ideas of programming abstraction and a practical introduction to the
+  pure λ-calculus: syntax and BNF-style forms; name binding and α/η conversions; normal-order
+  β-reduction and evaluation strategies; higher-order functions, combinators and functional
+  encodings (pairs, selectors); and termination/expressiveness issues.'
+short: 'Introduces abstraction as naming/generalisation and presents the λ-calculus
+  as a minimal formal system for functions: read and construct λ-expressions, perform
+  normal-order β-reduction safely with α-conversion, apply η-reduction, build higher-order
+  combinators and encode data (pairs/triples), and understand evaluation order and
+  non-termination.'
+long: 'This unit motivates abstraction (generalisation via naming and specialisation
+  via substitution) as a foundational programming technique and develops the untyped
+  λ-calculus as a compact formal language that captures pure functional abstraction.
+  It defines λ-expressions (names, λ-abstractions and applications) with BNF-style
+  syntax and examples of basic combinators (identity, self-application, apply), and
+  gives a tutorial on normal-order β-reduction: reducing the function position first,
+  substituting the bound variable with the (unevaluated) argument, and continuing
+  reductions. The unit emphasises correct handling of names and scopes—distinguishing
+  free and bound variables and using α-conversion to avoid capture during substitution—and
+  presents η-reduction as a valid simplification. It contrasts evaluation strategies
+  (normal-order vs applicative-order/call-by-value), illustrates non-terminating expressions
+  and their implications for computability, and shows how to represent data and control
+  with pure functions (encodings for pairs, selectors, extensions to tuples, and higher-order
+  constructions). Syntactic sugar and named definitions are treated as compile-time
+  rewrites into core λ-forms. Exercises focus on constructing, analysing and reducing
+  λ-expressions to build fluency with the calculus and its role in expressing abstraction.'

@@ -1,0 +1,21 @@
+name: 'Clojure language essentials: forms, functions, sequences, interop, and metadata'
+oneliner: Core forms, reader macros, function and binding patterns, namespaces, flow
+  control, sequence-oriented programming, Java interop, and metadata
+short: An example-driven survey of Clojure fundamentals and idioms for writing functional,
+  composable, and Java-interoperable code.
+long: This unit gives a practical, example-led tour of Clojure's foundational concepts
+  and common idioms. It covers the language's primary data/forms (numbers, strings,
+  lists, vectors, maps, sets, symbols, keywords, records, booleans, nil), the reader
+  and reader macros (quote, syntax-quote/unquote, anonymous-function shorthand, regex,
+  metadata, etc.), and how code is written and organized via functions (defn, arities,
+  variadic forms, anonymous fn/closures), vars and lexical bindings (def, let, destructuring),
+  and namespaces (ns, require, import, alias). It emphasizes expression-oriented control
+  flow (if, do, loop/recur and recursion) and promotes sequence-oriented programming—using
+  map/filter, for comprehensions, map-indexed, apply, and other sequence utilities—instead
+  of imperative loops and mutable state. The unit also explains Java interop (constructing
+  objects, calling instance/static methods and fields, imports) and use of REPL tooling,
+  plus attaching and inspecting metadata (meta, ^reader-metadata, :doc, :arglists,
+  :tag) for documentation and optimization. Throughout, examples contrast imperative
+  approaches with idiomatic Clojure solutions to illustrate how immutable data, higher-order
+  functions, destructuring, and sequence abstractions yield simpler, more general,
+  and composable code.

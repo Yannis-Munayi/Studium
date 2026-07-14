@@ -1,0 +1,496 @@
+element_id: chunk:gjm_lambda_book--4_recursion_and_arithmetic
+level: document
+variant: default
+content:
+  summary:
+    name: Recursion and arithmetic in the λ-calculus
+    oneliner: Recursion and arithmetic — introducing recursion by abstraction and
+      self-application (the Y combinator), applicative vs normal order, and recursive
+      definitions of standard arithmetic operations.
+    short: Explains how to obtain finite recursive behaviour in the λ-calculus by
+      abstracting recursion points and using self-application (the paradoxical combinator/Y),
+      shows applicative-order considerations, introduces rec notation, and builds
+      arithmetic (add, mult, power, sub, equal, inequalities, div).
+    long: 'This document develops recursion as the mechanism for repetition in functional
+      programming and the λ-calculus. It shows why naively allowing a name to appear
+      in its own definition leads to non-terminating infinite replacement, and how
+      to delay self-reference by abstracting the recursion point (introducing an extra
+      parameter that stands for the recursive call). It explains the technique of
+      passing a function to itself and shows progressively refined encodings (add1,
+      add2) that ensure a copy of the function is passed down each recursive step.
+
+
+      A general fixed-point / recursion constructor is derived using self-application;
+      the document presents the recursive combinator (the paradoxical combinator,
+      called Y) as:
+
+      $ \text{recursive}\ f = (\lambda s.\,f\,(s\,s))\;(\lambda s.\,f\,(s\,s)) $,
+
+      and shows how applying this to a non-recursive body yields a recursive function.
+      The text introduces a convenient definition form
+
+      rec <name> = <expression>
+
+      that expands to using the recursive combinator (so recursive references are
+      left in place for evaluation).
+
+
+      Applicative-order β-reduction is discussed: arguments are typically reduced
+      before function application (notation -> and -> ... -> are introduced), but
+      conditional expressions are treated carefully to avoid spurious non-termination
+      in examples. The relationship between normal and applicative order is noted:
+      when evaluation terminates both give the same result, but some expressions terminate
+      only under normal order.
+
+
+      Using recursion, the document defines standard arithmetic on Church-like numerals
+      (using named constructors succ, pred, iszero, zero, one, etc.): addition (rec
+      add), multiplication (rec mult), exponentiation (rec power), natural subtraction
+      (rec sub), equality (via abs_diff or recursive equal), inequalities (greater,
+      greater_or_equal), and integer division with a guarded-case for divisor zero
+      (rec div1 and def div). Several worked reductions demonstrate each definition.
+      A short exercise set asks to build sums, products, and parameterised summations
+      using the recursive pattern.
+
+
+      Overall, the focus is on (1) obtaining recursion without infinite textual substitution
+      by using abstraction and self-application (fixed-point construction), (2) practical
+      applicative-order evaluation conventions for examples, (3) notation (rec) for
+      defining recursive functions, and (4) using these techniques to implement and
+      reason about arithmetic in the λ-calculus.'
+  highlights:
+  - text: Explain why naive self-reference in a definition leads to non-terminating
+      replacement and how abstraction at the recursion point delays substitution to
+      produce finite evaluation in concrete uses.
+    concepts:
+    - concept:recursion
+    reference_id: chunk:gjm_lambda_book--4_recursion_and_arithmetic
+  - text: Construct a recursive function by passing a function to itself and derive
+      the fixed-point/paradoxical combinator (Y) $ (\lambda s.\,f\,(s\,s))(\lambda
+      s.\,f\,(s\,s)) $ to generate recursion from a non-recursive body.
+    concepts:
+    - concept:calculus
+    - concept:functions_as_values_higher_order_functions
+    reference_id: chunk:gjm_lambda_book--4_recursion_and_arithmetic
+  - text: Use the rec notation (rec <name> = <expr>) as syntactic sugar that binds
+      the name via the fixed-point combinator so recursive references remain for evaluation.
+    concepts:
+    - concept:calculus
+    reference_id: chunk:gjm_lambda_book--4_recursion_and_arithmetic
+  - text: Understand applicative-order β-reduction (evaluate arguments before application)
+      vs normal order, and why conditional evaluation must be treated to avoid non-termination
+      in applicative examples.
+    concepts:
+    - concept:evaluation_order
+    reference_id: chunk:gjm_lambda_book--4_recursion_and_arithmetic
+  - text: Define standard arithmetic operations (add, mult, power, sub, equal, greater,
+      greater_or_equal, div) recursively in the λ-calculus and trace example reductions
+      (e.g. mult three two => six).
+    concepts:
+    - concept:recursion
+    reference_id: chunk:gjm_lambda_book--4_recursion_and_arithmetic
+  concepts:
+  - key: concept:functional_programming
+    introduced: false
+    summary: null
+    note: The document contrasts functional repetition via nested function calls and
+      recursion with imperative iteration, and uses λ-calculus examples to illustrate
+      functional-programming techniques.
+    status: used
+  - key: concept:imperative_programming
+    introduced: false
+    summary: null
+    note: Used as a contrast to explain iteration constructs (FOR, WHILE) and mutable
+      state versus functional recursion.
+    status: used
+  - key: concept:calculus
+    introduced: false
+    summary: null
+    note: The paper uses λ-abstraction and application throughout, presents the Y
+      (fixed-point) combinator, and gives many λ-calculus style definitions and reductions.
+    status: used
+  - key: concept:names_and_values
+    introduced: false
+    summary: null
+    note: Discusses replacement of names by definitions, problems with naive substitution
+      for recursive definitions, and binding of formal parameters.
+    status: used
+  - key: concept:evaluation_order
+    introduced: false
+    summary: null
+    note: Introduces applicative-order vs normal-order β-reduction, applicative-order
+      notation (->, -> ... ->), and their impact on termination for recursive and
+      conditional expressions.
+    status: used
+  - key: concept:recursion
+    introduced: false
+    summary: null
+    note: 'Main topic: recursion as repetition, primitive vs general recursion, recursion
+      via self-application, the recursive definition notation (rec), and construction
+      of recursive functions with the fixed-point combinator.'
+    status: used
+  - key: concept:data_structures_lists_vs_arrays
+    introduced: false
+    summary: null
+    note: 'Referenced when motivating recursion and functional approaches: arrays
+      are linear sequences suited to bounded iteration; nested structures (e.g. directories)
+      motivate unbounded recursion and recursive processing like lists.'
+    status: used
+  - key: concept:functions_as_values_higher_order_functions
+    introduced: false
+    summary: null
+    note: 'Uses higher-order functions heavily: passing functions as arguments, constructing
+      abstractions like add1/add2, and building the recursive combinator via self-application.'
+    status: used
+  topics:
+  - key: topic:recursion_and_arithmetic
+    summary:
+      name: Recursion and arithmetic
+      oneliner: Use of recursion for repetition and definition of arithmetic in the
+        λ-calculus
+      short: Introduces recursion as the functional mechanism for repetition, discusses
+        applicative vs normal order, the fixed-point (Y) combinator for building recursive
+        definitions, recursion notation, and recursive definitions of arithmetic operations
+        (power, subtraction, comparison, division).
+      long: 'This chapter develops recursion as the primary mechanism for repetition
+        in functional programming and in the λ-calculus.
+
+        It explains why naive recursive definitions lead to non-terminating replacement,
+        shows how to abstract recursion points
+
+        to pass a function to itself, constructs a general recursion builder using
+        self-application (the Y / paradoxical combinator),
+
+        introduces a concise ''rec'' definition form, and uses recursion to define
+        standard arithmetic operations: power, subtraction
+
+        (natural subtraction), equality and inequalities, and division (with a convention
+        for division by zero). It also contrasts
+
+        bounded (primitive) recursion and unbounded (general) recursion and presents
+        exercises on summation, product, and
+
+        parameterised summation.'
+    entities:
+    - key: definition:repetition_iteration_and_recursion
+      kind: definition
+      summary:
+        name: Repetition, iteration and recursion
+        oneliner: Distinguishes bounded (iteration/primitive recursion) from unbounded
+          (general recursion) repetition
+        short: Defines bounded vs unbounded repetition; relates iteration in imperative
+          languages to recursion in functional languages; primitive recursion has
+          known finite depth while general recursion may be unbounded.
+        long: 'Repetition involves performing an action zero or more times. Bounded
+          repetition (primitive recursion / iteration)
+
+          has a known finite number of repetitions and can be implemented by loops
+          (FOR) or finite-depth recursion. Unbounded
+
+          repetition (general recursion / unbounded iteration) ends when a runtime
+          condition is met and may have unknown depth.
+
+          Functional languages express repetition by nesting function calls and recursion
+          (a function invoking itself with
+
+          updated parameters); there is no shared mutable state. Primitive recursion
+          corresponds to bounded iteration; general
+
+          recursion corresponds to unbounded iteration and is more powerful.'
+      fact_kind: null
+      related_to:
+      - type: depends_on
+        target_key: concept:functional_programming
+      - type: depends_on
+        target_key: concept:recursion
+    - key: other:recursion_through_definitions_non_terminating_replacement
+      kind: other
+      summary:
+        name: Recursion through definitions? (non-terminating replacement)
+        oneliner: Explains why naive substitution of recursive names in definitions
+          leads to non-terminating expansion
+        short: If definitions are replaced eagerly (every occurrence replaced by its
+          right-hand side), allowing the defined name to appear in its own definition
+          leads to infinite expansion; thus recursion cannot be implemented by simple
+          textual replacement.
+        long: 'Using the earlier name-replacement convention (replace names by their
+          definitions before evaluation) on a recursive
+
+          definition like:
+
+          def add x y = if iszero y then x else add (succ x) (pred y)
+
+          causes infinite substitution because each replacement reintroduces the same
+          name. Therefore recursion requires a means
+
+          to delay self-reference until application time (e.g. by abstraction) rather
+          than performing eager global replacement at
+
+          definition time.'
+      fact_kind: null
+      related_to:
+      - type: related_to
+        target_key: concept:calculus
+      - type: related_to
+        target_key: concept:names_and_values
+    - key: definition:passing_a_function_to_itself_abstraction_at_recursion_point
+      kind: definition
+      summary:
+        name: Passing a function to itself (abstraction at recursion point)
+        oneliner: 'Technique: abstract the recursive call into a parameter and supply
+          the function to itself to realize recursion'
+        short: Show how to transform a self-referential definition into a non-recursive
+          one by abstracting the recursive call as a function parameter (e.g. def
+          add1 f x y = ... f ...), then supply the function (or its transformer) to
+          itself to effect recursion.
+        long: 'To avoid non-terminating replacement, the recursive occurrence is replaced
+          by a formal parameter (e.g. f). The original
+
+          function is then obtained by supplying an appropriate argument that represents
+          the function itself. Simple self-application
+
+          (e.g. add1 add1) must be arranged carefully so that the function value is
+          passed down at each recursive call (may require
+
+          passing two copies or using a self-replicating construction). This leads
+          to patterns such as:
+
+          def add2 f x y = if iszero y then x else f f (succ x) (pred y)
+
+          def add = add2 add2
+
+          which ensures the recursive capability is propagated.'
+      fact_kind: null
+      related_to:
+      - type: depends_on
+        target_key: concept:functions_as_values_higher_order_functions
+      - type: depends_on
+        target_key: concept:recursion
+    - key: definition:recursion_function_y_paradoxical_combinator
+      kind: definition
+      summary:
+        name: Recursion function / Y (paradoxical) combinator
+        oneliner: 'Constructs a fixed point of a function to produce recursion: recursive
+          f = (λs. f (s s)) (λs. f (s s))'
+        short: Defines recursive (the Y combinator) as recursive f = λs.(f (s s))
+          λs.(f (s s)), which when applied to a function that expects its recursive
+          self as a parameter, yields a genuinely recursive function without using
+          named self-reference.
+        long: 'The general recursion builder (paradoxical combinator, often denoted
+          Y) is:
+
+          def recursive f = (λs.(f (s s))) (λs.(f (s s)))
+
+          When applied to a non-recursive transformer f (one that expects a function
+          argument representing the recursive call),
+
+          recursive f expands to a value that behaves like a fixed point: recursive
+          f => f (recursive f). This provides recursion
+
+          by self-application while delaying the self-application inside an abstraction,
+          avoiding non-terminating eager expansion.'
+      fact_kind: null
+      related_to:
+      - type: depends_on
+        target_key: concept:calculus
+      - type: depends_on
+        target_key: concept:recursion
+      - type: related_to
+        target_key: concept:computability_theory
+    - key: notation:applicative_order_reduction_notation
+      kind: notation
+      summary:
+        name: Applicative order β-reduction (notation)
+        oneliner: Describes applicative-order evaluation steps and shorthand notations
+          -> and -> ... ->
+        short: 'Applicative order: evaluate argument expressions to values first,
+          then function expression, then perform β-reduction by substituting argument
+          values into the function body. Use -> for one applicative-order reduction
+          and -> ... -> for sequences.'
+        long: 'Applicative order β-reduction proceeds by:
+
+          i) applicative-order β-reduce the argument expression(s) to argument value(s),
+
+          ii) applicative-order β-reduce the function expression to a function value,
+
+          iii) if the function value is a λ-abstraction λx.body then replace free
+          occurrences of x in body with the argument value and continue applicative
+          reduction on the result;
+
+          iv) if the function value is not a function, return the application of the
+          values.
+
+          Notation: ''->'' denotes an applicative-order reduction step; ''-> ... ->''
+          denotes multiple such reductions.
+
+          Note: in the text, reduction of conditional expressions with recursive calls
+          is treated using normal-order semantics even when applicative-order arrows
+          are used, to avoid spurious non-termination in exposition.'
+      fact_kind: null
+      related_to:
+      - type: depends_on
+        target_key: concept:calculus
+      - type: depends_on
+        target_key: concept:evaluation_order
+    - key: notation:recursion_notation_rec_form
+      kind: notation
+      summary:
+        name: 'Recursion notation: ''rec'' form'
+        oneliner: 'Syntactic sugar: rec name = expr  === def name = recursive λf.expr[f->f]'
+        short: The 'rec' definition form allows the defined name to appear in the
+          body; implementation-wise it corresponds to wrapping the body in a λf. abstraction
+          and applying the recursive combinator.
+        long: 'The notation:
+
+          rec <name> = <expression using ''<name>''>
+
+          is shorthand for:
+
+          def <name> = recursive (λf.<expression with occurrences of <name> replaced
+          by f>)
+
+          Semantically it constructs a fixed point of the λ-abstraction so that the
+          defined name is available recursively within the expression.'
+      fact_kind: null
+      related_to:
+      - type: depends_on
+        target_key: concept:calculus
+      - type: depends_on
+        target_key: concept:recursion
+    - key: definition:arithmetic_power_subtraction_comparison_division
+      kind: definition
+      summary:
+        name: 'Arithmetic: power, subtraction, comparison, division'
+        oneliner: Recursive definitions of power, natural subtraction, equality/inequalities,
+          and division (with divisor-zero convention).
+        short: Defines power, sub (natural subtraction), equal (via abs_diff or recursive
+          decrementing), greater/greater_or_equal, and div (with div1 and zero-divisor
+          handling) using recursion and helper functions add, mult, pred, succ, iszero.
+        long: "Key recursive definitions presented:\n- power: rec power x y = if iszero\
+          \ y then one else mult x (power x (pred y))\n- sub (natural subtraction):\
+          \ rec sub x y = if iszero y then x else sub (pred x) (pred y)  (returns\
+          \ zero when result would be negative)\n- abs_diff and equal:\n  def abs_diff\
+          \ x y = add (sub x y) (sub y x)\n  def equal x y = iszero (abs_diff x y)\n\
+          \  or recursive:\n  rec equal x y = if and (iszero x) (iszero y) then true\
+          \ else if or (iszero x) (iszero y) then false else equal (pred x) (pred\
+          \ y)\n- inequalities:\n  def greater x y = not (iszero (sub x y))\n  def\
+          \ greater_or_equal x y = iszero (sub y x)\n- division:\n  rec div1 x y =\
+          \ if greater y x then zero else succ (div1 (sub x y) y)\n  def div x y =\
+          \ if iszero y then zero else div1 x y\nDivision-by-zero is defined to yield\
+          \ zero here; callers should check divisor to detect the special case if\
+          \ needed."
+      fact_kind: null
+      related_to:
+      - type: depends_on
+        target_key: concept:recursion
+      - type: related_to
+        target_key: concept:calculus
+    - key: example:worked_examples_add_mult_power_sub_div
+      kind: example
+      summary:
+        name: 'Worked examples: add, mult, power, sub, div'
+        oneliner: Step-by-step reductions showing how recursive definitions evaluate
+          (e.g., add one two, mult three two, power two three, sub four two, div nine
+          four).
+        short: Concrete applicative/normal-order reduction traces illustrate how the
+          recursive constructs evaluate to expected arithmetic results (three, six,
+          eight, two, two respectively).
+        long: 'Several example reductions are shown to demonstrate the behaviour of
+          the constructions:
+
+          - add one two using the add2/add1 style or rec add yields three.
+
+          - mult three two via recursive mult1 yields six.
+
+          - power two three reduces through nested mult to eight.
+
+          - sub four two reduces by simultaneous decrements to two (natural subtraction
+          semantics).
+
+          - div nine four uses div1 to obtain two (with subtraction steps and succ).
+
+          Examples also illustrate applicative-order reduction notation and the treatment
+          of conditional expressions in the exposition.'
+      fact_kind: null
+      related_to:
+      - type: related_to
+        target_key: concept:calculus
+      - type: related_to
+        target_key: concept:recursion
+    - key: other:exercises_summation_product_function_sum_stepped_sum
+      kind: other
+      summary:
+        name: 'Exercises: summation, product, function-sum, stepped sum'
+        oneliner: Exercises request recursive definitions using recursive combinator
+          patterns and evaluation examples (sum, prod/factorial-like, fun_sum, fun_sum_step).
+        short: 'Four exercises: compute sum three via recursive sum; define prod (factorial-like)
+          and evaluate prod three; define fun_sum to sum a function applied over range
+          and evaluate fun_sum double three; define stepped summation fun_sum_step
+          and evaluate example.'
+        long: 'Exercises ask the reader to apply the recursive construction patterns:
+
+          1) Using def sum1 f n = if iszero n then zero else add n (f (pred n)) and
+          def sum = recursive sum1, evaluate sum three.
+
+          2) Define prod1 f n and prod = recursive prod1 so that prod n computes n*(n-1)*...*1;
+          evaluate prod three.
+
+          3) Define fun_sum1 f fun n and fun_sum = recursive fun_sum1; e.g., fun_sum
+          sq three where sq x = mult x x; evaluate fun_sum double three where double
+          x = add x x.
+
+          4) Generalise to fun_sum_step1 f fun n s and fun_sum_step = recursive fun_sum_step1
+          and evaluate sample like fun_sum_step sq six two.
+
+          These reinforce applying the recursive-builder and abstraction-at-recursion-point
+          techniques.'
+      fact_kind: null
+      related_to:
+      - type: related_to
+        target_key: concept:recursion
+      - type: related_to
+        target_key: concept:functions_as_values_higher_order_functions
+    related_to:
+    - type: depends_on
+      target_key: concept:recursion
+    - type: depends_on
+      target_key: concept:functional_programming
+    - type: depends_on
+      target_key: concept:calculus
+    - type: related_to
+      target_key: concept:evaluation_order
+    - type: related_to
+      target_key: concept:functions_as_values_higher_order_functions
+    - type: related_to
+      target_key: concept:names_and_values
+    - type: related_to
+      target_key: concept:computability_theory
+    subtopics:
+    - key: subtopic:fixed_point_combinators_and_theoretical_notes
+      summary:
+        name: Fixed-point combinators and theoretical notes
+        oneliner: Discussion of the Y combinator, self-application, and relationship
+          to computability
+        short: Explains the self-replicating application pattern λs.(s s) and how
+          wrapping it via λf.λs.(f (s s)) delays replication; identifies the recursive
+          builder as the paradoxical combinator (Y). Mentions connection to fixed
+          points in λ-calculus and computability implications.
+        long: 'The chapter motivates the fixed-point construction by requiring a copy
+          mechanism that, when applied, yields f applied to the copy mechanism again:
+
+          <''f'' and copy> => ... => f <''f'' and copy>
+
+          Using self-application λs.(s s) replicates but diverges; delaying it by
+          abstraction yields λf.(λs.(f (s s))) (λs.(f (s s))) which behaves as a fixed-point
+          constructor.
+
+          This construction (Y combinator) is central in the λ-calculus for expressing
+          recursion without named self-reference. Its existence connects to computability
+          theory (fixed-point theorems, expressiveness of λ-calculus).'
+      entities: []
+      related_to:
+      - type: depends_on
+        target_key: concept:calculus
+      - type: related_to
+        target_key: concept:computability_theory
+      subtopics: []

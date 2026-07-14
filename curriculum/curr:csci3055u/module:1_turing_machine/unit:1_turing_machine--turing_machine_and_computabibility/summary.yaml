@@ -1,0 +1,15 @@
+name: Theory of Computation — Turing Machines
+oneliner: 'Turing Machines: modeling human computation · constructing machines for
+  languages · comparing computational power with DFA and PDA'
+short: 'Introduction to Turing Machines: their formal model, building machines for
+  language problems, and how their power and limits compare to DFAs and PDAs.'
+long: This unit presents a focused study of Turing Machines as the central formal
+  model of computation. It examines how Turing Machines formalize aspects of human
+  computation, provides step‑by‑step examples and exercises for constructing Turing
+  Machines that decide or recognize specific languages, and situates Turing Machines
+  relative to simpler models (Deterministic Finite Automata and Pushdown Automata).
+  Topics include machine design techniques, examples of language constructions, and
+  a discussion of computational power and limitations across models, enabling learners
+  to understand the role of Turing Machines in theoretical computer science, build
+  concrete machines for problem scenarios, and distinguish the expressive boundaries
+  of DFA, PDA, and Turing Machine models.

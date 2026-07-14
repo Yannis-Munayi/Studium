@@ -1,0 +1,33 @@
+name: 'Sequences: Clojure''s Unifying Abstraction and Sequence Library'
+oneliner: How Clojure views diverse data as seqs and uses a rich, lazy sequence library
+  for creation, transformation, filtering, IO/Java interop, and structure‑specific
+  ops.
+short: Introduces the seq abstraction and core ops (first/rest/cons/seq/next), sequence
+  creation (range, repeat, iterate, cycle, etc.), transformation and reduction (map,
+  reduce, sort, for), filtering and predicate helpers, lazy and infinite sequences
+  (doall/dorun), Java/IO/XML interop via seqs, and when to use structure-specific
+  operations for semantics or performance.
+long: 'This unit explains Clojure''s central unifying abstraction—the sequence (seq)—and
+  the programming idioms that flow from treating lists, vectors, maps, sets, many
+  Java collections, strings, arrays, regex matches, file walks, and XML trees as seqs.
+  It defines core sequence operations (first, rest, cons, seq, next), shows how to
+  create sequences (range, repeat, iterate, cycle, interleave, interpose, list/vector/hash-set/vec),
+  and demonstrates transformation and aggregation with map, reduce, sort/sort-by,
+  and for comprehensions. The unit covers predicate and filtering utilities (filter,
+  take, take-while, drop-while, split-at/split-with, some, every?, not-any?, not-every?)
+  and emphasizes composition of small predicates and seq functions to express complex
+  data processing without mutation.
+
+
+  A key focus is laziness and infinite sequences: most seq operations return lazy
+  views that enable streaming and working with conceptually infinite data, with doall
+  and dorun available to force realization when side effects or full traversal are
+  required. Practical interop use-cases show how seqs provide uniform access to Java
+  arrays and collections, regex matches (re-seq), file IO (line-seq, file-seq), and
+  XML trees (xml-seq). Finally, the unit surveys structure-specific primitives and
+  performance-sensitive operations—peek/pop, get/assoc/subvec, keys/vals/contains?/assoc/dissoc/merge/merge-with
+  for maps, and clojure.set relational operations—explaining when to rely on generic
+  seq-based algorithms versus using collection-specific functions for semantics or
+  efficiency. Together these ideas teach idiomatic Clojure data-processing: decouple
+  algorithms from concrete data structures, leverage laziness, and compose small,
+  reusable sequence operations to build robust utilities.'

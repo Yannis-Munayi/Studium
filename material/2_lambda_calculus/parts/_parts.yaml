@@ -1,0 +1,88 @@
+source:
+  citation: null
+  link: null
+  id: doc:gjm_lambda_book
+  title: gjm_lambda_book
+  note: null
+  pdf: ../curricula/programming-languages/2_lambda_calculus/gjm_lambda_book.pdf
+chunks:
+- id: chunk:gjm_lambda_book--1_introduction
+  title: 1. INTRODUCTION
+  document: gjm_lambda_book
+  name: 1_introduction
+  pages:
+    start: 3
+    end: 11
+  pdf: 1_introduction.pdf
+- id: chunk:gjm_lambda_book--2_lambda_calculus
+  title: 2. LAMBDA CALCULUS
+  document: gjm_lambda_book
+  name: 2_lambda_calculus
+  pages:
+    start: 12
+    end: 38
+  pdf: 2_lambda_calculus.pdf
+- id: chunk:gjm_lambda_book--3_conditions_booleans_and_integers
+  title: 3. CONDITIONS, BOOLEANS AND INTEGERS
+  document: gjm_lambda_book
+  name: 3_conditions_booleans_and_integers
+  pages:
+    start: 39
+    end: 50
+  pdf: 3_conditions_booleans_and_integers.pdf
+- id: chunk:gjm_lambda_book--4_recursion_and_arithmetic
+  title: 4. Recursion and arithmetic
+  document: gjm_lambda_book
+  name: 4_recursion_and_arithmetic
+  pages:
+    start: 51
+    end: 67
+  pdf: 4_recursion_and_arithmetic.pdf
+- id: chunk:gjm_lambda_book--5_types
+  title: 5. TYPES
+  document: gjm_lambda_book
+  name: 5_types
+  pages:
+    start: 68
+    end: 88
+  pdf: 5_types.pdf
+- id: chunk:gjm_lambda_book--6_lists_and_strings
+  title: 6. LISTS AND STRINGS
+  document: gjm_lambda_book
+  name: 6_lists_and_strings
+  pages:
+    start: 89
+    end: 119
+  pdf: 6_lists_and_strings.pdf
+- id: chunk:gjm_lambda_book--7_composite_values_and_trees
+  title: 7. COMPOSITE VALUES AND TREES
+  document: gjm_lambda_book
+  name: 7_composite_values_and_trees
+  pages:
+    start: 120
+    end: 144
+  pdf: 7_composite_values_and_trees.pdf
+- id: chunk:gjm_lambda_book--8_evaluation
+  title: 8. EVALUATION
+  document: gjm_lambda_book
+  name: 8_evaluation
+  pages:
+    start: 145
+    end: 159
+  pdf: 8_evaluation.pdf
+- id: chunk:gjm_lambda_book--9_functional_programming_in_standard_ml
+  title: 9. FUNCTIONAL PROGRAMMING IN STANDARD ML
+  document: gjm_lambda_book
+  name: 9_functional_programming_in_standard_ml
+  pages:
+    start: 160
+    end: 186
+  pdf: 9_functional_programming_in_standard_ml.pdf
+- id: chunk:gjm_lambda_book--10_functional_programming_and_lisp
+  title: 10. FUNCTIONAL PROGRAMMING AND LISP
+  document: gjm_lambda_book
+  name: 10_functional_programming_and_lisp
+  pages:
+    start: 187
+    end: 241
+  pdf: 10_functional_programming_and_lisp.pdf

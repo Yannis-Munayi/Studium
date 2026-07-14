@@ -1,0 +1,971 @@
+concepts:
+  concept:forms:
+    key: concept:forms
+    summary:
+      name: Forms
+      oneliner: Basic syntactic units of Clojure source that the reader parses into
+        data.
+      short: Forms are the pieces of Clojure code read by the reader and evaluated;
+        literals (numbers, strings, vectors, maps, lists), and special forms all are
+        forms.
+      long: In Clojure, source code is composed of forms. The reader converts text
+        into Clojure data structures (forms), which are then compiled/executed. Common
+        forms include numeric literals, strings, characters, lists (used for function
+        calls), vectors, maps, sets, symbols, keywords, and nil. Lists where the first
+        element resolves to a function represent function calls (prefix notation).
+        Forms are the primary unit discussed in Section 2.1 and summarized across
+        the chapter.
+    introduced_by: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  concept:reader_macros:
+    key: concept:reader_macros
+    summary:
+      name: Reader Macros
+      oneliner: 'Syntax shortcuts the reader recognizes (e.g., '', ^, #) that expand
+        to longer forms.'
+      short: 'Reader macros are special reader behaviors triggered by prefix characters
+        that expand into Clojure data (e.g., '' for quote, ^ for metadata, #'' for
+        var-quote, ; for comments, #\"...\" for regex). They are distinct from macros.'
+      long: 'The Clojure reader recognizes a set of reader macros that perform transformations
+        at read time. Examples include ; (comment), '' (quote) which expands to (quote
+        ...), ^ (attach metadata), #'' (var-quote / (var ...)), #\"...\" (regex literal),
+        and shorthand anonymous-function syntax (#(...)). Reader macros reduce clutter
+        by expanding to longer list forms. Clojure does not allow user-defined reader
+        macros.'
+    introduced_by: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  concept:functions:
+    key: concept:functions
+    summary:
+      name: Functions
+      oneliner: Named and anonymous callable values defined with defn and fn; support
+        arities and variadic parameters.
+      short: Functions are defined with defn (top-level, with optional docstring and
+        metadata) and fn (anonymous). They support multiple arities, variadic arguments
+        (&), and are first-class (can be returned, passed, and stored).
+      long: 'Function calls are represented as lists with the function position first.
+        defn defines top-level named functions (optionally with docstring and metadata);
+        defn supports multiple arities and arity enforcement (ArityException on mismatch).
+        Anonymous functions are created with fn or the shorthand #(...) with implicit
+        parameters % %1 %2. Closures capture lexical bindings. Examples include greeting,
+        make-greeter, and anonymous predicates used with higher-order functions like
+        filter.'
+    introduced_by: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  concept:vars:
+    key: concept:vars
+    summary:
+      name: Vars
+      oneliner: Top-level locations (bindings) created by def/defn that hold values
+        and metadata.
+      short: 'def and defn create vars (e.g., #''user/foo). Vars have a root binding,
+        can carry metadata, can be dynamically rebound per-thread, and can be referred
+        to directly via var or reader macro #''symbol.'
+      long: 'Vars are the named holders for top-level bindings in namespaces. A var
+        has a root binding (initial value), may have metadata (doc, :tag, :arglists),
+        and supports advanced features such as dynamic/thread-local rebinding. The
+        var special form returns the var object; #'' is the reader shorthand. Most
+        code treats symbols as resolving to var values transparently, but the distinction
+        matters for metadata and rebinding.'
+    introduced_by: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  concept:bindings:
+    key: concept:bindings
+    summary:
+      name: Bindings
+      oneliner: Lexical associations of names to values (function parameters, let
+        bindings, loop bindings).
+      short: Bindings are created by function parameters, let, loop, and destructuring.
+        They have lexical scope and are used to name intermediate values without mutating
+        state.
+      long: Lexical bindings associate names with values inside a scope. Functions
+        bind parameters; let creates local bindings; loop establishes recursive bindings
+        usable with recur. Destructuring in bindings (vectors/maps and :as) lets you
+        bind parts of collections directly. Bindings avoid mutable local variables
+        by giving immutable names to values in scope.
+    introduced_by: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  concept:namespaces:
+    key: concept:namespaces
+    summary:
+      name: Namespaces
+      oneliner: Named containers for vars; control resolution and provide aliasing/importing
+        of Clojure vars and Java classes.
+      short: Namespaces group root bindings. Use in-ns, ns, require, use, import,
+        and :require/:import in ns to manage symbol resolution and aliases; java.lang
+        is auto-imported.
+      long: Root bindings live in namespaces (e.g., user/foo). in-ns switches/creates
+        namespaces; ns declares namespace and reference forms at the top of a file.
+        require with :as creates aliases (e.g., [clojure.string :as str]). import
+        brings Java classes into the namespace. resolve returns the var/class a symbol
+        maps to in the current namespace. Namespaces enable modular code and controlled
+        symbol visibility.
+    introduced_by: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  concept:destructuring:
+    key: concept:destructuring
+    summary:
+      name: Destructuring
+      oneliner: Binding syntax that extracts parts of collections (vectors/maps) into
+        local names.
+      short: Destructuring lets you bind elements of sequential collections with vectors
+        and keys of associative collections with maps directly in parameter lists
+        and let bindings; supports :as and skipping via _.
+      long: Destructuring is a mini-language used wherever bindings occur. Vector
+        destructuring binds sequential elements by position; map destructuring binds
+        by key names. Use :as to bind the whole structure alongside parts. The idiom
+        _ indicates an ignored binding. Destructuring simplifies extracting nested
+        data without manual indexing or lookups.
+    introduced_by: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  concept:flow_control:
+    key: concept:flow_control
+    summary:
+      name: Flow Control
+      oneliner: 'Small set of control constructs: if, do, loop/recur (and derived
+        macros like when).'
+      short: 'Clojure favors a few composable control forms: if for branching, do
+        for sequencing side-effecting expressions, and loop/recur for explicit recursion
+        (recur is optimized tail recursion). Other macros like when build on if.'
+      long: 'Control flow in Clojure is minimal: if evaluates a test and returns the
+        then/else expression; do evaluates multiple expressions for side effects and
+        returns the last value; loop establishes recursion points and recur rebinds
+        loop variables and jumps to the loop head (optimized by the compiler). Tail-call
+        optimization is not generally performed, but recur is optimized. Sequence
+        library functions often replace explicit loops.'
+    introduced_by: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  concept:metadata:
+    key: concept:metadata
+    summary:
+      name: Metadata
+      oneliner: Auxiliary data attached to vars and objects that does not affect logical
+        value (e.g., :doc, :tag).
+      short: Metadata is a map of key/value pairs attached to vars and literals via
+        the ^ reader macro or explicit meta forms; common keys include :doc, :arglists,
+        :file, :line, :tag, :ns, and :name.
+      long: Metadata represents data about data and is orthogonal to an object's value.
+        Vars carry metadata used for documentation, type hints (:tag), source location,
+        and macro flags. Attach metadata with the ^reader-macro (e.g., ^String or
+        ^{:tag String}) to annotate args/returns and assist the compiler or tooling.
+        Use meta to inspect var metadata.
+    introduced_by: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  concept:symbols:
+    key: concept:symbols
+    summary:
+      name: Symbols
+      oneliner: Names used to refer to functions, vars, classes, namespaces, and data.
+      short: Symbols name functions, operators, Java classes, namespaces, and data
+        structures. They have syntactic rules (cannot start with a number) and special
+        characters like / and . are treated specially for namespaces and interop.
+      long: Symbols (e.g., +, concat, java.lang.String) are identifiers used throughout
+        Clojure to refer to functions, classes, namespaces, and vars. They resolve
+        to vars or classes in the current namespace. Clojure allows a restricted set
+        of symbol characters and treats / and . specially to support namespaced symbols
+        and Java interop naming. Unresolved symbols cause runtime/compile errors.
+    introduced_by: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  concept:strings_and_characters:
+    key: concept:strings_and_characters
+    summary:
+      name: Strings and Characters
+      oneliner: Java String and char literals in Clojure; strings are sequences of
+        characters and interoperate with Java methods.
+      short: Clojure strings are Java strings (double-quoted); characters are written
+        as \c. Strings are sequences; use apply str to build strings from character
+        sequences; Java interop calls invoke methods like (.toUpperCase "hello").
+      long: Strings are Java java.lang.String instances and support Java interop directly.
+        Character literals use backslash notation (e.g., \a, \space, \newline). Strings
+        are sequences of characters, so sequence functions operate on them. To convert
+        a sequence of characters to a string, use (apply str ...). Clojure provides
+        str (which concatenates and ignores nil) as a convenience over Java's toString.
+    introduced_by: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  concept:maps_keywords_and_records:
+    key: concept:maps_keywords_and_records
+    summary:
+      name: Maps, Keywords, and Records
+      oneliner: 'Associative data structures: maps are key/value tables; keywords
+        are self-resolving identifiers often used as keys; defrecord creates typed
+        map-like records.'
+      short: Maps use curly-brace literals {:k v}. Keywords (:k) evaluate to themselves
+        and are functions that look themselves up in maps. defrecord defines record
+        types that behave like maps but with a concrete type and optional constructors
+        and readable literals.
+      long: 'Maps store key/value associations and can be invoked as functions to
+        lookup keys. Keywords begin with : and evaluate to themselves; they serve
+        as convenient map keys and can be used as functions to lookup their value
+        in a map. defrecord creates a new record type (with constructor ->Type and
+        Type. forms and literal #namespace.Type{...}) that behaves like a map but
+        has a concrete class and can carry type semantics. get provides an explicit
+        lookup with optional default.'
+    introduced_by: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  concept:calling_java:
+    key: concept:calling_java
+    summary:
+      name: Calling Java
+      oneliner: 'Clojure Java interoperability: new, ., import, and calling static/instance
+        methods/fields.'
+      short: Create Java objects with (new ClassName ...) or (ClassName. ...), call
+        methods and access fields with (. instance method args) or (. ClassName FIELD)
+        for statics; import to allow short class names; use javadoc from REPL.
+      long: 'Clojure provides direct Java interop: (new java.util.Random) to construct,
+        (. rnd nextInt) or (. rnd nextInt 10) to call instance methods, (. Math PI)
+        for static fields, and import to shorten class references. javadoc helper
+        aids discovery. Java primitives/arrays have special-casing where needed. Clojure''s
+        interop lets you use Java libraries seamlessly from the REPL and source.'
+    introduced_by: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  concept:anonymous_functions:
+    key: concept:anonymous_functions
+    summary:
+      name: Anonymous Functions
+      oneliner: 'Functions without names created with fn or shorthand #(...) used
+        for short callbacks and closures.'
+      short: 'fn creates anonymous functions; shorthand syntax #( ... ) uses implicit
+        params % %1 %2. Anonymous functions are useful for small callbacks, local
+        names via let, and creating closures at runtime.'
+      long: 'Anonymous functions are created with (fn [params] body) or the shorthand
+        #(...). The shorthand names parameters % (first), %1, %2, etc. Anonymous functions
+        are used when a brief function is needed inline, to create functions that
+        close over lexical values, or to provide local named functions via let. Examples
+        include filter (fn [w] (> (count w) 2)) and #(> (count %) 2).'
+    introduced_by: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  concept:sequences:
+    key: concept:sequences
+    summary:
+      name: Sequences
+      oneliner: Uniform abstraction (seq) that views many collections as logical lists.
+      short: The seq abstraction (pronounced "seek") is a logical list interface providing
+        first, rest, and cons; many Clojure and Java data structures are seq-able.
+      long: 'A seq is a logical (immutable) list abstraction in Clojure. Core operations:
+
+        - (first aseq) returns the first item or nil for empty/nil.
+
+        - (rest aseq) returns a seq of remaining items; returns an empty seq (not
+        nil) when no more items.
+
+        - (cons elem aseq) constructs a new seq by adding elem to the front.
+
+
+        The function (seq coll) returns a seq for any seq-able collection (or nil
+        for empty/nil). (next aseq) is equivalent to (seq (rest aseq)) and returns
+        nil for empty remainder. Many concrete collections (lists, vectors, maps,
+        sets, Java collections, arrays, strings, regex matches, filesystem trees,
+        IO streams, XML trees) can be viewed via the same seq abstraction, enabling
+        a single, powerful sequence library to operate uniformly across them. Seqs
+        are immutable and often lazy.'
+    introduced_by: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+  concept:seq_able_collections:
+    key: concept:seq_able_collections
+    summary:
+      name: Seq-able collections
+      oneliner: Collections that can be viewed as seqs (Clojure and many Java types).
+      short: 'Definition and examples of seq-able: all Clojure collections, Java collections,
+        Java arrays, strings, regex matches, directory trees, I/O streams, XML trees.'
+      long: 'Many different collection types are "seq-able": they can be wrapped by
+        seq and processed by the sequence library. This includes Clojure built-in
+        collections (lists, vectors, maps, sets), Java Collections API types, Java
+        arrays and strings, regex match sequences (re-seq), file-system traversal
+        (file-seq), line/reader sequences (line-seq), and XML trees (xml-seq). Seq-able
+        wrappers are immutable views even if underlying data is mutable.'
+    introduced_by: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+  concept:lazy_sequences:
+    key: concept:lazy_sequences
+    summary:
+      name: Lazy sequences
+      oneliner: Sequences whose elements are computed on demand.
+      short: 'Most Clojure sequences are lazy: elements are generated only when needed,
+        enabling representation of large or infinite sequences and delayed I/O/side-effects.'
+      long: 'Lazy sequences postpone computation of elements until they are consumed.
+        Benefits: avoid unnecessary work, represent infinite sequences (iterate, range,
+        repeat, cycle), operate on datasets larger than memory, delay I/O. Common
+        lazy producers: iterate, range, repeat (one-arg infinite), cycle, lazy-seq,
+        many seq-library functions (map, filter, etc.) return lazy sequences. Forcing
+        evaluation: doall (realize and retain elements) and dorun (realize but do
+        not retain).'
+    introduced_by: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+  concept:sequence_library_map_filter_reduce_sort_take_drop_etc:
+    key: concept:sequence_library_map_filter_reduce_sort_take_drop_etc
+    summary:
+      name: Sequence library (map, filter, reduce, sort, take, drop, etc.)
+      oneliner: Set of generic functions to create, filter, transform, and query seqs.
+      short: 'The sequence library provides functions that operate on any seq-able:
+        creators (range, repeat, iterate, cycle, interleave, interpose), filters (filter,
+        take, take-while, drop-while, split-at, split-with), predicates (every?, some,
+        not-every?, not-any?), transformations (map, reduce, sort, sort-by, for comprehensions),
+        and helpers (conj, into, seq, reverse, doall, dorun).'
+      long: 'Comprehensive set of generic, mostly-lazy functions for manipulating
+        sequences:
+
+        - Creation: range, repeat, iterate, cycle, interleave, interpose, list/vector/hash-set/hash-map,
+        vec, set.
+
+        - Filtering: filter, take, take-while, drop-while, split-at, split-with.
+
+        - Predicates: every?, some, not-every?, not-any?.
+
+        - Transformation: map (supports multiple collections), reduce, sort/sort-by
+        (optional comparator), for comprehensions (with :when and :while), reverse.
+
+        - Collection operations: conj (efficient insertion spot per type), into (bulk
+        add).
+
+        - Realization: doall, dorun for forcing evaluation.
+
+        These functions allow concise, high-level, and reusable manipulation of many
+        data sources via the seq abstraction.'
+    introduced_by: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+  concept:core_seq_operations_first_rest_cons_next:
+    key: concept:core_seq_operations_first_rest_cons_next
+    summary:
+      name: 'Core seq operations: first/rest/cons/next'
+      oneliner: Primitive operations defining seq behavior and navigation.
+      short: first returns first element (or nil); rest returns seq of remainder (empty
+        seq when none); cons constructs new seq by prepending; next returns seq of
+        remainder or nil.
+      long: 'The minimal contract of ISeq (seq abstraction) exposes three core capabilities:
+
+        - (first aseq) — get first element; returns nil for empty/nil.
+
+        - (rest aseq) — get seq of remaining elements; returns empty seq when none
+        (not nil).
+
+        - (cons elem aseq) — construct a new seq with elem at the front.
+
+        Additionally, (next aseq) is like (seq (rest aseq)) but returns nil when there
+        are no remaining items (unlike rest which returns an empty seq). These primitives
+        underpin iteration and many seq functions.'
+    introduced_by: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+  concept:conj_and_into:
+    key: concept:conj_and_into
+    summary:
+      name: conj and into
+      oneliner: Collection-building helpers that add elements efficiently according
+        to underlying structure.
+      short: conj adds one or more elements at an efficient insertion spot (front
+        for lists, back for vectors); into adds all items from one collection into
+        another, honoring efficient insertion semantics of the target.
+      long: 'conj and into construct new collections efficiently:
+
+        - (conj coll element & elements) — adds elements in an efficient spot for
+        the collection type (e.g., front for lists, back for vectors).
+
+        - (into to-coll from-coll) — adds all items from from-coll into to-coll with
+        target-appropriate efficiency.
+
+        Because these functions choose the efficient insertion point for the concrete
+        collection, code can be both generic and performant.'
+    introduced_by: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+  concept:infinite_sequences_and_iteration_iterate_repeat_cycle:
+    key: concept:infinite_sequences_and_iteration_iterate_repeat_cycle
+    summary:
+      name: Infinite sequences and iteration (iterate, repeat, cycle)
+      oneliner: Generators for infinite sequences and patterns for producing unbounded
+        data.
+      short: iterate applies function repeatedly to produce an infinite sequence;
+        repeat produces infinite repetition (or a finite count with two-arg form);
+        cycle repeats a finite collection forever; use take to view finite prefix.
+      long: 'iterate, repeat, and cycle are primitives to express infinite or repeating
+        sequences:
+
+        - (iterate f x) — yields x, (f x), (f (f x)), ... infinitely.
+
+        - (repeat x) or (repeat n x) — infinite or fixed-length repetition.
+
+        - (cycle coll) — repeats elements of coll infinitely.
+
+        Because these sequences are lazy, consumers use functions like take, take-while,
+        interleave, etc., to produce finite results when needed.'
+    introduced_by: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+  concept:filtering_and_predicate_functions_filter_take_while_drop_while_split_with_every_some:
+    key: concept:filtering_and_predicate_functions_filter_take_while_drop_while_split_with_every_some
+    summary:
+      name: Filtering and predicate functions (filter, take-while, drop-while, split-with,
+        every?, some)
+      oneliner: Functions to select or query elements of sequences based on predicates.
+      short: filter returns items satisfying pred; take-while and drop-while operate
+        while pred holds/doesn't; split-at and split-with partition sequences; every?
+        and some test predicates across sequences (some returns first non-false value).
+      long: 'Sequence filtering/primitives:
+
+        - (filter pred coll) — lazy subsequence of elements where pred is truthy.
+
+        - (take-while pred coll) / (drop-while pred coll) — take or drop prefix while
+        pred holds.
+
+        - (split-at n coll) / (split-with pred coll) — split into two collections
+        by index or predicate.
+
+        - (every? pred coll) — true if pred true for every element.
+
+        - (some pred coll) — returns first non-false/non-nil result of pred (not a
+        boolean predicate necessarily).
+
+        - (not-every? pred coll), (not-any? pred coll) — negated forms.
+
+        Careful with infinite sequences: predicates that require full traversal may
+        not terminate.'
+    introduced_by: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+  concept:transformations_map_reduce_sort_sort_by_reverse:
+    key: concept:transformations_map_reduce_sort_sort_by_reverse
+    summary:
+      name: 'Transformations: map, reduce, sort, sort-by, reverse'
+      oneliner: Common higher-order sequence transformers for projecting, aggregating,
+        and ordering data.
+      short: map applies a function over each element (supports multiple colls), reduce
+        aggregates via a binary function, sort and sort-by order elements (optional
+        comparator), reverse returns reversed sequence (seq view).
+      long: 'Transformation primitives:
+
+        - (map f coll) — lazily maps f over coll; supports multiple colls (stops at
+        shortest).
+
+        - (reduce f coll) — folds coll with binary f to produce a single value.
+
+        - (sort coll) / (sort comp coll) / (sort-by keyfn comp? coll) — return sorted
+        seqs by natural order or custom comparator / key function.
+
+        - (reverse coll) — returns a seq in reverse order.
+
+        These functions are the building blocks for many data processing pipelines.'
+    introduced_by: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+  concept:for_comprehensions:
+    key: concept:for_comprehensions
+    summary:
+      name: for (comprehensions)
+      oneliner: Sequence comprehensions for expressive generation with bindings and
+        filters.
+      short: for builds lazy sequence comprehensions with binding vectors, supports
+        :when and :while clauses, multiple bindings (nested iteration), and yields
+        expressions. More general than map/filter.
+      long: 'for is a lazy sequence comprehension macro:
+
+        (for [binding-form coll-expr filter-expr? ...] expr)
+
+        Bindings can be multiple (producing nested loops), and optional :when filters
+        and :while guards control selection and termination. Clojure iterates the
+        rightmost binding fastest. for can express map/filter-like operations and
+        cross products, and is suited for complex generation of sequences.'
+    introduced_by: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+  concept:forcing_realization_doall_and_dorun:
+    key: concept:forcing_realization_doall_and_dorun
+    summary:
+      name: 'Forcing realization: doall and dorun'
+      oneliner: Helpers to realize lazy sequences, useful when side effects are embedded.
+      short: doall walks and retains elements, returning realized sequence; dorun
+        walks but does not retain (returns nil), both forcing evaluation useful when
+        lazy seqs embed side effects.
+      long: 'Because lazy sequences defer work, side-effecting code inside seqs will
+        not run until realized. Use:
+
+        - (doall coll) — realize the sequence and return it (keeps references).
+
+        - (dorun coll) — realize for side-effects but do not keep references (returns
+        nil).
+
+        Use sparingly; they are primarily for dealing with side effects while the
+        rest of Clojure encourages purity.'
+    introduced_by: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+  concept:seq_ing_java_and_interop_re_seq_file_seq_line_seq_xml_seq:
+    key: concept:seq_ing_java_and_interop_re_seq_file_seq_line_seq_xml_seq
+    summary:
+      name: Seq-ing Java and interop (re-seq, file-seq, line-seq, xml-seq)
+      oneliner: Wrappers that expose Java/IO/XML/regex data as immutable seqs for
+        uniform processing.
+      short: re-seq makes regex matches a seq; file-seq walks directory trees; line-seq
+        produces seq of lines from a Reader; xml-seq views parsed XML as a seq of
+        nodes. These enable use of sequence library over Java/IO/XML resources.
+      long: 'Clojure provides seq-oriented adapters for common Java and IO patterns:
+
+        - (re-seq regexp string) — returns seq of regex matches (immutable view).
+
+        - (file-seq file) — returns a depth-first seq of java.io.File for recursive
+        traversal.
+
+        - (line-seq reader) — seq of lines from a java.io.Reader (use with with-open
+        to close resources).
+
+        - (xml-seq root) — view of parsed XML tree as a sequence of nodes (after clojure.xml/parse).
+
+        These adapters make complex interop tasks amenable to the same sequence processing
+        functions; note resource management (with-open) when using Readers.'
+    introduced_by: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+  concept:structure_specific_functions_peek_pop_get_assoc_subvec_keys_vals_contains_merge_with_select_keys:
+    key: concept:structure_specific_functions_peek_pop_get_assoc_subvec_keys_vals_contains_merge_with_select_keys
+    summary:
+      name: Structure-specific functions (peek, pop, get, assoc, subvec, keys, vals,
+        contains?, merge-with, select-keys)
+      oneliner: APIs that target concrete collection types for performance or convenience.
+      short: 'Examples: peek/pop for lists (front) and vectors (end), get for associative
+        lookups (with optional default), assoc/dissoc for maps, subvec for efficient
+        vector slices, keys/vals for maps, contains? to test presence, merge-with
+        to combine maps with a custom combiner, select-keys to project maps.'
+      long: 'Clojure supplies functions that operate on particular concrete types
+        to provide performance or semantics not available in generic seq ops:
+
+        - Lists/Vectors: peek and pop behave differently (lists: front; vectors: end).
+        pop on empty list throws.
+
+        - Vectors: get (index, optional nil if out-of-bounds), assoc (set by index),
+        subvec (fast subvector).
+
+        - Maps: keys, vals, get (with optional default), contains? distinguishes missing
+        key vs nil value, assoc/dissoc, select-keys, merge, merge-with (combine values
+        for duplicate keys).
+
+        These functions let you take advantage of concrete-structure properties when
+        needed.'
+    introduced_by: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+  concept:sets_and_relational_operations_union_intersection_difference_select_project_join_rename:
+    key: concept:sets_and_relational_operations_union_intersection_difference_select_project_join_rename
+    summary:
+      name: Sets and relational operations (union, intersection, difference, select,
+        project, join, rename)
+      oneliner: Set-theoretic and relational-algebra-like operations available on
+        sets/maps for data-querying.
+      short: clojure.set provides union, intersection, difference, select (predicate-based),
+        plus relational primitives project, rename, join to operate on sets of maps
+        (relations). join supports key-mapping for differing key names.
+      long: 'The clojure.set namespace supplies both set-theory operations and relational
+        algebra primitives:
+
+        - union, intersection, difference, select for predicate-based selection.
+
+        - project to keep only specified keys from relation (set of maps).
+
+        - rename to change key names in a relation.
+
+        - join to combine relations on shared keys (or via a keymap) producing combined
+        maps (akin to DB joins).
+
+        These operations allow using Clojure sets as in-memory relational tables and
+        combining them with seq functions for powerful data queries.'
+    introduced_by: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+  concept:regular_expressions_re_seq_and_re_matcher_re_find:
+    key: concept:regular_expressions_re_seq_and_re_matcher_re_find
+    summary:
+      name: Regular expressions (re-seq and re-matcher/re-find)
+      oneliner: Regex matching accessible as seqs via re-seq; lower-level mutable
+        matcher via re-matcher and re-find.
+      short: re-seq returns an immutable seq of matches for a regexp; re-matcher/re-find
+        expose java.util.regex.Matcher for imperative iteration but are mutable. Prefer
+        re-seq to integrate regex results into seq pipelines.
+      long: 'Clojure builds on java.util.regex:
+
+        - (re-seq regex string) — returns an immutable sequence of matches suitable
+        for sequence operations (map, sort, drop, etc.).
+
+        - Lower-level: (re-matcher regex string) returns a Matcher; (re-find matcher)
+        advances and returns next match but uses a mutable API and is less idiomatic.
+
+        re-seq is the preferred, seq-friendly way to work with regex matches.'
+    introduced_by: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+  concept:files_and_i_o_file_seq_line_seq_with_open_reader:
+    key: concept:files_and_i_o_file_seq_line_seq_with_open_reader
+    summary:
+      name: Files and I/O (file-seq, line-seq, with-open, reader)
+      oneliner: File-system and stream utilities that produce seqs and require proper
+        resource management.
+      short: file-seq returns depth-first traversal of a directory; line-seq returns
+        seq of lines from a Reader; use clojure.java.io/reader and with-open to manage
+        resources (close readers).
+      long: 'Clojure provides IO utilities for working with file systems and streams
+        in a seq-friendly manner:
+
+        - (file-seq (java.io.File. path)) — depth-first sequence of files/directories.
+
+        - (line-seq reader) — sequence of lines from a Reader (use clojure.java.io/reader).
+
+        - (with-open [rdr (reader ...)] ...) — ensures Reader/stream is closed after
+        use.
+
+        Combine these with sequence functions (filter, map, reduce, count) to build
+        file-processing utilities (e.g., counting non-blank lines across .clj files
+        while excluding .svn directories).'
+    introduced_by: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+  concept:pure_functions:
+    key: concept:pure_functions
+    summary:
+      name: Pure Functions
+      oneliner: Functions without side effects; output depends only on arguments.
+      short: Pure functions have no side effects and depend only on their arguments;
+        they facilitate reasoning, testing, referential transparency, and laziness.
+      long: A pure function is one that, for the same arguments, always returns the
+        same result and produces no side effects (it does not mutate external state,
+        perform I/O, or depend on hidden state). Pure functions pair naturally with
+        immutable data and enable referential transparency, memoization, and easier
+        testing and composition. The document uses pure functions as a foundational
+        FP concept and contrasts them with impure ops like println.
+    introduced_by: chunk:programming_clojure_2nd_edition--4_functional_programming
+  concept:persistent_data_structures:
+    key: concept:persistent_data_structures
+    summary:
+      name: Persistent Data Structures
+      oneliner: Immutable data structures that share structure between versions for
+        efficiency.
+      short: 'Clojure data structures are immutable but persistent: updates create
+        new versions that efficiently share structure with old versions to avoid full
+        copying.'
+      long: Persistent data structures preserve previous versions after "updates"
+        by sharing structure between the old and new versions rather than copying
+        everything. This gives the benefits of immutability while avoiding the naive
+        memory blowup of full copies. The text explains structural sharing with lists
+        and references articles (Ideal Hash Trees, PersistentVector implementation)
+        and motivates persistent structures as central to Clojure's FP and concurrency
+        model.
+    introduced_by: chunk:programming_clojure_2nd_edition--4_functional_programming
+  concept:structural_sharing:
+    key: concept:structural_sharing
+    summary:
+      name: Structural Sharing
+      oneliner: The mechanism by which persistent data structures reuse parts of older
+        versions.
+      short: Structural sharing reuses unmodified portions of data structures between
+        versions to make immutable updates efficient.
+      long: 'Structural sharing is the technique persistent data structures use to
+        avoid full copying on updates: new versions share unchanged substructure with
+        previous versions. The book visualizes this with lists (cons reusing the tail)
+        and notes that for other structures (vectors, maps) the mechanics are more
+        complex but follow the same principle.'
+    introduced_by: chunk:programming_clojure_2nd_edition--4_functional_programming
+  concept:referential_transparency:
+    key: concept:referential_transparency
+    summary:
+      name: Referential Transparency
+      oneliner: Ability to replace a function call with its result without changing
+        program behavior.
+      short: Referential transparency means calls to a function can be substituted
+        with their results (no observable difference), enabling laziness, memoization,
+        and parallelization.
+      long: Referential transparency is the property that a function call can be replaced
+        by its result without changing the program's behavior. Pure functions are
+        referentially transparent; this property underpins lazy evaluation (safe postponement
+        of computation), memoization (caching results), and possibilities for automatic
+        parallelization. Impure functions typically lack this property and therefore
+        must be controlled explicitly.
+    introduced_by: chunk:programming_clojure_2nd_edition--4_functional_programming
+  concept:six_rules_of_clojure_fp:
+    key: concept:six_rules_of_clojure_fp
+    summary:
+      name: Six Rules of Clojure FP
+      oneliner: A pragmatic set of guidelines for writing FP-style Clojure.
+      short: Six practical rules guiding recursion, laziness, and use of the sequence
+        library in Clojure.
+      long: 'A compact set of Clojure-specific FP guidelines presented in the chapter:
+
+        1) Avoid direct (stack-consuming) recursion.
+
+        2) Use recur for producing scalar values or small fixed sequences.
+
+        3) For large/variable sequences, prefer lazy sequences (avoid recur).
+
+        4) Do not realize more of a lazy sequence than necessary.
+
+        5) Know and favor the sequence library (map, filter, iterate, partition, etc.).
+
+        6) Subdivide problems to exploit sequence-library abstractions.
+
+        These rules balance FP ideals with JVM constraints and recur/trampoline/lazy
+        techniques.'
+    introduced_by: chunk:programming_clojure_2nd_edition--4_functional_programming
+  concept:tail_recursion_and_tail_call_optimization_tco:
+    key: concept:tail_recursion_and_tail_call_optimization_tco
+    summary:
+      name: Tail Recursion and Tail-Call Optimization (TCO)
+      oneliner: Tail-position recursive calls that some runtimes can optimize into
+        iterations.
+      short: Tail recursion means the recursive call is the function's final action;
+        TCO removes stack growth by turning recursion into iteration, but the JVM
+        lacks general TCO.
+      long: Tail recursion occurs when a function calls itself as its last action
+        so that no work remains after the recursive call. Languages or runtimes that
+        perform tail-call optimization (TCO) can convert such recursion into iteration,
+        avoiding stack growth. The JVM generally does not provide general TCO, so
+        Clojure provides alternatives (recur for self-tail recursion, trampoline for
+        mutual recursion, and lazy sequences). The chapter demonstrates tail recursion
+        with a tail-fibo example and explains why tail recursion alone still overflows
+        on the JVM without reuse of recur.
+    introduced_by: chunk:programming_clojure_2nd_edition--4_functional_programming
+  concept:trampoline:
+    key: concept:trampoline
+    summary:
+      name: trampoline
+      oneliner: A caller-driven loop that repeatedly invokes returned functions to
+        support mutual recursion without growing the stack.
+      short: Clojure's trampoline repeatedly calls a function (or the functions it
+        returns) until a non-function value is returned, enabling mutual recursion
+        without stack growth.
+      long: 'trampoline is a Clojure core function that invokes an initial function
+        (with optional partial args). If the function returns another function, trampoline
+        calls that function, and so on, until a non-function result is produced. This
+        implements a caller-managed recursion (a trampoline) that can handle mutual
+        recursion patterns by avoiding JVM stack growth. The book shows converting
+        tail-recursive and mutually recursive functions to use trampoline (wrapping
+        recursive tail-calls with # to return thunks).'
+    introduced_by: chunk:programming_clojure_2nd_edition--4_functional_programming
+  concept:memoization:
+    key: concept:memoization
+    summary:
+      name: Memoization
+      oneliner: Caching function results to avoid repeated recomputation.
+      short: Memoization stores past inputs and outputs of functions so subsequent
+        calls with the same input return cached results quickly, trading heap for
+        time.
+      long: Memoization is an optimization that caches function call results (mapping
+        inputs to outputs). In mutually recursive or expensive computations (e.g.,
+        Hofstadter male/female sequences), memoization dramatically reduces repeated
+        work by returning cached values. The chapter demonstrates rebinding functions
+        with (memoize ...) and exposing sequences so the memo cache is populated incrementally,
+        enabling fast nth lookups while avoiding repeated deep recursion. It also
+        notes that memoization increases heap usage and that caches must be warmed
+        (otherwise stack overflow may occur before cache populates).
+    introduced_by: chunk:programming_clojure_2nd_edition--4_functional_programming
+  concept:letfn:
+    key: concept:letfn
+    summary:
+      name: letfn
+      oneliner: Create local named functions that can be mutually recursive.
+      short: letfn binds local functions that may refer to each other (mutual recursion)
+        within a lexical scope.
+      long: letfn is a binding form for defining local, possibly mutually recursive
+        functions. Each function declared inside letfn can call itself and the other
+        local functions in the same letfn block. The chapter uses letfn to implement
+        a tail-recursive fibonacci helper (fib) that is invoked with initial basis
+        values.
+    introduced_by: chunk:programming_clojure_2nd_edition--4_functional_programming
+  concept:declare:
+    key: concept:declare
+    summary:
+      name: declare
+      oneliner: Predeclare var names so mutually recursive top-level functions can
+        be defined.
+      short: declare creates var names (without bindings) so later defn forms can
+        refer to each other, enabling mutual recursion among top-level functions.
+      long: declare allows you to create forward declarations for var names so that
+        multiple top-level functions that call each other (mutual recursion) can be
+        defined without order constraints. The chapter uses (declare my-odd? my-even?)
+        before defning each to allow mutual calls.
+    introduced_by: chunk:programming_clojure_2nd_edition--4_functional_programming
+  concept:multimethods:
+    key: concept:multimethods
+    summary:
+      name: Multimethods
+      oneliner: Generic functions dispatching on runtime values via a dispatch function.
+      short: Multimethods let you define a generic function with defmulti and provide
+        implementations (defmethod) keyed by a dispatch value computed from arguments;
+        used here to separate collection vs scalar handling.
+      long: 'Multimethods are Clojure''s runtime polymorphism facility: defmulti creates
+        a dispatching generic function that computes a dispatch value via a dispatch
+        function; defmethod provides method implementations for specific dispatch
+        values. The chapter refactors a recursive replace-symbol into a multimethod
+        dispatching on whether the input is a collection or scalar to improve readability
+        and replace an explicit type-checking if.'
+    introduced_by: chunk:programming_clojure_2nd_edition--4_functional_programming
+  concept:lazy_seq:
+    key: concept:lazy_seq
+    summary:
+      name: lazy-seq
+      oneliner: Macro to create a lazily realized sequence by deferring evaluation
+        of its body.
+      short: lazy-seq wraps code so it is evaluated only when the sequence is realized;
+        used to implement infinite sequences and to break recursion.
+      long: lazy-seq is a macro that delays evaluation of its body until the sequence
+        is actually needed (realized). The result is cached for subsequent realizations.
+        Wrapping the recursive step of a sequence generator in lazy-seq replaces immediate
+        recursion with laziness, preventing stack overflow and enabling infinite or
+        large sequences. The chapter uses lazy-seq to implement a lazy Fibonacci sequence
+        and to break recursion in replace-symbol and other examples.
+    introduced_by: chunk:programming_clojure_2nd_edition--4_functional_programming
+  concept:holding_the_head_loss_of_laziness:
+    key: concept:holding_the_head_loss_of_laziness
+    summary:
+      name: Holding the head / loss of laziness
+      oneliner: Retaining a reference to the head of a lazy sequence prevents garbage
+        collection of realized prefix.
+      short: If a top-level var references the head of a lazy sequence, realized elements
+        cannot be reclaimed, causing memory blowup; expose sequences via functions
+        to avoid this.
+      long: 'The chapter warns that storing a lazy sequence in a top-level var (thus
+        holding its head) prevents garbage collection of realized elements as you
+        traverse the sequence, leading to unbounded memory usage. Example: head-fibo
+        stored as a var leads to OutOfMemoryError on deep nth access. Recommendation:
+        expose lazy sequences from a function so callers control caching if desired.'
+    introduced_by: chunk:programming_clojure_2nd_edition--4_functional_programming
+  concept:hofstadter_male_female_sequences:
+    key: concept:hofstadter_male_female_sequences
+    summary:
+      name: Hofstadter male/female sequences
+      oneliner: Mutually recursive integer sequences (F and M) where each depends
+        on the other.
+      short: 'F(0)=1, M(0)=0 and for n>0: F(n)=n - M(F(n-1)), M(n)=n - F(M(n-1));
+        used to illustrate memoization and sequencing.'
+      long: 'The Hofstadter Female (F) and Male (M) sequences are mutually recursive
+        integer sequences: F(0)=1, M(0)=0; for n>0, F(n)=n - M(F(n-1)) and M(n)=n
+        - F(M(n-1)). The chapter implements these directly (mutual recursion), demonstrates
+        their poor performance without memoization, and shows how memoization plus
+        exposing m-seq/f-seq (mapping the memoized functions over naturals) yields
+        efficient nth access by building the memo cache incrementally.'
+    introduced_by: chunk:programming_clojure_2nd_edition--4_functional_programming
+  concept:stack_overflow_jvm_stack_behavior:
+    key: concept:stack_overflow_jvm_stack_behavior
+    summary:
+      name: stack overflow / JVM stack behavior
+      oneliner: Recursive calls allocate JVM stack frames and can cause StackOverflowError;
+        JVM lacks general TCO.
+      short: The JVM represents function calls with stack frames; naive recursion
+        can exhaust the stack leading to StackOverflowError, motivating recur/trampoline/laziness.
+      long: The chapter emphasizes that each Clojure function call maps to JVM method
+        calls that allocate stack frames; naive recursion (especially exponential
+        or deep linear recursion) consumes stack proportional to recursion depth and
+        triggers StackOverflowError. The JVM generally does not implement general
+        tail-call optimization (TCO), so Clojure provides explicit recur for self-tail
+        recursion, trampoline for mutual recursion, and lazy sequences to avoid deep
+        recursion.
+    introduced_by: chunk:programming_clojure_2nd_edition--4_functional_programming
+  concept:printing_limits_print_length_and_print_level:
+    key: concept:printing_limits_print_length_and_print_level
+    summary:
+      name: printing limits *print-length* and *print-level*
+      oneliner: Printer controls to limit how much of collections and nesting are
+        printed.
+      short: '*print-length* limits number of items printed in collections; *print-level*
+        limits nested printing depth to avoid overwhelming the REPL/printer.'
+      long: 'Clojure exposes dynamic vars to control the REPL printer: *print-length*
+        restricts how many items of a collection are printed (truncating with an ellipsis),
+        preventing accidental realization of huge lazy sequences at the REPL; *print-level*
+        limits the depth of nested structure printed (printing # when exceeding limit).
+        The chapter uses these to safely inspect large or deeply nested sequences.'
+    introduced_by: chunk:programming_clojure_2nd_edition--4_functional_programming
+highlights:
+  chunk:programming_clojure_2nd_edition--2_exploring_clojure:
+  - text: Identify and use the primary Clojure forms (numbers, strings, lists, vectors,
+      maps, sets, symbols, keywords, records, booleans, nil) as the basis for programs.
+    concepts:
+    - concept:forms
+    reference_id: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  - text: 'Understand reader macros and how they transform source text into data:
+      quote, comment, var-quote (#''), anonymous-function (#()), regex (#\"...\"),
+      metadata (^), and syntax/unquote forms.'
+    concepts:
+    - concept:reader_macros
+    reference_id: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  - text: 'Define and call functions with defn, including multiple arities and variadic
+      parameters, and create anonymous functions (fn and shorthand #%).'
+    concepts:
+    - concept:functions
+    - concept:anonymous_functions
+    reference_id: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  - text: Use vars, lexical bindings (let), and destructuring (vectors and maps) to
+      bind data succinctly and access parts of collections without mutable locals.
+    concepts:
+    - concept:vars
+    - concept:bindings
+    - concept:destructuring
+    reference_id: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  - text: Organize code with namespaces, require/use/alias libraries, and import Java
+      classes; resolve names across namespaces and work in REPL-driven development.
+    concepts:
+    - concept:namespaces
+    reference_id: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  - text: 'Perform Java interop: construct objects (new), call instance/static methods
+      and fields (.), import classes, and use REPL tools like javadoc.'
+    concepts:
+    - concept:java_interop
+    reference_id: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  - text: 'Control flow using expression-oriented constructs: if, do for side effects,
+      and loop/recur for optimized recursion and explicit recurrence points.'
+    concepts:
+    - concept:flow_control
+    - concept:recursion
+    reference_id: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  - text: Prefer sequence abstractions and comprehensions (map-indexed, for, filter,
+      apply, sequence library functions) over imperative loops and mutable variables
+      to produce simpler, more general code (illustrated with index-of-any).
+    concepts:
+    - concept:sequence_library
+    - concept:for_comprehensions
+    reference_id: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  - text: Attach and inspect metadata on vars and forms (meta, ^reader-metadata),
+      including common keys (:doc, :arglists, :tag), to document and optimize code.
+    concepts:
+    - concept:metadata
+    reference_id: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences:
+  - text: 'Explain the seq abstraction and core operations: first, rest, cons, seq,
+      next; understand that many collection types are seq-able and that seqs are immutable
+      and often lazy.'
+    concepts:
+    - concept:sequences
+    reference_id: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+  - text: Use sequence-creation functions (range, repeat, iterate, cycle, interleave,
+      interpose, list/vector/hash-set/vec) and understand how to form finite views
+      on infinite sequences with take.
+    concepts:
+    - concept:concept_forms
+    reference_id: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+  - text: 'Apply filtering and predicate utilities: filter, take-while, drop-while,
+      split-at, split-with, every?, some, not-every?, not-any? and reason about predicate
+      semantics (e.g., some returns the matching value).'
+    concepts:
+    - concept:concept_functions
+    reference_id: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+  - text: Transform sequences using map, reduce, sort/sort-by, and for comprehensions;
+      compose these to express complex data transformations without mutating state.
+    concepts:
+    - concept:concept_functions
+    - concept:concept_bindings
+    reference_id: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+  - text: 'Understand laziness and infinite sequences: most seqs are lazy, enabling
+      streaming and infinite structures; use doall/dorun to force realization when
+      side effects or full evaluation are required.'
+    concepts:
+    - concept:concept_lazy_evaluation
+    reference_id: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+  - text: 'Use Java interop with seqs: seq-able Java arrays, Collections, regex via
+      re-seq, file IO via line-seq and file-seq, and xml-seq for XML trees—treat these
+      uniformly with the sequence library.'
+    concepts:
+    - concept:concept_calling_java
+    - concept:concept_strings_and_characters
+    reference_id: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+  - text: 'Apply structure-specific functions when needed for semantics or performance:
+      peek/pop for lists and vectors, get/assoc/subvec for vectors, keys/vals/contains?/assoc/dissoc/merge/merge-with
+      for maps, and clojure.set operations (union, intersection, difference, select,
+      project, join) for relational-style data.'
+    concepts:
+    - concept:concept_maps_keywords_and_records
+    reference_id: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+  - text: 'Compose small predicates and seq functions to build utilities (example:
+      clojure-loc counts nonblank Clojure lines in a directory using file-seq, line-seq,
+      filter, with-open, and reduce).'
+    concepts:
+    - concept:concept_bindings
+    - concept:concept_namespaces
+    reference_id: chunk:programming_clojure_2nd_edition--3_unifying_data_with_sequences
+  chunk:programming_clojure_2nd_edition--4_functional_programming:
+  - text: Explain and apply the notion of pure functions and why immutability and
+      persistent data structures matter in Clojure.
+    concepts:
+    - concept:functions
+    reference_id: chunk:programming_clojure_2nd_edition--4_functional_programming
+  - text: Understand lazy evaluation via lazy-seq and how lazy sequences enable representing
+      infinite or large series while realizing only needed elements.
+    concepts:
+    - concept:lazy_sequences
+    reference_id: chunk:programming_clojure_2nd_edition--4_functional_programming
+  - text: Use the sequence library (map, filter, partition, iterate, take, drop, etc.)
+      to write concise, composable solutions instead of explicit recursion.
+    concepts:
+    - concept:sequence_library_map_filter_reduce_sort_take_drop_etc
+    reference_id: chunk:programming_clojure_2nd_edition--4_functional_programming
+  - text: 'Choose appropriate recursion patterns on the JVM: avoid stack-consuming
+      recursion; prefer loop/recur for self-tail recursion, trampoline for mutual
+      recursion, or replace recursion with laziness when possible.'
+    concepts:
+    - concept:flow_control
+    reference_id: chunk:programming_clojure_2nd_edition--4_functional_programming
+  - text: Recognize realization and printing pitfalls (retain head of a lazy sequence)
+      and use doall/dorun or expose sequences via functions to avoid unintended memory
+      retention.
+    concepts:
+    - concept:forcing_realization_doall_and_dorun
+    reference_id: chunk:programming_clojure_2nd_edition--4_functional_programming
+  - text: Apply memoization to shortcut expensive mutually recursive computations
+      and combine memoization with sequence exposure to build caches incrementally.
+    concepts: []
+    reference_id: chunk:programming_clojure_2nd_edition--4_functional_programming
+  - text: Follow pragmatic guidance encapsulated in the Six Rules of Clojure FP to
+      pick laziness, recur, sequence-library functions, and subdivision for robust,
+      composable code.
+    concepts: []
+    reference_id: chunk:programming_clojure_2nd_edition--4_functional_programming

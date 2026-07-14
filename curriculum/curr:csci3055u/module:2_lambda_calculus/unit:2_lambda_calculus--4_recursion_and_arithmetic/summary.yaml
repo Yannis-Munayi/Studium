@@ -1,0 +1,38 @@
+name: Recursion, fixed points, and arithmetic in the λ-calculus
+oneliner: Derive recursion via self-application/fixed-point combinators, adopt rec
+  notation and applicative-order conventions, and implement standard arithmetic operations
+  in the λ-calculus.
+short: Shows how to obtain finite recursive behaviour by abstracting recursion points
+  and using self-application to form a fixed-point (Y) combinator; presents rec as
+  syntactic sugar; discusses applicative vs normal-order evaluation; and implements
+  arithmetic (add, mult, power, sub, equal, inequalities, div) on Church-like encodings
+  with worked reductions.
+long: 'This unit develops recursion as the mechanism for repetition in the λ-calculus
+  and functional programming. It explains why naive textual self-reference leads to
+  infinite non-terminating replacement and how abstraction at the recursion point
+  delays substitution so recursion manifests only during evaluation. Building on that
+  idea, it shows how passing a function to itself yields a general fixed-point constructor:
+  the paradoxical (Y) combinator expressed as (λs. f (s s)) (λs. f (s s)), and how
+  applying this to a non-recursive body produces a recursive function. To make definitions
+  convenient the unit introduces rec <name> = <expr> as syntactic sugar that expands
+  to a fixed-point binding, leaving recursive references intact for evaluation.
+
+
+  The text also treats evaluation order: it defines applicative-order β-reduction
+  (evaluate arguments before applying a function), contrasts it with normal order,
+  and highlights when conditional expressions must be guarded to avoid spurious non-termination
+  under applicative evaluation. With these conventions in place, the unit constructs
+  standard arithmetic on Church-like numerals — using constructors such as zero, succ,
+  pred, iszero — and gives recursive definitions and worked reductions for addition,
+  multiplication, exponentiation, natural subtraction, equality and inequalities (greater,
+  greater_or_equal), and integer division (including a guarded case for division by
+  zero). Exercises reinforce building sums, products, and parameterised summations
+  using the recursive pattern.
+
+
+  Overall the focus is (1) how to obtain recursion without infinite substitution by
+  abstraction and self-application (fixed-point construction), (2) practical applicative-order
+  evaluation conventions and implications for conditional evaluation, (3) the rec
+  notation for readable recursive definitions, and (4) applying these techniques to
+  implement and reason about arithmetic in the λ-calculus with explicit reduction
+  examples.'

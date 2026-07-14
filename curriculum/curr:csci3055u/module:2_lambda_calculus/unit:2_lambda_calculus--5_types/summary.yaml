@@ -1,0 +1,25 @@
+name: Typed representations, operations, and notations for a minimal functional language
+oneliner: Introduce type/value representations, error handling, typed booleans, numbers
+  and characters, typed operations and conditionals, notation conveniences (infix,
+  IF, case), and discussion of dynamic vs static checking
+short: Describe how to add explicit types to a small functional language via type/value
+  pairs, define typed booleans, numbers and characters and their operations (including
+  error returns), and introduce concise notations while contrasting run-time checks
+  with static typing.
+long: This unit presents a practical design for adding types to a minimal functional
+  language built from λ-abstractions and applications. It adopts an explicit representation
+  of typed objects as type/value pairs with constructors and selectors, introduces
+  a canonical ERROR object and an error type so operations yield typed error values
+  on mismatches, and prescribes an idiom of using typed interfaces rather than raw
+  untyped primitives. Using this representation the unit develops typed booleans (TRUE,
+  FALSE) and boolean operations (NOT, AND) together with a typed conditional (COND/IF)
+  that enforces boolean-typed conditions; a numeric type with constructors (MAKE_NUMB,
+  0, SUCC), predicates (ISNUMB, ISZERO) and arithmetic (+, *, /) that return NUMB_ERROR
+  for invalid inputs or division-by-zero; and a character type mapped to numeric codes
+  with CHAR/ORD conversions and character comparisons implemented via numeric operations.
+  It highlights the implementation cost of repetitive dynamic type checks and motivates
+  static (compile-time) typing as a way to eliminate redundant checks. Finally, the
+  unit adds syntactic conveniences—bracketed infix operators and concise case/structure
+  matching (pattern-style definitions and recursive clauses)—to make typed definitions
+  clearer and more concise, and emphasizes the programming discipline of using the
+  provided typed interfaces to preserve safety and meaningful composition of operations.

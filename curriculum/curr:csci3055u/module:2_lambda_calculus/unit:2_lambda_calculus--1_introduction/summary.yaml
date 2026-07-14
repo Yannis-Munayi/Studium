@@ -1,0 +1,23 @@
+name: Foundations of Functional Programming and the Lambda Calculus
+oneliner: Core principles of functional programming, the λ‑calculus and recursive
+  function theory, evaluation order and termination, and their influence on language
+  design and semantics.
+short: Introduces immutable bindings, first‑class functions, recursion, λ‑calculus
+  formalisms, evaluation‑order issues, and the historical development of functional
+  languages and semantic models.
+long: This unit presents the theoretical and practical foundations of functional programming,
+  tracing its roots in the λ‑calculus, recursive function theory and twentieth‑century
+  computability work. It explains the programming consequences of immutable name–value
+  associations, nested function composition, first‑class functions and recursion as
+  the means of repetition and state evolution. The unit develops the λ‑calculus as
+  a minimal formal system (abstraction and application) for encoding booleans, pairs,
+  numbers, lists and recursive definitions, and discusses key properties such as Church–Rosser
+  confluence, evaluation‑order independence, and the relationship between evaluation
+  strategy, termination and efficiency. It connects these ideas to programming‑language
+  design and semantics—operational and denotational models—and surveys historically
+  important functional languages (LISP, POP‑2/POP11, SASL, KRC, Miranda, Hope, ML/Standard
+  ML) and influences (Backus’s FP). Together the material provides both conceptual
+  tools for reasoning about programs and practical perspectives on language implementation,
+  program proof, prototyping and parallelism, and prepares the learner for deeper
+  study of types, evaluation strategies, encodings in the λ‑calculus, and concrete
+  functional languages.

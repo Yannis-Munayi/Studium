@@ -1,0 +1,162 @@
+element_id: doc:2_algorithmicallyunsolvableproblems
+level: document
+variant: default
+content:
+  summary:
+    name: 'Theory of Computation: Algorithmic Solvability'
+    oneliner: Exploration of Turing machines, decidability, and algorithmic problems.
+    short: Examines the foundations and limits of computation.
+    long: This document provides an in-depth overview of the theory of computation,
+      particularly focusing on algorithmic solvability through the lens of Turing
+      machines, decidable and undecidable languages, and specific problems like the
+      Post correspondence problem. It discusses the characteristics and behavior of
+      Turing machines, the nature of computable functions, the concept of Turing-decidable
+      and Turing-semi-decidable languages, and various examples to illustrate these
+      concepts. The document concludes with the implications of algorithmic unsolvability
+      and demonstrates the importance of these foundational theories in computer science.
+  highlights:
+  - text: Understand the concept of Turing-decidable and undecidable languages.
+    concepts: []
+    reference_id: doc:2_algorithmicallyunsolvableproblems
+  - text: Develop proficiency in identifying Turing-computable functions.
+    concepts: []
+    reference_id: doc:2_algorithmicallyunsolvableproblems
+  - text: Explain the significance of Turing machines in establishing algorithmic
+      solvability.
+    concepts: []
+    reference_id: doc:2_algorithmicallyunsolvableproblems
+  - text: Prove the uncountability of decision problems using diagonalization.
+    concepts: []
+    reference_id: doc:2_algorithmicallyunsolvableproblems
+  - text: Apply the Post correspondence problem to demonstrate algorithmic unsolvability.
+    concepts: []
+    reference_id: doc:2_algorithmicallyunsolvableproblems
+  concepts:
+  - key: concept:turing_decidable_languages
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:turing_computable_functions
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:turing_semidecidable_languages
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:non_halting_turing_machines
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:algorithmically_unsolvable_problems
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:post_correspondence_problem_pcp
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  topics:
+  - key: topic:theory_of_computation
+    summary:
+      name: Theory of Computation
+      oneliner: A study of algorithmic solvability and its boundaries.
+      short: Explores Turing machines, languages, and computable functions.
+      long: This topic covers foundational concepts in the theory of computation,
+        including Turing machines, decidability, and problems that cannot be solved
+        algorithmically.
+    entities:
+    - key: definition:turing_decidable_languages
+      kind: definition
+      summary:
+        name: Turing-Decidable Languages
+        oneliner: Languages for which membership can be determined by a Turing machine.
+        short: Languages that can be accepted by Turing machines.
+        long: Turing-decidable languages are those for which there exists a Turing
+          machine that will halt and accept for every string in the language, and
+          halt and reject for every string not in the language.
+      fact_kind: null
+      related_to:
+      - type: related_to
+        target_key: concept:input
+      - type: related_to
+        target_key: concept:output
+      - type: related_to
+        target_key: concept:state
+    - key: definition:turing_computable_functions
+      kind: definition
+      summary:
+        name: Turing-Computable Functions
+        oneliner: Functions that can be computed by a Turing machine.
+        short: Functions that Turing machines can calculate.
+        long: Turing-computable functions are functions that can be computed with
+          an algorithm on a Turing machine, meaning there is a Turing machine that
+          will give the output for any valid input.
+      fact_kind: null
+      related_to:
+      - type: related_to
+        target_key: concept:input
+      - type: related_to
+        target_key: concept:output
+      - type: related_to
+        target_key: concept:state
+    - key: definition:turing_semidecidable_languages
+      kind: definition
+      summary:
+        name: Turing-Semidecidable Languages
+        oneliner: Languages for which acceptance is verifiable but may not always
+          halt.
+        short: Languages accepted by Turing machines that may run indefinitely.
+        long: Turing-semidecidable languages are those for which there exists a Turing
+          machine that will accept strings in the language, but may run forever on
+          strings not in the language.
+      fact_kind: null
+      related_to:
+      - type: related_to
+        target_key: concept:input
+      - type: related_to
+        target_key: concept:output
+      - type: related_to
+        target_key: concept:state
+    - key: definition:algorithmic_unsatifiability
+      kind: definition
+      summary:
+        name: Algorithmic Unsatifiability
+        oneliner: The concept that some problems cannot be solved algorithmically.
+        short: Limits of algorithmic decision making.
+        long: This concept explores the boundaries of algorithmic decision-making,
+          highlighting that there are problems for which no Turing machine can provide
+          a solution.
+      fact_kind: null
+      related_to:
+      - type: related_to
+        target_key: concept:input
+      - type: related_to
+        target_key: concept:output
+    - key: example:post_correspondence_problem_pcp
+      kind: example
+      summary:
+        name: Post Correspondence Problem (PCP)
+        oneliner: A problem that illustrates algorithmic unsolvability.
+        short: Example of an undecidable problem.
+        long: The Post Correspondence Problem asks if a set of dominos can be aligned
+          such that the strings on the top match those on the bottom, illustrating
+          undecidability in computation.
+      fact_kind: null
+      related_to:
+      - type: related_to
+        target_key: concept:input
+      - type: related_to
+        target_key: concept:output
+    related_to:
+    - type: depends_on
+      target_key: concept:computation
+    - type: is_a
+      target_key: concept:turing_machine
+    subtopics: []

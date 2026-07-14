@@ -1,0 +1,165 @@
+element_id: doc:1_turingmachines
+level: document
+variant: default
+content:
+  summary:
+    name: 'Theory of Computation: Turing Machines'
+    oneliner: Exploring Turing Machines in the context of human computation
+    short: An introduction to Turing Machines and their role in computation theory.
+    long: This document provides a comprehensive examination of Turing Machines, their
+      formalization of human computation, and examples of constructing Turing Machines
+      for various language problems. It also compares Turing Machines with Deterministic
+      Finite Automata (DFA) and Pushdown Automata (PDA), and outlines the computational
+      powers and limitations associated with each model. The document aids learners
+      in understanding the fundamental principles of computation and the role of Turing
+      Machines in theoretical computer science.
+  highlights:
+  - text: Understand the role of Turing Machines in modeling human computation processes.
+    concepts: []
+    reference_id: doc:1_turingmachines
+  - text: Construct Turing Machines for specific languages and problem scenarios.
+    concepts: []
+    reference_id: doc:1_turingmachines
+  - text: Differentiate between the computational powers of Turing Machines, DFAs,
+      and PDAs.
+    concepts: []
+    reference_id: doc:1_turingmachines
+  concepts:
+  - key: concept:turing_machine
+    introduced: true
+    summary:
+      name: Turing machine
+      oneliner: A theoretical model of computation that defines an abstract machine.
+      short: A computing model proposed by Alan Turing.
+      long: A Turing machine consists of an infinite tape, a tape head that can read
+        and write symbols, and a finite state control. It formalizes the concept of
+        computation by simulating human problem-solving processes.
+    note: null
+    status: resolved
+  - key: concept:computation
+    introduced: true
+    summary:
+      name: computation
+      oneliner: The process by which a Turing machine processes input to produce output.
+      short: Execution of operations based on input.
+      long: Computation involves sequences of configurations of a Turing machine as
+        it reads input, transitions between states, and eventually produces an output.
+    note: null
+    status: resolved
+  - key: concept:input
+    introduced: true
+    summary:
+      name: input
+      oneliner: The data fed into a Turing machine for processing.
+      short: Symbols provided to a machine.
+      long: Input is a finite sequence of symbols placed on the tape of the Turing
+        machine prior to its operation.
+    note: null
+    status: resolved
+  - key: concept:output
+    introduced: true
+    summary:
+      name: output
+      oneliner: The result produced by a Turing machine after processing input.
+      short: Results from computation.
+      long: Output represents the final state of the tape after the computation is
+        complete, showing the result of the processed input.
+    note: null
+    status: resolved
+  - key: concept:state
+    introduced: true
+    summary:
+      name: state
+      oneliner: A specific condition or situation of a Turing machine during computation.
+      short: Configuration of the machine at a given time.
+      long: States denote the various conditions of a Turing machine that dictate
+        its actions based on the current input symbol being read.
+    note: null
+    status: resolved
+  topics:
+  - key: topic:theory_of_computation
+    summary:
+      name: Theory of Computation
+      oneliner: Introduction to the foundations of computation.
+      short: Fundamentals of computation theory.
+      long: This section covers the basics of computation, including Turing machines
+        and their workings.
+    entities:
+    - key: definition:turing_machine
+      kind: definition
+      summary:
+        name: Turing Machine
+        oneliner: A computing model introduced by Alan Turing.
+        short: A theoretical model for computation.
+        long: Turing machines serve as a fundamental concept in computer science,
+          illustrating how functions can be computed mechanically.
+      fact_kind: null
+      related_to:
+      - type: is_a
+        target_key: concept:turing_machine
+    - key: example:human_computation
+      kind: example
+      summary:
+        name: Human Computation
+        oneliner: How humans compute and perform calculations.
+        short: The process of computation by humans.
+        long: Describes the steps humans take to perform computation, similar to machine
+          processes.
+      fact_kind: null
+      related_to:
+      - type: related_to
+        target_key: concept:computation
+    related_to:
+    - type: is_a
+      target_key: concept:turing_machine
+    - type: depends_on
+      target_key: concept:computation
+    subtopics: []
+  - key: topic:computation_mechanics
+    summary:
+      name: Computation Mechanics
+      oneliner: Understanding how computation functions.
+      short: Operations carried out in computation.
+      long: This topic addresses the various operations involved in computation, explaining
+        how Turing machines execute instructions.
+    entities:
+    - key: definition:input
+      kind: definition
+      summary:
+        name: Input
+        oneliner: Symbols provided to a computation machine.
+        short: Data fed into a machine for processing.
+        long: The initial data required for a computation to take place, essential
+          for Turing machines to function.
+      fact_kind: null
+      related_to:
+      - type: is_a
+        target_key: concept:input
+    - key: definition:output
+      kind: definition
+      summary:
+        name: Output
+        oneliner: Results generated by a computation.
+        short: Final results after processing input.
+        long: The final products of a computation, produced after processing the input
+          through the machine.
+      fact_kind: null
+      related_to:
+      - type: is_a
+        target_key: concept:output
+    - key: definition:state
+      kind: definition
+      summary:
+        name: State
+        oneliner: Configuration of the machine at any time.
+        short: The current condition of the computation process.
+        long: Represents where the machine is in its operations, crucial for understanding
+          its behavior as it processes.
+      fact_kind: null
+      related_to:
+      - type: is_a
+        target_key: concept:state
+    related_to:
+    - type: is_a
+      target_key: concept:computation
+    subtopics: []

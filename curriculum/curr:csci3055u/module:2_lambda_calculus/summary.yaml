@@ -1,0 +1,56 @@
+name: Foundations of Functional Programming and the Lambda Calculus
+oneliner: Core principles of functional programming; the pure λ‑calculus (syntax,
+  binding, reduction, encodings); boolean and numeric encodings; recursion via fixed‑points
+  and evaluation‑order issues; and typed representations and notations for a minimal
+  functional language.
+short: An integrated module introducing functional programming principles and the
+  λ‑calculus as a formal foundation, showing how to represent data and recursion in
+  the untyped calculus and how to move toward practical typed value representations
+  and notations.
+long: 'This module develops a coherent foundation for functional programming that
+  combines practical programming principles, formal λ‑calculus theory, concrete data
+  encodings, recursion techniques, evaluation‑order considerations, and a path toward
+  typed implementations.
+
+
+  It begins with the programming principles that distinguish the functional style—immutable
+  bindings, recursion and higher‑order functions, immutable compound data and first‑class
+  functions—and situates these ideas historically and semantically within the design
+  space of languages such as LISP, ML and FP. The pure λ‑calculus is introduced as
+  a minimal, rigorous language for abstraction: learners read and construct λ‑expressions,
+  distinguish free and bound names, perform α‑conversion and normal‑order β‑reduction
+  (and contrast normal‑order with applicative‑order/call‑by‑value), apply η‑reduction,
+  and work with common combinators.
+
+
+  Building on that formal core, the module shows how to encode basic data and control
+  structures in the untyped λ‑calculus. Truth values are encoded as pair selectors
+  with an if‑then‑else cond form and derived boolean operators; natural numbers are
+  represented via pair‑based successor encodings (with iszero and pred) and via Church‑style
+  numerals when appropriate. The curriculum develops compact surface syntax and proof
+  practice for reading reductions and verifying correctness of these encodings.
+
+
+  Recursion is treated as an explicit construction: the text explains why naive textual
+  self‑reference diverges, how abstraction plus self‑application yields fixed points
+  (Y‑style combinators), and how a rec notation can expand to a guarded fixed‑point
+  binding that behaves sensibly under applicative‑order evaluation. Using these techniques
+  the module implements and reasons about arithmetic operations (add, multiply, power,
+  subtraction, comparisons, division) and emphasises how evaluation strategy affects
+  termination and operational behaviour.
+
+
+  Finally, the module connects theory to practicable language design by presenting
+  typed representations for a minimal functional language: explicit type/value pairs,
+  constructors/selectors, an ERROR object and typed error values, typed booleans,
+  numbers and characters, typed operations that return errors on mismatches, and convenient
+  syntactic forms (infix operators, IF/CASE, pattern‑style definitions). It contrasts
+  dynamic run‑time checks with static typing as a means to reduce overhead and improve
+  safety, and highlights idioms for preserving type discipline in implementations.
+
+
+  Throughout, the unit interleaves formal exercises (reduction and substitution proofs,
+  encoding and derivation tasks), worked examples that trace evaluation, and implementation‑oriented
+  material (abstract machines, notation desugaring and practical language interfaces),
+  giving students both the theoretical tools and the programming practice needed to
+  design, reason about, and implement functional languages and their core abstractions.'

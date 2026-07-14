@@ -1,0 +1,28 @@
+name: 'Managing State and Concurrency in Clojure: Refs, Atoms, Agents, and Dynamic
+  Vars'
+oneliner: 'Overview of Clojure''s four reference types and STM: refs (STM), atoms
+  (synchronous), agents (asynchronous), and dynamic vars (thread-local), with practical
+  guidance and a Snake example.'
+short: Explains how Clojure models mutable identity over time via refs, atoms, agents,
+  and dynamic vars; details STM (dosync, alter, commute, MVCC), atom and agent semantics
+  and APIs, validators/error handling, when to choose each reference type, and a worked
+  Snake game showing a pure core plus a small mutable layer and UI.
+long: 'This unit presents Clojure''s explicit model for mutable identity and concurrent
+  programming, centered on four reference types and the software transactional memory
+  (STM) system. It defines state as the value of an identity over time and contrasts
+  lock-based approaches with Clojure''s coordination primitives: refs for coordinated,
+  synchronous updates managed by STM (dosync, ref-set, alter, commute), atoms for
+  uncoordinated synchronous updates (reset!, swap!), agents for asynchronous queued
+  side-effecting work (send/send-off, await, error handling), and dynamic vars for
+  thread-local rebinding and controlled per-thread mutation. The STM implementation
+  and semantics are described (MVCC, transaction retries, when commute is appropriate,
+  validators, and ACI trade-offs vs durable storage), and practical rules of thumb
+  are given: prefer refs/alter for coordinated multi-reference updates, use atoms
+  for isolated single-value state, use agents for asynchronous side effects and background
+  tasks, and use dynamic vars sparingly for interop or per-thread behavior. The unit
+  also emphasizes that swap! and transaction bodies should avoid irreversible side
+  effects because of retries, and explains how agent actions are enqueued exactly
+  once when sent from transactions. A complete Snake game ties the concepts together,
+  demonstrating how to structure code into a pure functional core, a minimal mutable
+  reference layer (refs or an atom-based combined state), and a UI layer that drives
+  updates and rendering, illustrating real-world application and trade-offs.'

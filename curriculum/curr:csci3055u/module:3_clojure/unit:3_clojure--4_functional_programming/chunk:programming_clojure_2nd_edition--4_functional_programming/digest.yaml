@@ -1,0 +1,868 @@
+element_id: chunk:programming_clojure_2nd_edition--4_functional_programming
+level: document
+variant: default
+content:
+  summary:
+    name: Functional Programming in Clojure (Chapter 4)
+    oneliner: 'Overview of Clojure-style functional programming: pure functions, persistent
+      data, laziness, recursion patterns (recur, lazy-seq, trampoline), and using
+      the sequence library effectively.'
+    short: Introduces core FP ideas in Clojure, practical recursion strategies, lazy
+      sequences, sequence-library idioms, and performance patterns like memoization
+      and structural sharing.
+    long: This chapter surveys practical functional programming techniques in Clojure.
+      It defines pure functions and explains why immutability and persistent data
+      structures (structural sharing) are fundamental. It presents the "Six Rules
+      of Clojure FP" to guide implementation choices. The chapter shows multiple ways
+      to implement recursive definitions—simple recursion, tail recursion, recur,
+      trampoline, and lazy sequences—using the Fibonacci numbers as a running example.
+      It explains how lazy sequences and the sequence library (map, filter, partition,
+      iterate, etc.) let you express infinite or large computations efficiently, avoid
+      unnecessary realization, and structure code at a higher level of abstraction.
+      The text warns about accidentally retaining sequence heads (causing memory leaks),
+      shows how to break recursion via lazy-seq, and demonstrates memoization plus
+      exposing sequences to build caches for mutually recursive definitions (Hofstadter
+      sequences). Overall, it emphasizes preferring lazy, composable sequence-based
+      solutions and gives pragmatic JVM-minded workarounds for recursion limits (recur,
+      trampoline).
+  highlights:
+  - text: Explain and apply the notion of pure functions and why immutability and
+      persistent data structures matter in Clojure.
+    concepts:
+    - concept:functions
+    reference_id: chunk:programming_clojure_2nd_edition--4_functional_programming
+  - text: Understand lazy evaluation via lazy-seq and how lazy sequences enable representing
+      infinite or large series while realizing only needed elements.
+    concepts:
+    - concept:lazy_sequences
+    reference_id: chunk:programming_clojure_2nd_edition--4_functional_programming
+  - text: Use the sequence library (map, filter, partition, iterate, take, drop, etc.)
+      to write concise, composable solutions instead of explicit recursion.
+    concepts:
+    - concept:sequence_library_map_filter_reduce_sort_take_drop_etc
+    reference_id: chunk:programming_clojure_2nd_edition--4_functional_programming
+  - text: 'Choose appropriate recursion patterns on the JVM: avoid stack-consuming
+      recursion; prefer loop/recur for self-tail recursion, trampoline for mutual
+      recursion, or replace recursion with laziness when possible.'
+    concepts:
+    - concept:flow_control
+    reference_id: chunk:programming_clojure_2nd_edition--4_functional_programming
+  - text: Recognize realization and printing pitfalls (retain head of a lazy sequence)
+      and use doall/dorun or expose sequences via functions to avoid unintended memory
+      retention.
+    concepts:
+    - concept:forcing_realization_doall_and_dorun
+    reference_id: chunk:programming_clojure_2nd_edition--4_functional_programming
+  - text: Apply memoization to shortcut expensive mutually recursive computations
+      and combine memoization with sequence exposure to build caches incrementally.
+    concepts: []
+    reference_id: chunk:programming_clojure_2nd_edition--4_functional_programming
+  - text: Follow pragmatic guidance encapsulated in the Six Rules of Clojure FP to
+      pick laziness, recur, sequence-library functions, and subdivision for robust,
+      composable code.
+    concepts: []
+    reference_id: chunk:programming_clojure_2nd_edition--4_functional_programming
+  concepts:
+  - key: concept:pure_functions
+    introduced: true
+    summary:
+      name: Pure Functions
+      oneliner: Functions without side effects; output depends only on arguments.
+      short: Pure functions have no side effects and depend only on their arguments;
+        they facilitate reasoning, testing, referential transparency, and laziness.
+      long: A pure function is one that, for the same arguments, always returns the
+        same result and produces no side effects (it does not mutate external state,
+        perform I/O, or depend on hidden state). Pure functions pair naturally with
+        immutable data and enable referential transparency, memoization, and easier
+        testing and composition. The document uses pure functions as a foundational
+        FP concept and contrasts them with impure ops like println.
+    note: Discussed throughout Chapter 4 as the FP foundation; contrasted with println
+      and mutable state; motivates immutability and laziness.
+    status: used
+  - key: concept:persistent_data_structures
+    introduced: true
+    summary:
+      name: Persistent Data Structures
+      oneliner: Immutable data structures that share structure between versions for
+        efficiency.
+      short: 'Clojure data structures are immutable but persistent: updates create
+        new versions that efficiently share structure with old versions to avoid full
+        copying.'
+      long: Persistent data structures preserve previous versions after "updates"
+        by sharing structure between the old and new versions rather than copying
+        everything. This gives the benefits of immutability while avoiding the naive
+        memory blowup of full copies. The text explains structural sharing with lists
+        and references articles (Ideal Hash Trees, PersistentVector implementation)
+        and motivates persistent structures as central to Clojure's FP and concurrency
+        model.
+    note: Explained in "Persistent Data Structures" section with list example (cons)
+      and references to implementation articles.
+    status: used
+  - key: concept:structural_sharing
+    introduced: true
+    summary:
+      name: Structural Sharing
+      oneliner: The mechanism by which persistent data structures reuse parts of older
+        versions.
+      short: Structural sharing reuses unmodified portions of data structures between
+        versions to make immutable updates efficient.
+      long: 'Structural sharing is the technique persistent data structures use to
+        avoid full copying on updates: new versions share unchanged substructure with
+        previous versions. The book visualizes this with lists (cons reusing the tail)
+        and notes that for other structures (vectors, maps) the mechanics are more
+        complex but follow the same principle.'
+    note: Illustrated with list a and cons to produce b, showing memory reuse and
+      avoiding exponential memory growth.
+    status: used
+  - key: concept:referential_transparency
+    introduced: true
+    summary:
+      name: Referential Transparency
+      oneliner: Ability to replace a function call with its result without changing
+        program behavior.
+      short: Referential transparency means calls to a function can be substituted
+        with their results (no observable difference), enabling laziness, memoization,
+        and parallelization.
+      long: Referential transparency is the property that a function call can be replaced
+        by its result without changing the program's behavior. Pure functions are
+        referentially transparent; this property underpins lazy evaluation (safe postponement
+        of computation), memoization (caching results), and possibilities for automatic
+        parallelization. Impure functions typically lack this property and therefore
+        must be controlled explicitly.
+    note: Explained in relation to laziness and benefits like memoization and parallelization.
+    status: used
+  - key: concept:six_rules_of_clojure_fp
+    introduced: true
+    summary:
+      name: Six Rules of Clojure FP
+      oneliner: A pragmatic set of guidelines for writing FP-style Clojure.
+      short: Six practical rules guiding recursion, laziness, and use of the sequence
+        library in Clojure.
+      long: 'A compact set of Clojure-specific FP guidelines presented in the chapter:
+
+        1) Avoid direct (stack-consuming) recursion.
+
+        2) Use recur for producing scalar values or small fixed sequences.
+
+        3) For large/variable sequences, prefer lazy sequences (avoid recur).
+
+        4) Do not realize more of a lazy sequence than necessary.
+
+        5) Know and favor the sequence library (map, filter, iterate, partition, etc.).
+
+        6) Subdivide problems to exploit sequence-library abstractions.
+
+        These rules balance FP ideals with JVM constraints and recur/trampoline/lazy
+        techniques.'
+    note: Presented as the chapter's guiding rules (numbered 1–6) and referenced when
+      choosing implementations.
+    status: used
+  - key: concept:tail_recursion_and_tail_call_optimization_tco
+    introduced: true
+    summary:
+      name: Tail Recursion and Tail-Call Optimization (TCO)
+      oneliner: Tail-position recursive calls that some runtimes can optimize into
+        iterations.
+      short: Tail recursion means the recursive call is the function's final action;
+        TCO removes stack growth by turning recursion into iteration, but the JVM
+        lacks general TCO.
+      long: Tail recursion occurs when a function calls itself as its last action
+        so that no work remains after the recursive call. Languages or runtimes that
+        perform tail-call optimization (TCO) can convert such recursion into iteration,
+        avoiding stack growth. The JVM generally does not provide general TCO, so
+        Clojure provides alternatives (recur for self-tail recursion, trampoline for
+        mutual recursion, and lazy sequences). The chapter demonstrates tail recursion
+        with a tail-fibo example and explains why tail recursion alone still overflows
+        on the JVM without reuse of recur.
+    note: Discussed with tail-fibo example and failure on the JVM; motivates recur
+      and trampoline.
+    status: used
+  - key: concept:trampoline
+    introduced: true
+    summary:
+      name: trampoline
+      oneliner: A caller-driven loop that repeatedly invokes returned functions to
+        support mutual recursion without growing the stack.
+      short: Clojure's trampoline repeatedly calls a function (or the functions it
+        returns) until a non-function value is returned, enabling mutual recursion
+        without stack growth.
+      long: 'trampoline is a Clojure core function that invokes an initial function
+        (with optional partial args). If the function returns another function, trampoline
+        calls that function, and so on, until a non-function result is produced. This
+        implements a caller-managed recursion (a trampoline) that can handle mutual
+        recursion patterns by avoiding JVM stack growth. The book shows converting
+        tail-recursive and mutually recursive functions to use trampoline (wrapping
+        recursive tail-calls with # to return thunks).'
+    note: 'Example: converting recursive returns into thunks (anonymous functions
+      via #) and using (trampoline f args...) to compute large inputs without StackOverflowError.'
+    status: used
+  - key: concept:memoization
+    introduced: true
+    summary:
+      name: Memoization
+      oneliner: Caching function results to avoid repeated recomputation.
+      short: Memoization stores past inputs and outputs of functions so subsequent
+        calls with the same input return cached results quickly, trading heap for
+        time.
+      long: Memoization is an optimization that caches function call results (mapping
+        inputs to outputs). In mutually recursive or expensive computations (e.g.,
+        Hofstadter male/female sequences), memoization dramatically reduces repeated
+        work by returning cached values. The chapter demonstrates rebinding functions
+        with (memoize ...) and exposing sequences so the memo cache is populated incrementally,
+        enabling fast nth lookups while avoiding repeated deep recursion. It also
+        notes that memoization increases heap usage and that caches must be warmed
+        (otherwise stack overflow may occur before cache populates).
+    note: 'Used in the Hofstadter Male/Female example: def m/f then (def m (memoize
+      m)) etc., and exposing m-seq/f-seq to build cache.'
+    status: used
+  - key: concept:letfn
+    introduced: true
+    summary:
+      name: letfn
+      oneliner: Create local named functions that can be mutually recursive.
+      short: letfn binds local functions that may refer to each other (mutual recursion)
+        within a lexical scope.
+      long: letfn is a binding form for defining local, possibly mutually recursive
+        functions. Each function declared inside letfn can call itself and the other
+        local functions in the same letfn block. The chapter uses letfn to implement
+        a tail-recursive fibonacci helper (fib) that is invoked with initial basis
+        values.
+    note: Shown in tail-fibo example to define an inner fib function with [current
+      next n] parameters.
+    status: used
+  - key: concept:declare
+    introduced: true
+    summary:
+      name: declare
+      oneliner: Predeclare var names so mutually recursive top-level functions can
+        be defined.
+      short: declare creates var names (without bindings) so later defn forms can
+        refer to each other, enabling mutual recursion among top-level functions.
+      long: declare allows you to create forward declarations for var names so that
+        multiple top-level functions that call each other (mutual recursion) can be
+        defined without order constraints. The chapter uses (declare my-odd? my-even?)
+        before defning each to allow mutual calls.
+    note: Used to illustrate mutual recursion for odd/even and other examples.
+    status: used
+  - key: concept:multimethods
+    introduced: true
+    summary:
+      name: Multimethods
+      oneliner: Generic functions dispatching on runtime values via a dispatch function.
+      short: Multimethods let you define a generic function with defmulti and provide
+        implementations (defmethod) keyed by a dispatch value computed from arguments;
+        used here to separate collection vs scalar handling.
+      long: 'Multimethods are Clojure''s runtime polymorphism facility: defmulti creates
+        a dispatching generic function that computes a dispatch value via a dispatch
+        function; defmethod provides method implementations for specific dispatch
+        values. The chapter refactors a recursive replace-symbol into a multimethod
+        dispatching on whether the input is a collection or scalar to improve readability
+        and replace an explicit type-checking if.'
+    note: 'Example: (defmulti replace-symbol coll-or-scalar) with defmethod for :collection
+      and :scalar.'
+    status: used
+  - key: concept:lazy_seq
+    introduced: true
+    summary:
+      name: lazy-seq
+      oneliner: Macro to create a lazily realized sequence by deferring evaluation
+        of its body.
+      short: lazy-seq wraps code so it is evaluated only when the sequence is realized;
+        used to implement infinite sequences and to break recursion.
+      long: lazy-seq is a macro that delays evaluation of its body until the sequence
+        is actually needed (realized). The result is cached for subsequent realizations.
+        Wrapping the recursive step of a sequence generator in lazy-seq replaces immediate
+        recursion with laziness, preventing stack overflow and enabling infinite or
+        large sequences. The chapter uses lazy-seq to implement a lazy Fibonacci sequence
+        and to break recursion in replace-symbol and other examples.
+    note: 'Used repeatedly: lazy-seq-fibo, wrapping recursive cons in replace-symbol,
+      and guidance to expose sequences as functions to avoid holding the head.'
+    status: used
+  - key: concept:holding_the_head_loss_of_laziness
+    introduced: true
+    summary:
+      name: Holding the head / loss of laziness
+      oneliner: Retaining a reference to the head of a lazy sequence prevents garbage
+        collection of realized prefix.
+      short: If a top-level var references the head of a lazy sequence, realized elements
+        cannot be reclaimed, causing memory blowup; expose sequences via functions
+        to avoid this.
+      long: 'The chapter warns that storing a lazy sequence in a top-level var (thus
+        holding its head) prevents garbage collection of realized elements as you
+        traverse the sequence, leading to unbounded memory usage. Example: head-fibo
+        stored as a var leads to OutOfMemoryError on deep nth access. Recommendation:
+        expose lazy sequences from a function so callers control caching if desired.'
+    note: Demonstrated with head-fibo var using lazy-cat and resulting OOM when accessing
+      large nth.
+    status: used
+  - key: concept:hofstadter_male_female_sequences
+    introduced: true
+    summary:
+      name: Hofstadter male/female sequences
+      oneliner: Mutually recursive integer sequences (F and M) where each depends
+        on the other.
+      short: 'F(0)=1, M(0)=0 and for n>0: F(n)=n - M(F(n-1)), M(n)=n - F(M(n-1));
+        used to illustrate memoization and sequencing.'
+      long: 'The Hofstadter Female (F) and Male (M) sequences are mutually recursive
+        integer sequences: F(0)=1, M(0)=0; for n>0, F(n)=n - M(F(n-1)) and M(n)=n
+        - F(M(n-1)). The chapter implements these directly (mutual recursion), demonstrates
+        their poor performance without memoization, and shows how memoization plus
+        exposing m-seq/f-seq (mapping the memoized functions over naturals) yields
+        efficient nth access by building the memo cache incrementally.'
+    note: Used as a nontrivial mutual-recursion example showing memoize and sequence
+      exposure.
+    status: used
+  - key: concept:lazy_sequences
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:sequence_library_map_filter_reduce_sort_take_drop_etc
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:core_seq_operations_first_rest_cons_next
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:partition_with_step
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:iterate
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:map
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:filter
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:partial
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:comp
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:doall_and_dorun_forcing_realization
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:loop_recur
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:functions
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:vars
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:seq_the_seq_abstraction
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:forms
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:flow_control
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:metadata
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:destructuring
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:namespaces
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:calling_java
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:stack_overflow_jvm_stack_behavior
+    introduced: true
+    summary:
+      name: stack overflow / JVM stack behavior
+      oneliner: Recursive calls allocate JVM stack frames and can cause StackOverflowError;
+        JVM lacks general TCO.
+      short: The JVM represents function calls with stack frames; naive recursion
+        can exhaust the stack leading to StackOverflowError, motivating recur/trampoline/laziness.
+      long: The chapter emphasizes that each Clojure function call maps to JVM method
+        calls that allocate stack frames; naive recursion (especially exponential
+        or deep linear recursion) consumes stack proportional to recursion depth and
+        triggers StackOverflowError. The JVM generally does not implement general
+        tail-call optimization (TCO), so Clojure provides explicit recur for self-tail
+        recursion, trampoline for mutual recursion, and lazy sequences to avoid deep
+        recursion.
+    note: Shown via stack-consuming-fibo and tail-fibo examples producing StackOverflowError;
+      explains reasons and workarounds.
+    status: used
+  - key: concept:let_loop_recur_usage_patterns_loop_recur_idiom
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:lazy_cat_concat_cons
+    introduced: false
+    summary: null
+    note: null
+    status: used
+  - key: concept:printing_limits_print_length_and_print_level
+    introduced: true
+    summary:
+      name: printing limits *print-length* and *print-level*
+      oneliner: Printer controls to limit how much of collections and nesting are
+        printed.
+      short: '*print-length* limits number of items printed in collections; *print-level*
+        limits nested printing depth to avoid overwhelming the REPL/printer.'
+      long: 'Clojure exposes dynamic vars to control the REPL printer: *print-length*
+        restricts how many items of a collection are printed (truncating with an ellipsis),
+        preventing accidental realization of huge lazy sequences at the REPL; *print-level*
+        limits the depth of nested structure printed (printing # when exceeding limit).
+        The chapter uses these to safely inspect large or deeply nested sequences.'
+    note: 'Examples: (set! *print-length* 10) to avoid printing a billion fibs; (set!
+      *print-level* 25) to limit nested deeply-nested output.'
+    status: used
+  topics:
+  - key: topic:functional_programming_in_clojure
+    summary:
+      name: Functional Programming in Clojure
+      oneliner: Overview of FP principles, benefits, and Clojure-specific rules and
+        idioms.
+      short: Pure functions, referential transparency, immutability via persistent
+        structures, and practical rules for recursion and laziness in Clojure.
+      long: 'This topic groups the chapter''s high-level functional-programming concepts
+        as applied in Clojure.
+
+        It emphasizes writing pure functions (no side effects), the advantages of
+        referential transparency
+
+        (laziness, memoization, parallelization), and immutable persistent data structures
+        that rely on
+
+        structural sharing. The chapter presents practical "Six Rules of Clojure FP"
+        guiding when to use
+
+        recur, when to prefer lazy sequences, and when to leverage the sequence library
+        to avoid explicit
+
+        recursion. It also explains JVM constraints (lack of general TCO) and the
+        resulting pragmatic
+
+        techniques Clojure provides (loop/recur, lazy-seq, trampoline, memoization).'
+    entities:
+    - key: definition:pure_functions
+      kind: definition
+      summary:
+        name: Pure functions
+        oneliner: Functions without side effects that depend only on arguments.
+        short: Functions whose behavior is determined solely by their arguments and
+          which produce no side effects.
+        long: 'Pure functions are central to FP and enable reasoning, testing, and
+          laziness.
+
+          They are referentially transparent: a call can be replaced by its result
+          without changing program behavior.'
+      fact_kind: null
+      related_to:
+      - type: same_as
+        target_key: concept:pure_functions
+      - type: depends_on
+        target_key: concept:referential_transparency
+    - key: definition:persistent_immutable_data_structures
+      kind: definition
+      summary:
+        name: Persistent immutable data structures
+        oneliner: Immutable collections that share structure between versions.
+        short: Clojure's collections are immutable but persistent, reusing unchanged
+          parts efficiently.
+        long: 'Persistent data structures allow ''updates'' to produce new versions
+          while sharing most internal structure
+
+          with prior versions, avoiding naïve full-copy semantics and improving performance
+          via structural sharing.'
+      fact_kind: null
+      related_to:
+      - type: same_as
+        target_key: concept:persistent_data_structures
+      - type: part_of
+        target_key: concept:structural_sharing
+    - key: other:six_rules_of_clojure_fp
+      kind: other
+      summary:
+        name: Six Rules of Clojure FP
+        oneliner: Pragmatic guidelines for recursion, laziness, and using the sequence
+          library.
+        short: 'Guidelines: avoid direct recursion; use recur for scalars/small seqs;
+          prefer lazy for large/variable seqs; don''t realize more than needed; know
+          the sequence library; subdivide problems.'
+        long: 'These six rules give actionable advice for writing efficient, idiomatic
+          Clojure FP:
+
+          1) Avoid direct (stack-consuming) recursion.
+
+          2) Use recur for scalar results or fixed small sequences.
+
+          3) For large/variable sequences, produce lazy sequences.
+
+          4) Avoid realizing more of a lazy sequence than necessary.
+
+          5) Know and prefer sequence-library functions.
+
+          6) Subdivide problems to leverage sequence primitives.'
+      fact_kind: null
+      related_to:
+      - type: same_as
+        target_key: concept:six_rules_of_clojure_fp
+    related_to:
+    - type: is_a
+      target_key: concept:pure_functions
+    - type: related_to
+      target_key: concept:referential_transparency
+    - type: related_to
+      target_key: concept:persistent_data_structures
+    - type: part_of
+      target_key: concept:structural_sharing
+    - type: related_to
+      target_key: concept:six_rules_of_clojure_fp
+    - type: depends_on
+      target_key: concept:stack_overflow_jvm_stack_behavior
+    subtopics:
+    - key: subtopic:recursion_and_jvm_constraints
+      summary:
+        name: Recursion and JVM constraints
+        oneliner: Tail recursion limitations on the JVM and Clojure workarounds.
+        short: The JVM lacks general TCO; use recur, trampoline, lazy-seq, or memoization
+          to avoid stack overflow.
+        long: 'Because the JVM does not provide general tail-call optimization, naive
+          recursive algorithms can
+
+          cause StackOverflowError. Clojure provides several remedies: converting
+          mutual recursion into
+
+          self-recursion when possible; using loop/recur for self tail recursion (explicit
+          TCO); using trampoline
+
+          to handle mutual recursion without stack growth; replacing recursion with
+          laziness (lazy-seq); and
+
+          using memoization to shortcut repeated computation.'
+      entities:
+      - key: example:tail_recursion_recur_and_loop
+        kind: example
+        summary:
+          name: Tail recursion, recur, and loop
+          oneliner: Use loop/recur to implement tail recursion that doesn't consume
+            stack.
+          short: 'Example: rewrite tail-recursive Fibonacci to use loop/recur so JVM
+            stack is not consumed.'
+          long: 'Tail recursion places the recursive call in tail position so it can
+            be transformed into iteration.
+
+            Clojure''s recur provides explicit self-recursion optimization when the
+            recursive call is to the same function
+
+            or loop point. For self-recursive tail cases, prefer recur; for mutual
+            recursion, consider other techniques.'
+        fact_kind: null
+        related_to:
+        - type: related_to
+          target_key: concept:tail_recursion_and_tail_call_optimization_tco
+      - key: example:trampoline_for_mutual_recursion
+        kind: example
+        summary:
+          name: Trampoline for mutual recursion
+          oneliner: trampoline repeatedly calls returned functions until a non-function
+            value is produced.
+          short: 'Mutually recursive functions return zero-arg functions (via #(...));
+            trampoline drives the iteration to avoid stack growth.'
+          long: 'Trampolining converts mutual recursive tail calls into a loop at
+            the caller: functions return a thunk (zero-arg function)
+
+            representing the next call; trampoline repeatedly invokes the returned
+            thunks until a concrete (non-function) value is returned.
+
+            This permits mutual recursion without consuming additional JVM stack frames.'
+        fact_kind: null
+        related_to:
+        - type: same_as
+          target_key: concept:trampoline
+        - type: related_to
+          target_key: concept:declare
+        - type: related_to
+          target_key: concept:letfn
+      - key: example:memoization_and_sequences_hofstadter_f_m
+        kind: example
+        summary:
+          name: Memoization and sequences (Hofstadter F/M)
+          oneliner: Use memoize to cache mutually recursive results and expose sequences
+            to prepopulate caches.
+          short: Memoize mutually recursive Hofstadter male/female functions, then
+            expose m-seq/f-seq so values are cached incrementally.
+          long: 'The Hofstadter Male/Female sequences are mutually recursive by definition
+            and expensive to compute naively.
+
+            Memoization caches computed values (trading heap for time), making repeated
+            calls fast. Further, exposing the sequences
+
+            (m-seq and f-seq) and building them from lower indices ensures the memoization
+            cache is populated progressively,
+
+            avoiding stack blowup when accessing higher indices later.'
+        fact_kind: null
+        related_to:
+        - type: related_to
+          target_key: concept:hofstadter_male_female_sequences
+        - type: same_as
+          target_key: concept:memoization
+      - key: other:stack_overflow_behavior_on_the_jvm
+        kind: other
+        summary:
+          name: Stack overflow behavior on the JVM
+          oneliner: Recursive calls allocate stack frames; deep recursion can trigger
+            StackOverflowError.
+          short: JVM represents calls with stack frames; absence of general TCO motivates
+            recur/trampoline/lazy approaches.
+          long: 'The JVM uses per-call stack frames; unbounded recursion grows the
+            call stack and may cause StackOverflowError.
+
+            Clojure''s design acknowledges this and offers recur (self-tail recursion),
+            trampoline (mutual recursion), and lazy sequences
+
+            to mitigate or avoid deep call chains.'
+        fact_kind: null
+        related_to:
+        - type: same_as
+          target_key: concept:stack_overflow_jvm_stack_behavior
+      related_to:
+      - type: related_to
+        target_key: concept:tail_recursion_and_tail_call_optimization_tco
+      - type: related_to
+        target_key: concept:trampoline
+      - type: related_to
+        target_key: concept:memoization
+      - type: related_to
+        target_key: concept:lazy_seq
+      - type: depends_on
+        target_key: concept:stack_overflow_jvm_stack_behavior
+      subtopics: []
+    - key: subtopic:laziness_and_sequences
+      summary:
+        name: Laziness and sequences
+        oneliner: Creating and using lazy sequences to represent infinite/large data
+          and to break recursion.
+        short: Use lazy-seq, iterate, map, and other seq functions to build lazy pipelines;
+          avoid holding a top-level head to prevent memory leaks.
+        long: 'Lazy sequences delay computation until elements are needed (realization)
+          and cache realized segments.
+
+          Construct lazy sequences directly with lazy-seq or compose them using sequence-library
+          functions (iterate, map, concat, partition).
+
+          Prefer exposing lazy-producing functions rather than top-level vars holding
+          realized heads to avoid retaining references
+
+          and preventing GC (the "holding the head" problem). Control REPL printing
+          with *print-length* and *print-level* to avoid accidental realization/display
+          of huge or deeply nested sequences.'
+      entities:
+      - key: example:fibonacci_iterate_map_first_christophe_grand_s_version
+        kind: example
+        summary:
+          name: 'Fibonacci: iterate + map first (Christophe Grand''s version)'
+          oneliner: Build an infinite lazy Fibonacci sequence using iterate and map.
+          short: fibo = (map first (iterate (fn [[a b]] [b (+ a b)]) [0 1])) — lazy,
+            efficient, easy to consume with take/nth.
+          long: 'By composing iterate (which produces an infinite lazy sequence of
+            pairs) with map first,
+
+            you obtain an infinite lazy sequence of Fibonacci numbers that realizes
+            only the prefix you consume.
+
+            This follows the chapter''s rule of preferring sequence-library functions
+            over manual recursion.'
+        fact_kind: null
+        related_to:
+        - type: depends_on
+          target_key: concept:lazy_seq
+      - key: fact:holding_the_head_prevents_gc
+        kind: fact
+        summary:
+          name: Holding the head prevents GC
+          oneliner: Top-level var referencing a sequence head retains realized elements
+            and can cause OOM.
+          short: Storing a lazy sequence in a top-level var that holds its head prevents
+            collected realized elements, leading to memory growth.
+          long: 'If a top-level var (or long-lived root) references the head of a
+            lazy sequence, elements that have been realized remain reachable
+
+            and cannot be garbage-collected. To avoid this, provide a function that
+            returns a fresh lazy sequence, allowing callers to manage
+
+            their own references and caches.'
+        fact_kind: fact
+        related_to:
+        - type: same_as
+          target_key: concept:holding_the_head_loss_of_laziness
+      related_to:
+      - type: same_as
+        target_key: concept:lazy_seq
+      - type: related_to
+        target_key: concept:holding_the_head_loss_of_laziness
+      - type: related_to
+        target_key: concept:printing_limits_print_length_and_print_level
+      subtopics: []
+    - key: subtopic:problem_decomposition_using_sequence_library
+      summary:
+        name: Problem decomposition using sequence library
+        oneliner: Prefer composing sequence functions (partition, filter, count, partial)
+          over manual loop/recur.
+        short: 'Example: transform a sequence into overlapping pairs with partition
+          and count matching runs using count-if/partial.'
+        long: 'Rather than writing explicit loop/recur to inspect neighboring elements,
+          transform the input using sequence-library functions.
+
+          Example workflow: create adjacent pairs (partition 2 1), filter those pairs
+          by a predicate (every? (= :h ...)), and count results (count or a composed
+          count-if).
+
+          This yields clearer, more general, and lazy solutions (count-runs, count-heads-pairs).'
+      entities:
+      - key: example:by_pairs_partition_count_runs_pattern
+        kind: example
+        summary:
+          name: By-pairs → partition → count-runs pattern
+          oneliner: 'Turn neighbor-aware problems into sequence transformations: partition
+            + filter + count.'
+          short: Use partition with step 1 to make overlapping windows, then apply
+            every?/filter and count (or count-if via comp).
+          long: 'The pattern shows rule 5 & 6 in action: subdivide the problem (create
+            pairs/windows) and use the existing sequence library
+
+            to express the core predicate and aggregation. This avoids explicit recursion
+            and yields concise, reusable functions (e.g., count-runs).'
+        fact_kind: null
+        related_to:
+        - type: related_to
+          target_key: concept:six_rules_of_clojure_fp
+      related_to:
+      - type: related_to
+        target_key: concept:lazy_seq
+      - type: depends_on
+        target_key: concept:six_rules_of_clojure_fp
+      subtopics: []
+    - key: subtopic:language_constructs_and_patterns_used
+      summary:
+        name: Language constructs and patterns used
+        oneliner: letfn, declare, multimethods, lazy-seq, memoize, partial — how they
+          appear in idioms and examples.
+        short: Local mutually recursive functions (letfn), pre-declaration (declare),
+          multimethod dispatch for collection vs scalar handling, lazy-seq to break
+          recursion, memoize to cache expensive computations, and partial/curry-like
+          idioms.
+        long: 'This topic groups the implementation-level constructs illustrated in
+          examples:
+
+          - letfn: local functions that can be mutually recursive.
+
+          - declare: predeclare top-level names to allow mutual top-level defs.
+
+          - multimethods: dispatch on whether an item is a collection or scalar (used
+          to simplify replace-symbol).
+
+          - lazy-seq: break recursive generators and produce infinite sequences.
+
+          - memoize: cache function results to speed up mutually recursive sequences
+          (Hofstadter F/M).
+
+          - partial: create specialized functions (e.g., count-heads-pairs) from general
+          ones.
+
+          These constructs are combined to balance clarity, laziness, and JVM realities.'
+      entities:
+      - key: definition:letfn_and_declare_usage
+        kind: definition
+        summary:
+          name: letfn and declare usage
+          oneliner: letfn defines local mutually referential functions; declare creates
+            top-level var names for mutual defs.
+          short: letfn allows local functions to call each other; declare pre-creates
+            var names so later defn forms can mutually reference each other.
+          long: 'letfn is used when mutually recursive helper functions are local
+            to an enclosing function.
+
+            declare is used at top-level when two or more defn forms must refer to
+            each other; it creates the var names without bindings
+
+            so subsequent defn forms can populate them. Both are tools to express
+            mutual recursion while managing scope appropriately.'
+        fact_kind: null
+        related_to:
+        - type: same_as
+          target_key: concept:letfn
+        - type: same_as
+          target_key: concept:declare
+      - key: other:multimethod_refactor_for_replace_symbol
+        kind: other
+        summary:
+          name: Multimethod refactor for replace-symbol
+          oneliner: Replace explicit symbol/list branching with a defmulti/defmethod
+            dispatch on coll? to improve clarity.
+          short: Use a multimethod that dispatches on whether the input is a collection
+            or a scalar, and break recursion with lazy-seq for deep nesting.
+          long: 'Converting a literal mutual-recursive pair of functions into a single
+            multimethod (dispatching on coll?),
+
+            and wrapping recursive branches in lazy-seq, simplifies the code and prevents
+            stack overflow for deeply nested s-lists.'
+        fact_kind: null
+        related_to:
+        - type: related_to
+          target_key: concept:multimethods
+        - type: depends_on
+          target_key: concept:lazy_seq
+      related_to:
+      - type: is_a
+        target_key: concept:letfn
+      - type: is_a
+        target_key: concept:declare
+      - type: is_a
+        target_key: concept:multimethods
+      - type: is_a
+        target_key: concept:lazy_seq
+      - type: is_a
+        target_key: concept:memoization
+      subtopics: []

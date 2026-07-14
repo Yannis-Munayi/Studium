@@ -1,0 +1,6 @@
+model: openai/gpt-4o-mini
+n_calls: 3
+prompt_tokens: 460739
+completion_tokens: 1445
+cost: 0.06936345
+complete: true

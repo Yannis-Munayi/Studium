@@ -1,0 +1,534 @@
+element_id: chunk:gjm_lambda_book--2_lambda_calculus
+level: document
+variant: default
+content:
+  summary:
+    name: Introduction to Abstraction and the Lambda Calculus
+    oneliner: Chapter introducing programming abstraction and a tutorial on λ-calculus
+      syntax, evaluation (normal-order β-reduction), name handling (α conversion),
+      η-reduction, and basic encodings (pairs, selectors, higher-order functions).
+    short: 'Explains abstraction in programming and presents the λ-calculus as a minimal
+      formal language for functions: syntax, normal-order β-reduction, name binding
+      (free vs bound), α/η conversions, simple combinators (identity, self-application,
+      apply), and pair/triple encodings.'
+    long: This document (a chapter) motivates abstraction as generalisation and specialisation
+      in problem solving and programming, contrasts imperative and functional styles,
+      then develops the λ-calculus as a simple, powerful formal system for pure abstraction
+      and functional programming. It defines λ-expressions (names, functions λname.body,
+      and applications (f x)), presents example combinators (identity, self-application,
+      apply), and demonstrates normal-order β-reduction (substitute free occurrences
+      of a bound variable by the argument). It covers syntactic sugar (named definitions
+      and replacement notation), higher-order construction of functions from functions,
+      and encodings for pairs (make_pair) with selector functions (select_first, select_second),
+      and sketches how to extend to triplets. The chapter formalises free vs bound
+      variables, scopes, and the need for α-conversion (renaming bound variables)
+      to avoid name capture during substitution; it also presents η-reduction as a
+      simplification rule. Evaluation strategies (normal vs applicative order) and
+      the existence of non-terminating expressions (self-application to itself) are
+      discussed. The chapter provides BNF-like syntax rules and reduction notations
+      and finishes with exercises to analyse and reduce λ-expressions. Mathematical
+      expressions and λ-notation are used throughout (e.g. $\\lambda x.x$, applications
+      written as $(\\lambda x.x\\;\\lambda x.x)$).
+  highlights:
+  - text: Explain and apply the notion of abstraction (generalisation via naming and
+      specialisation via replacement) to derive parameterised expressions and functions.
+    concepts:
+    - concept:concept_names_and_values
+    reference_id: chunk:gjm_lambda_book--2_lambda_calculus
+  - text: 'Read and construct λ-expressions: names, functions ($\\lambda$-abstraction)
+      and applications; understand the BNF-style syntax presented.'
+    concepts:
+    - concept:concept_calculus
+    reference_id: chunk:gjm_lambda_book--2_lambda_calculus
+  - text: 'Perform normal-order β-reduction: reduce the function expression first,
+      substitute free occurrences of the bound variable with the (unevaluated) argument,
+      and continue reducing; contrast with applicative-order (call-by-value).'
+    concepts:
+    - concept:concept_calculus
+    - concept:concept_evaluation_order
+    reference_id: chunk:gjm_lambda_book--2_lambda_calculus
+  - text: Identify free vs bound variables and scopes in λ-expressions, and apply
+      α-conversion (renaming bound variables) to avoid name capture during substitution.
+    concepts:
+    - concept:concept_calculus
+    reference_id: chunk:gjm_lambda_book--2_lambda_calculus
+  - text: Use η-reduction to simplify expressions of the form $\\lambda x.(E\\;x)$
+      to $E$ when appropriate.
+    concepts:
+    - concept:concept_calculus
+    reference_id: chunk:gjm_lambda_book--2_lambda_calculus
+  - text: Construct and reason about higher-order functions and combinators (identity,
+      self-application, apply) and encode data structures (pairs, selectors, and extension
+      to triplets) using pure functions.
+    concepts:
+    - concept:concept_functions_as_values_higher_order_functions
+    reference_id: chunk:gjm_lambda_book--2_lambda_calculus
+  - text: Recognise that some λ-expressions do not terminate (infinite reduction sequences)
+      and relate this to computability limitations.
+    concepts:
+    - concept:concept_computability_theory
+    reference_id: chunk:gjm_lambda_book--2_lambda_calculus
+  - text: Apply syntactic sugar (named definitions, infix notation, conditional forms)
+      as compile-time rewrites into pure λ-calculus to preserve time-order independence
+      of substitutions.
+    concepts: []
+    reference_id: chunk:gjm_lambda_book--2_lambda_calculus
+  concepts:
+  - key: concept:functional_programming
+    introduced: false
+    summary: null
+    note: Discussed as contrasting with imperative programming; highlights functions
+      as values, lack of assignment, and origins in lambda calculus.
+    status: used
+  - key: concept:imperative_programming
+    introduced: false
+    summary: null
+    note: 'Used as a contrast to functional programming: based on assignment sequences,
+      fixed evaluation order, and mutable name/value associations.'
+    status: used
+  - key: concept:calculus
+    introduced: false
+    summary: null
+    note: 'Central topic of the chapter: syntax of λ expressions, abstraction ($\lambda$-abstraction),
+      application, normal-order β-reduction, α-conversion and η-reduction, and use
+      as foundation for functional programming.'
+    status: used
+  - key: concept:names_and_values
+    introduced: false
+    summary: null
+    note: Explained via abstraction and replacement (REPLACE ... WITH ... IN ...);
+      contrasts immutable bindings in functional style with reassignment in imperative
+      style.
+    status: used
+  - key: concept:evaluation_order
+    introduced: false
+    summary: null
+    note: Discusses applicative order (call-by-value) vs normal order (call-by-name);
+      chapter uses normal order β-reduction and notes power/efficiency trade-offs.
+    status: used
+  - key: concept:recursion
+    introduced: false
+    summary: null
+    note: Mentioned as the mechanism for repetition in functional programming; self-application
+      combinators will be used to construct recursive functions.
+    status: used
+  - key: concept:data_structures_lists_vs_arrays
+    introduced: false
+    summary: null
+    note: Notes that functional languages provide explicit (immutable) data structure
+      representations; chapter builds pairs/triplets as functional encodings to model
+      data like booleans, numbers, lists.
+    status: used
+  - key: concept:functions_as_values_higher_order_functions
+    introduced: false
+    summary: null
+    note: 'Demonstrated throughout: functions return functions, are passed as arguments,
+      used to build apply, make_pair, selectors, and higher-order combinators.'
+    status: used
+  - key: concept:lisp
+    introduced: false
+    summary: null
+    note: Mentioned as an example where names can be objects in their own right (programs-as-data),
+      contrasting with the chapter's restriction of no free names in expressions for
+      simplicity.
+    status: used
+  - key: concept:computability_theory
+    introduced: false
+    summary: null
+    note: The λ calculus is presented as a model for computability originating in
+      Church's work; chapter remarks on undecidability (termination) referenced later.
+    status: used
+  topics:
+  - key: topic:lambda_calculus_and_abstraction
+    summary:
+      name: Lambda calculus and Abstraction
+      oneliner: Core concepts, syntax, and reduction rules of the λ calculus; role
+        of abstraction in programming.
+      short: Overview of λ-calculus as a system of abstraction and application and
+        its role in functional programming.
+      long: 'This topic groups the chapter material presenting abstraction as generalisation/specialisation,
+        the syntax of λ-expressions,
+
+        naming conventions, evaluation orders (normal/applicative), β/α/η reductions,
+        and the use of λ-calculus as a foundation
+
+        for functional programming. It also covers practical syntactic sugar (named
+        definitions, pairing, selectors) and demonstrates
+
+        examples (identity, self-application, apply, make_pair) and pathological/non-terminating
+        expressions.'
+    entities:
+    - key: definition:expression_syntax_bnf
+      kind: definition
+      summary:
+        name: λ-expression syntax (BNF)
+        oneliner: BNF for names, functions (abstractions), and applications in λ-calculus.
+        short: 'Formal grammar: <expression> ::= <name> | <function> | <application>,
+
+          <function> ::= λ<name>.<body>, <application> ::= (<function expression>
+          <argument expression>).'
+        long: 'The text gives the grammar for λ expressions (BNF):
+
+          <expression> ::= <name> | <function> | <application>
+
+          <name> ::= non-blank character sequence
+
+          <function> ::= λ <name> . <body>
+
+          <body> ::= <expression>
+
+          <application> ::= ( <function expression> <argument expression> )
+
+          This defines names, λ-abstractions (functions) and applications; functions
+          bind a variable (the bound variable) whose scope
+
+          is the function body.'
+      fact_kind: null
+      related_to:
+      - type: is_a
+        target_key: concept:calculus
+    - key: definition:abstraction_and_specialisation_replace_notation
+      kind: definition
+      summary:
+        name: Abstraction and specialisation (REPLACE notation)
+        oneliner: Abstraction via naming operands and operators; specialisation by
+          replacing names with concrete values.
+        short: Introduce names to generalise expressions (e.g. REPLACE items IN cost*items)
+          and specialise by supplying values.
+        long: 'Abstraction is described as introducing names to stand for concrete
+          values or operations (generalisation). Specialisation
+
+          replaces those names with concrete values/operations. Examples include replacing
+          items and cost in formulas and abstracting
+
+          an operator op to produce cost op items, later specialising op with * or
+          /.'
+      fact_kind: null
+      related_to:
+      - type: related_to
+        target_key: concept:names_and_values
+      - type: related_to
+        target_key: concept:functional_programming
+    - key: definition:evaluation_orders_normal_order_vs_applicative_order
+      kind: definition
+      summary:
+        name: 'Evaluation orders: normal-order vs applicative-order'
+        oneliner: 'Two evaluation strategies described: normal order (call-by-name)
+          and applicative order (call-by-value).'
+        short: 'Normal order: substitute unevaluated argument into body; applicative
+          order: evaluate argument first.'
+        long: 'Two approaches to evaluating applications:
+
+          - Applicative order: evaluate the argument expression to a value before
+          substituting (call-by-value).
+
+          - Normal order: substitute the (possibly unevaluated) argument into the
+          function body and then reduce (call-by-name).
+
+          The chapter adopts normal order reductions for examples and notes normal
+          order can be more powerful (may find a normal form
+
+          when applicative doesn''t) but sometimes less efficient.'
+      fact_kind: null
+      related_to:
+      - type: same_as
+        target_key: concept:evaluation_order
+    - key: definition:reduction_beta_reduction
+      kind: definition
+      summary:
+        name: β-reduction (beta reduction)
+        oneliner: 'Formal substitution rule: replace free occurrences of bound variable
+          in body with the argument.'
+        short: 'For (λ<name>.<body> <argument>): replace free occurrences of <name>
+          in <body> with <argument> and reduce.'
+        long: 'β reduction is the formal mechanism for function application: for an
+          application (λ<name>.<body> <argument>),
+
+          all free occurrences of <name> in <body> are replaced by <argument>, yielding
+          a new expression which is then reduced
+
+          (typically under normal-order constraints described earlier). Care must
+          be taken to replace only free occurrences (see free/bound variables).'
+      fact_kind: null
+      related_to:
+      - type: is_a
+        target_key: concept:calculus
+    - key: definition:conversion_alpha_conversion
+      kind: definition
+      summary:
+        name: α-conversion (alpha conversion)
+        oneliner: Renaming bound variables to avoid name-clashes during substitution.
+        short: 'Consistent renaming: in λ<name1>.<body> rename <name1> to <name2>
+          (and free occurrences in body) if <name2> is not free in the function.'
+        long: 'α conversion avoids name clashes: when a substitution would place an
+          expression containing a free variable into the scope
+
+          of a bound variable with the same name, rename the bound variable (and its
+          bound occurrences) to a fresh name not free
+
+          in the function. Example: avoid substituting ''arg'' into λarg.(...) by
+          first renaming λarg to λarg1.'
+      fact_kind: null
+      related_to:
+      - type: is_a
+        target_key: concept:calculus
+    - key: definition:reduction_eta_reduction
+      kind: definition
+      summary:
+        name: η-reduction (eta reduction)
+        oneliner: Simplification that removes trivial abstraction over application
+          of an expression to the bound name.
+        short: λx.(E x) is equivalent to E when x not free in E; this is η-reduction.
+        long: 'An expression of the form λ<name>.(<expression> <name>) is equivalent
+          to <expression> provided <name> is not free in <expression>.
+
+          This simplification (η-reduction) is used to remove redundant λ-abstraction
+          that only immediately applies its argument.'
+      fact_kind: null
+      related_to:
+      - type: is_a
+        target_key: concept:calculus
+    - key: notation:named_definitions_and_replacement_notation
+      kind: notation
+      summary:
+        name: Named definitions and replacement notation
+        oneliner: Notation def <name> = <function>, name replacement ==, and reduction
+          =>.
+        short: Use def to name functions; == to expand defined names when used as
+          function expressions; => to denote β reduction (normal-order).
+        long: 'Syntactic sugar introduced:
+
+          - def <name> = <function> to associate a name with a λ-function.
+
+          - (<name> <arg>) == (<function> <arg>) indicates replacing a name by its
+          definition when the name appears as a function expression.
+
+          - => denotes a normal-order β reduction step; => ... => indicates multiple
+          reductions.
+
+          These substitutions are intended to be static/time-order independent so
+          the sugared language can be fully compiled to pure λ-calculus.'
+      fact_kind: null
+      related_to:
+      - type: related_to
+        target_key: concept:functions_as_values_higher_order_functions
+    - key: example:basic_example_functions_identity_self_apply_apply
+      kind: example
+      summary:
+        name: 'Basic example functions: identity, self-apply, apply'
+        oneliner: 'Concrete λ-terms used throughout: identity = λx.x; self_apply =
+          λs.(s s); apply = λf.λa.(f a).'
+        short: Examples show behaviour under application and composition; demonstrate
+          termination and non-termination cases.
+        long: '- identity: λx.x — returns its argument.
+
+          - self_apply: λs.(s s) — applies an argument to itself; when applied to
+          itself yields a non-terminating loop.
+
+          - apply: λfunc.λarg.(func arg) — takes a function and returns a function
+          that applies it to an argument.
+
+          Worked examples illustrate ((λx.x λs.(s s)) => λs.(s s)), (λs.(s s) λs.(s
+          s)) non-terminating, and constructions like identity2 and self_apply2
+
+          built by combining apply and the previous terms.'
+      fact_kind: null
+      related_to:
+      - type: is_a
+        target_key: concept:functions_as_values_higher_order_functions
+    - key: definition:pairing_and_selectors_make_pair_select_first_select_second
+      kind: definition
+      summary:
+        name: 'Pairing and selectors: make_pair, select_first, select_second'
+        oneliner: Encode pairs as higher-order functions and extract components by
+          applying to selector functions.
+        short: make_pair = λf.λs.λfunc.((func f) s); select_first = λf.λs.f; select_second
+          = λf.λs.s (in λ encoding).
+        long: 'make_pair builds a pair as a function that, given a selector func,
+          applies func to the stored first and second:
+
+          make_pair = λfirst.λsecond.λfunc.((func first) second)
+
+          Selecting:
+
+          - ((make_pair a) b) select_first => a
+
+          - ((make_pair a) b) select_second => b
+
+          select_second as written yields a function equivalent to the identity when
+          partially applied; examples show general behaviour.'
+      fact_kind: null
+      related_to:
+      - type: related_to
+        target_key: concept:functions_as_values_higher_order_functions
+    - key: other:free_and_bound_variables_scope_rules
+      kind: other
+      summary:
+        name: Free and bound variables; scope rules
+        oneliner: Formal definitions of free vs bound occurrences and variable scope;
+          used to define correct β-substitution.
+        short: Variables are bound when introduced by λ and free otherwise; substitution
+          replaces only free occurrences.
+        long: 'Precise rules:
+
+          - A variable is bound in λ<name>.<body> for occurrences of <name> in <body>
+          except where shadowed by inner λ with same name.
+
+          - Free occurrences are names not bound in their context.
+
+          Rules for free/bound in applications and functions are enumerated; β-reduction
+          replaces only free occurrences of the bound name.
+
+          This motivates α-conversion to avoid accidental capture (name-clashes).'
+      fact_kind: null
+      related_to:
+      - type: related_to
+        target_key: concept:names_and_values
+    - key: other:non_termination_and_computability_remark
+      kind: other
+      summary:
+        name: Non-termination and computability remark
+        oneliner: Some λ-expressions (e.g., self-application to itself) never terminate;
+          detecting termination is undecidable.
+        short: The chapter notes non-terminating reductions and points to undecidability
+          results (addressed in later chapters).
+        long: 'The self-application term (λs.(s s) λs.(s s)) reduces to itself and
+          therefore never terminates. The chapter observes that not all
+
+          evaluations terminate and foreshadows the impossibility of mechanically
+          deciding termination (to be discussed in chapter 8).'
+      fact_kind: null
+      related_to:
+      - type: related_to
+        target_key: concept:computability_theory
+    - key: other:syntactic_sugaring_and_compilation_to_pure
+      kind: other
+      summary:
+        name: Syntactic sugaring and compilation to pure λ
+        oneliner: Introduce higher-level notations (named defs, infix operations,
+          IF) that can be statically compiled to pure λ.
+        short: Sugar provides concise notation but must be statically eliminable to
+          pure λ-calculus to preserve semantics and time-order independence.
+        long: 'The chapter introduces higher-level conveniences (named definitions
+          via def, infix ops, IF-like constructs) to make examples
+
+          readable. Substitution rules for these are designed to be static/time-order
+          independent so any sugared expression can be
+
+          fully expanded to pure λ-calculus before evaluation; actual implementations
+          may avoid full expansion for readability.'
+      fact_kind: null
+      related_to:
+      - type: related_to
+        target_key: concept:functional_programming
+    - key: other:exercises_and_constructive_tasks
+      kind: other
+      summary:
+        name: Exercises and constructive tasks
+        oneliner: Exercises asking for structural analysis, reductions, equivalence
+          proofs, and construction of triplet selectors.
+        short: Problems include analysing λ-terms, evaluating reductions, proving
+          equivalences (e.g., identity constructions), and defining make_triplet and
+          selectors.
+        long: 'The exercises require:
+
+          - parsing and identifying bound variables and bodies,
+
+          - performing normal-order β reductions on given terms,
+
+          - proving equivalence between named functions and composed constructions,
+
+          - defining make_triplet and selectors (triplet_first, triplet_second, triplet_third)
+          analogous to make_pair,
+
+          - analysing free/bound variables.
+
+          These are practical applications of the chapter''s definitions and rules.'
+      fact_kind: null
+      related_to:
+      - type: related_to
+        target_key: concept:functions_as_values_higher_order_functions
+    related_to:
+    - type: is_a
+      target_key: concept:calculus
+    - type: depends_on
+      target_key: concept:functional_programming
+    - type: related_to
+      target_key: concept:names_and_values
+    - type: related_to
+      target_key: concept:evaluation_order
+    - type: related_to
+      target_key: concept:functions_as_values_higher_order_functions
+    - type: related_to
+      target_key: concept:computability_theory
+    subtopics:
+    - key: subtopic:encoding_data_and_higher_order_constructions
+      summary:
+        name: Encoding data and higher-order constructions
+        oneliner: How functions encode pairs/triples and selectors; building functions
+          from functions.
+        short: Make_pair/selectors and make_triplet idea; constructing new functions
+          by applying apply and self-apply.
+        long: 'This subtopic groups constructions that encode data structures and
+          selectors using pure λ-terms (make_pair and the proposed
+
+          make_triplet), and patterns that build functions from other functions (e.g.,
+          identity2, self_apply2 built using apply).
+
+          It emphasises higher-order techniques: functions that return functions and
+          functions that consume selector-functions to extract data.'
+      entities:
+      - key: example:constructing_identity2_and_self_apply2_using_apply
+        kind: example
+        summary:
+          name: Constructing identity2 and self_apply2 using apply
+          oneliner: 'Examples show equivalence: identity2 = λx.((apply identity) x)
+            equals identity; self_apply2 = λs.((apply s) s).'
+          short: Shows how apply composes to produce variants equivalent to base functions.
+          long: 'Derived definitions:
+
+            identity2 = λx.((apply identity) x) => behaves as identity for arbitrary
+            argument.
+
+            self_apply2 = λs.((apply s) s) => behaves as self_apply.
+
+            Stepwise normal-order reductions in the chapter demonstrate equivalences
+            and how apply adds a β layer.'
+        fact_kind: null
+        related_to:
+        - type: is_a
+          target_key: concept:functions_as_values_higher_order_functions
+      - key: other:triplet_construction_exercise
+        kind: other
+        summary:
+          name: Triplet construction exercise
+          oneliner: Task to define make_triplet and three selectors analogous to make_pair
+            and show correctness by reductions.
+          short: Design make_triplet and selectors so that make_triplet a b c triplet_first
+            => a, etc.
+          long: 'Exercise 4 asks for define:
+
+            def make_triplet = ...
+
+            def triplet_first = ...
+
+            def triplet_second = ...
+
+            def triplet_third = ...
+
+            so that applying the triplet to the corresponding selector returns the
+            chosen element. This is an exercise in higher-order encoding
+
+            of n-tuples using λ-terms and selectors-as-functions.'
+        fact_kind: null
+        related_to:
+        - type: related_to
+          target_key: concept:functions_as_values_higher_order_functions
+        - type: related_to
+          target_key: concept:data_structures_lists_vs_arrays
+      related_to:
+      - type: is_a
+        target_key: concept:functions_as_values_higher_order_functions
+      - type: related_to
+        target_key: concept:data_structures_lists_vs_arrays
+      subtopics: []

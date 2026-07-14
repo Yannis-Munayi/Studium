@@ -1,0 +1,7 @@
+title: Lambda Calculus
+units:
+  - "1_introduction.pdf"
+  - "2_lambda_calculus.pdf"
+  - "3_conditions_booleans_and_integers.pdf"
+  - "4_recursion_and_arithmetic.pdf"
+  - "5_types.pdf"

@@ -1,0 +1,714 @@
+element_id: chunk:gjm_lambda_book--1_introduction
+level: document
+variant: default
+content:
+  summary:
+    name: Introduction to Functional Programming and the Lambda Calculus
+    oneliner: An introductory survey of functional programming principles, their theoretical
+      origins in the $λ$-calculus and recursive function theory, and practical implications
+      for languages such as LISP and Standard ML.
+    short: Introduces functional programming concepts, $λ$-calculus foundations, evaluation
+      order, recursion, data representations and connections to language design and
+      semantics.
+    long: 'This document is the introductory chapter of a book that presents functional
+      programming from both practical and theoretical perspectives. It explains how
+      functional programming differs from imperative programming by emphasising immutable
+      name–value associations, nested function composition, and recursion instead
+      of assignment and loops. The text traces historical and theoretical origins
+      in propositional and predicate calculus, Peano arithmetic, Hilbert’s program,
+      and the 1930s developments of Turing machines, recursive function theory and
+      Church''s $λ$-calculus. It highlights key properties of the $λ$-calculus (abstraction,
+      application, evaluation-order independence, Church–Rosser confluence, and termination
+      issues), and shows how these ideas underpin functional languages and language
+      semantics (operational/SECD-style and denotational approaches). Practical language
+      material and connections are sketched: LISP''s history and hybrid nature, the
+      emergence of languages like POP-2/POP11, SASL, KRC, Miranda, Hope, ML/Standard
+      ML, and the influence of Backus''s FP ideas. The chapter outlines core programming
+      consequences: no reassignment, execution-order independence in pure fragments,
+      recursion as repetition, representation of data as whole immutable structures
+      (lists, trees), first-class functions (functions as values), and implications
+      for program proof, prototyping and parallelism. It also previews the rest of
+      the book: developing pure $λ$-calculus syntax and encodings (pairs, booleans,
+      numbers), recursion and arithmetic, types, lists and trees, evaluation orders
+      and termination, and practical chapters on Standard ML and LISP implementations.'
+  highlights:
+  - text: Explain how functional programming treats names as single, immutable associations
+      and how this contrasts with imperative variable assignment.
+    concepts:
+    - concept:functional_programming
+    - concept:variable_assignment
+    reference_id: chunk:gjm_lambda_book--1_introduction
+  - text: Describe recursion and nested function calls as the mechanism for repetition
+      and state evolution in functional programs (replacing loops and reassignment).
+    concepts:
+    - concept:recursion
+    reference_id: chunk:gjm_lambda_book--1_introduction
+  - text: 'Understand first-class functions: functions can be constructed, returned
+      and passed as values.'
+    concepts:
+    - concept:first_class_functions
+    reference_id: chunk:gjm_lambda_book--1_introduction
+  - text: Summarise the $λ$-calculus as a minimal formal system (abstraction and application)
+      that can represent programming constructs and reason about evaluation.
+    concepts:
+    - concept:lambda_calculus
+    reference_id: chunk:gjm_lambda_book--1_introduction
+  - text: Explain evaluation-order independence, Church–Rosser confluence, and the
+      relation between evaluation order and termination/efficiency.
+    concepts:
+    - concept:evaluation_order
+    - concept:confluence_church_rosser
+    reference_id: chunk:gjm_lambda_book--1_introduction
+  - text: Relate theoretical models (Turing machines, recursive functions, $λ$-calculus)
+      to language design and semantics (operational and denotational), and survey
+      historically important functional languages.
+    concepts:
+    - concept:denotational_semantics
+    - concept:operational_semantics
+    reference_id: chunk:gjm_lambda_book--1_introduction
+  concepts:
+  - key: concept:functional_programming
+    introduced: true
+    summary:
+      name: Functional programming
+      oneliner: Programming paradigm based on function calls and immutability.
+      short: An approach to programming where computation is expressed by composing
+        and evaluating functions; names are bound once and there is no assignment.
+      long: Functional programming is a programming paradigm in which function application
+        and function composition are the primary building blocks. Names (formal parameters)
+        are bound to values by function calls and are not reassigned; there is no
+        assignment statement or mutable variables in the pure form. Repetition is
+        achieved by recursion rather than loops, data structures are treated as whole
+        values (immutable), and functions are first-class values that can be passed
+        and returned. The paradigm highlights evaluation-order independence and a
+        close connection with the λ (lambda) calculus and recursive function theory.
+    note: Presented as the central theme of the book, contrasted with imperative programming;
+      motivates use of λ calculus and examples in SML/Miranda/LISP.
+    status: used
+  - key: concept:imperative_programming
+    introduced: true
+    summary:
+      name: Imperative programming
+      oneliner: Programming style based on commands, mutable variables and assignment.
+      short: An approach to programming consisting of sequences of commands that change
+        program state via assignment to variables; execution order is crucial.
+      long: Imperative programming models computation as sequences of commands (statements)
+        that update mutable state. Variables (names) represent changeable associations
+        to values and assignment (<name> := <expression>) modifies those associations.
+        Control structures (loops, conditionals) describe command sequencing; execution
+        order matters because commands can alter shared state. Examples include Pascal,
+        FORTRAN and COBOL.
+    note: 'Used as the principal contrast to functional programming throughout the
+      introduction (examples: loops, swapping variables).'
+    status: used
+  - key: concept:calculus
+    introduced: true
+    summary:
+      name: λ calculus
+      oneliner: Minimal formal system using abstraction and application to model computation.
+      short: A simple but powerful formal system based on function abstraction ($\lambda$-abstraction)
+        and function application, used as a foundation for functional programming
+        and semantics.
+      long: The λ calculus is a formal system whose syntax and computation rules are
+        built from variable names, function abstraction ($\lambda x.\,E$) and application
+        ($E_1\,E_2$). It can encode data and control structures and serves as a universal
+        model for computation equivalent to Turing machines and recursive functions.
+        Important properties include evaluation-order independence, the Church–Rosser
+        confluence property, and its use as a basis for language design, operational
+        and denotational semantics, and implementations (e.g. via the SECD machine).
+        Representations for booleans, numbers, pairs and lists are developed from
+        the λ calculus.
+    note: Described as the theoretical basis for the book; later chapters build λ-calculus
+      encodings (booleans, numbers, lists, recursion).
+    status: used
+  - key: concept:names_and_values
+    introduced: true
+    summary:
+      name: Names and values
+      oneliner: How names are associated with values in programs; differing rules
+        in paradigms.
+      short: Concept of using names to stand for values in programs; in imperative
+        languages names can be reassigned, while in functional languages names (formal
+        parameters) are bound once by calls and immutable.
+      long: Names (identifiers) are program-level references to values. Imperative
+        languages use variables as changeable associations between a name and successive
+        values via assignment. Functional languages introduce names only as formal
+        parameters for functions; once bound to actual parameter values they are not
+        reassigned. This distinction underpins differences in execution order sensitivity,
+        repetition mechanisms, and data-structure manipulation.
+    note: Section 1.2–1.3 contrasts treatment of names and values across paradigms
+      with examples.
+    status: used
+  - key: concept:evaluation_order
+    introduced: true
+    summary:
+      name: Evaluation order
+      oneliner: Order in which expressions/commands are evaluated and its effect on
+        results.
+      short: 'The sequencing of evaluation (execution order): imperative languages
+        depend on a fixed command order, while pure functional languages are evaluation-order
+        independent (different orders yield the same result when they terminate).'
+      long: 'Evaluation order refers to the sequence in which expressions or commands
+        are evaluated. Imperative programs rely on a fixed ordering because assignments
+        change shared state. Pure functional programs, where functions cannot change
+        shared names, are evaluation-order independent: rearranging the order of independent
+        function calls does not affect final results. λ calculus has confluence properties
+        (Church–Rosser) guaranteeing that if different reduction orders terminate,
+        they produce the same normal form; some orders are more likely to terminate
+        (e.g., normal order).'
+    note: Discussed in sections 1.4 and 1.8; motivates parallel execution and termination
+      considerations.
+    status: used
+  - key: concept:recursion
+    introduced: true
+    summary:
+      name: Recursion
+      oneliner: Function calls that reference themselves to express repetition.
+      short: Technique for repetition in functional programming where a function calls
+        itself with updated parameters to produce iterative behaviour without assignment.
+      long: 'Recursion is the mechanism by which repetition and iterative computation
+        are expressed in functional languages: a function invokes itself with new
+        arguments to progress toward a base case. Each recursive call creates new
+        local bindings; previous activations become inaccessible until results are
+        returned. Recursive definitions correspond closely to mathematical induction
+        and primitives in recursive function theory. Recursion replaces imperative
+        loops in pure functional code (example: summing array elements via SUM(A,I,N)
+        calling SUM(A,I+1,N)).'
+    note: Presented as the functional analogue of loops (section 1.5) with examples.
+    status: used
+  - key: concept:data_structures_lists_vs_arrays
+    introduced: true
+    summary:
+      name: Data structures (lists vs arrays)
+      oneliner: Representation and manipulation of structured values in functional
+        languages, favouring immutable lists over mutable arrays.
+      short: Functional languages favour immutable nested structures like lists; arrays
+        requiring in-place updates are awkward without assignment. Lists are recursively
+        defined and align with function recursive processing.
+      long: Because pure functional languages lack assignment, modifying parts of
+        large structures by destructive updates is not available. Instead entire structures
+        are constructed with desired changes; nested recursive data (lists, trees)
+        are natural and efficiently processed by recursive functions. Lists provide
+        a standard, uniform representation (as in LISP) for both data and code, simplifying
+        printing, I/O, and program-manipulation. Arrays and destructive updates are
+        an imperative facility and are not primary in pure functional style.
+    note: Discussed in section 1.6 with commentary on passing whole structures as
+      parameters and LISP's uniform list representation.
+    status: used
+  - key: concept:functions_as_values_higher_order_functions
+    introduced: true
+    summary:
+      name: Functions as values (higher-order functions)
+      oneliner: Functions can be passed and returned like other values, enabling higher-order
+        programming.
+      short: 'In functional languages functions are first-class: they can be created,
+        passed as actual parameters, returned as results, and stored in data structures.'
+      long: 'Higher-order functions treat functions as data: functions may construct
+        new functions, return them as results, or accept them as arguments. This enables
+        powerful abstraction mechanisms (e.g., ARITH(OP) returning an arithmetic function
+        such that ARITH(ADD)(3,4) computes 7). Many imperative languages allow passing
+        subroutines but do not treat subprograms uniformly as first-class values.'
+    note: Illustrated in section 1.7 with a Pascal-like example returning arithmetic
+      operations.
+    status: used
+  - key: concept:lisp
+    introduced: true
+    summary:
+      name: LISP
+      oneliner: An early list-processing language influenced by λ calculus and recursion.
+      short: LISP is an early high-level language based on list processing, with minimal
+        syntax, programs-as-data (code is a list), and both functional and imperative
+        features; influential in AI and functional language design.
+      long: LISP (LISt Processing) was developed by McCarthy and is based on recursive
+        functions that operate on lists of symbols and numbers. Variables are untyped,
+        programs are represented as lists (enabling program manipulation), and the
+        language mixes functional and imperative features. LISP influenced many later
+        functional languages and implementations; dialects include COMMON LISP.
+    note: Reviewed historically in 1.9 and targeted later in chapter 10 for functional
+      programming in LISP.
+    status: used
+  - key: concept:computability_theory
+    introduced: true
+    summary:
+      name: Computability theory
+      oneliner: Formal study of what can be computed (Turing, Church, Kleene).
+      short: Field studying formal models of computation (Turing machines, recursive
+        functions, λ calculus), their equivalence, and limits like undecidability.
+      long: Computability theory developed formalizations of computation—Turing machines,
+        Kleene's recursive functions, and Church's λ calculus—showing their equivalence
+        and providing a foundation for reasoning about algorithms and languages. It
+        addresses decidability and undecidability results (e.g., the halting problem)
+        and motivates semantic descriptions and language design. Church's thesis (informal)
+        posits that these formalizations capture all effectively computable functions.
+    note: Covered in section 1.8–1.9 as historical and conceptual background linking
+      theory to language design.
+    status: used
+  - key: concept:turing_machines
+    introduced: false
+    summary: null
+    note: Mentioned as one of the formal models of computation contrasted with λ calculus
+      and recursive functions; halting problem reference (section 1.8).
+    status: used
+  - key: concept:recursive_function_theory
+    introduced: false
+    summary: null
+    note: Mentioned as an equivalent formalism to λ calculus and Turing machines and
+      as theoretical basis for recursive programs and proofs.
+    status: used
+  - key: concept:church_s_thesis
+    introduced: false
+    summary: null
+    note: Referenced as the hypothesis that all reasonable notions of computability
+      are equivalent; presented historically (section 1.8).
+    status: used
+  - key: concept:halting_problem
+    introduced: false
+    summary: null
+    note: 'Cited via Turing''s result: impossibility of deciding whether arbitrary
+      computation halts; applies to λ calculus and recursive functions (section 1.8).'
+    status: used
+  - key: concept:church_rosser_theorem
+    introduced: false
+    summary: null
+    note: 'Mentioned: confluence property for λ calculus guaranteeing equal results
+      for different terminating reduction orders (section 1.8).'
+    status: used
+  - key: concept:secd_machine
+    introduced: false
+    summary: null
+    note: Mentioned as Landin's abstract interpreter for the λ calculus and as an
+      implementation technique adapted to functional languages (section 1.9).
+    status: used
+  - key: concept:denotational_semantics
+    introduced: false
+    summary: null
+    note: Mentioned in relation to Scott's lattice-theoretic description and as a
+      method for formally defining programming languages (section 1.9).
+    status: used
+  - key: concept:operational_semantics
+    introduced: false
+    summary: null
+    note: Implied by references to Landin's operational descriptions and abstract
+      interpreters; contrasts with denotational approaches (section 1.9).
+    status: used
+  - key: concept:standard_ml_sml
+    introduced: false
+    summary: null
+    note: Mentioned as a modern functional language (used in chapter 9) and contrasted
+      with LISP; lacks normal-order reduction but has imperative extensions (page
+      1).
+    status: used
+  - key: concept:miranda
+    introduced: false
+    summary: null
+    note: Mentioned as a functional language descendant of SASL/KRC; used in teaching
+      and research (section 1.9).
+    status: used
+  - key: concept:types_and_typed_representations
+    introduced: false
+    summary: null
+    note: Announced as topic for chapter 5 (typed representations for booleans, numbers,
+      characters).
+    status: partial
+  - key: concept:lists_and_linear_list_processing
+    introduced: false
+    summary: null
+    note: Listed as chapter 6 topic; lists emphasized throughout as primary data structure
+      in functional languages.
+    status: partial
+  - key: concept:proof_techniques_program_verification
+    introduced: false
+    summary: null
+    note: 'Mentioned: recursive function based proofs, constructive type theory, and
+      formal specification methods (VDM, Z, OBJ) using functional notation (section
+      1.9).'
+    status: used
+  topics:
+  - key: topic:introduction_to_functional_programming
+    summary:
+      name: Introduction to Functional Programming
+      oneliner: Overview of functional programming, its contrast with imperative programming,
+        and role of λ calculus.
+      short: Motivation for functional programming, historical roots, and book roadmap.
+      long: This topic introduces functional programming as an approach based on function
+        calls and immutable bindings, contrasts it with imperative programming, outlines
+        its theoretical roots (λ calculus, recursive function theory, Turing machines),
+        surveys practical relevance, and summarizes the book's structure and chapter
+        contents.
+    entities:
+    - key: other:preface_acknowledgements
+      kind: other
+      summary:
+        name: Preface / Acknowledgements
+        oneliner: Author acknowledgements and scope of the book.
+        short: Credits, educational background of the author, and intended exposition
+          using λ calculus.
+        long: Contains acknowledgements of people and institutions that influenced
+          the author and describes the intent to use λ calculus to explore functional
+          programming across subsequent chapters, including practical languages (SML,
+          Miranda, LISP) and theoretical foundations.
+      fact_kind: null
+      related_to:
+      - type: related_to
+        target_key: concept:functional_programming
+    related_to:
+    - type: is_a
+      target_key: concept:functional_programming
+    - type: related_to
+      target_key: concept:computability_theory
+    - type: related_to
+      target_key: concept:calculus
+    subtopics:
+    - key: subtopic:book_roadmap
+      summary:
+        name: Book roadmap
+        oneliner: Chapter-by-chapter summary of contents and goals.
+        short: Chapters 2–10 cover λ calculus, booleans, numbers, recursion, types,
+          lists, trees, evaluation order, SML and LISP.
+        long: Explains that chapter 2 treats pure λ calculus and notation; chapter
+          3 covers booleans and numbers; chapter 4 covers recursive functions and
+          arithmetic; chapter 5 discusses types; chapter 6 lists; chapter 7 nested
+          structures; chapter 8 evaluation orders and termination; chapter 9 Standard
+          ML; chapter 10 LISP.
+      entities: []
+      related_to: []
+      subtopics: []
+  - key: topic:names_and_values_in_programming
+    summary:
+      name: Names and values in programming
+      oneliner: How names bind to values in imperative vs functional languages.
+      short: Distinguishes mutable variables (imperative) from immutable formal parameters
+        (functional).
+      long: Discusses names as placeholders for values; in calculators no generalisation;
+        in programming languages names allow abstraction. Contrasts imperative variables
+        which can be reassigned via assignment statements (<name> := <expression>)
+        with functional formal parameters which are bound once by function calls and
+        cannot be changed. Emphasises that functional names are introduced only as
+        formal parameters and remain bound to a single value for their lifetime.
+    entities:
+    - key: definition:variable_binding_models
+      kind: definition
+      summary:
+        name: Variable binding models
+        oneliner: Definition of mutable variable binding versus single-assignment
+          binding.
+        short: 'Imperative: names may be reassigned; Functional: names (parameters)
+          are single-assignment.'
+        long: Defines the imperative model where names denote storage cells whose
+          contents can change via assignment, and the functional model where names
+          are parameters bound to values on function entry and never reassigned. This
+          underpins differences in program structure and reasoning about programs.
+      fact_kind: null
+      related_to:
+      - type: is_a
+        target_key: concept:names_and_values
+    related_to:
+    - type: is_a
+      target_key: concept:names_and_values
+    - type: related_to
+      target_key: concept:imperative_programming
+    - type: related_to
+      target_key: concept:functional_programming
+    subtopics: []
+  - key: topic:imperative_vs_functional_programming
+    summary:
+      name: Imperative vs Functional programming
+      oneliner: Contrast of sequencing/commands and function composition/nesting.
+      short: 'Imperative: sequences of commands with assignments and crucial execution
+        order. Functional: nested function calls, no assignment, order independence.'
+      long: Explains that imperative programs are sequences of commands where each
+        command (often an assignment) may change variables used later; hence execution
+        order is often crucial. Functional programs are built from nested function
+        calls; values are passed via parameters and returned; there is no assignment
+        so different evaluation orders do not change final results when they terminate.
+        Examples include command sequences for swapping variables vs nested calls
+        F(A(D),B(D),C(D)).
+    entities:
+    - key: example:swap_example_and_order_sensitivity
+      kind: example
+      summary:
+        name: Swap example and order sensitivity
+        oneliner: Command reorder changes outcome in imperative swap sequence.
+        short: Shows three assignment sequences illustrating different results when
+          order changes.
+        long: 'Provides imperative examples: T := X ; X := Y ; Y := T and two reorderings
+          demonstrating that changing the order produces different final bindings
+          for X and Y, highlighting dependence on execution sequence.'
+      fact_kind: null
+      related_to:
+      - type: related_to
+        target_key: concept:imperative_programming
+    - key: example:function_call_order_independence_example
+      kind: example
+      summary:
+        name: Function-call order independence example
+        oneliner: Order of evaluating independent arguments does not affect result
+          in pure functional calls.
+        short: F(A(D),B(D),C(D)) where A,B,C cannot alter D so evaluation order is
+          irrelevant.
+        long: Illustrates that when functions do not have side effects (cannot change
+          shared state or parameters), the evaluation order of their arguments does
+          not affect the result, demonstrating a key benefit for parallelism and reasoning.
+      fact_kind: null
+      related_to:
+      - type: depends_on
+        target_key: concept:evaluation_order
+      - type: related_to
+        target_key: concept:functional_programming
+    related_to:
+    - type: is_a
+      target_key: concept:imperative_programming
+    - type: related_to
+      target_key: concept:functional_programming
+    - type: related_to
+      target_key: concept:evaluation_order
+    subtopics: []
+  - key: topic:evaluation_order_and_termination
+    summary:
+      name: Evaluation order and termination
+      oneliner: Evaluation-order independence, Church-Rosser property, and termination
+        considerations.
+      short: Different orders yield same result when they terminate; some orders more
+        likely to terminate; implications for parallelism.
+      long: 'Explains that λ calculus and recursive function theory are evaluation-order
+        independent: Church-Rosser shows confluence (different reduction orders that
+        terminate produce the same normal form). Also notes existence of a reduction
+        strategy more likely to lead to termination (e.g. normal-order). Discusses
+        halting/undecidability: Turing''s halting problem implies no general method
+        to decide termination. Practical implication: order independence enables parallel
+        evaluation for some programs.'
+    entities:
+    - key: fact:undecidability_of_halting
+      kind: fact
+      summary:
+        name: Undecidability of halting
+        oneliner: No algorithm can decide for every program whether it halts.
+        short: Turing's halting problem applies to Turing machines, λ calculus, and
+          recursive functions.
+        long: 'Turing proved that the halting problem is unsolvable: there is no general
+          procedure to determine whether an arbitrary Turing machine halts on a given
+          input. This result transfers to equivalent models such as the λ calculus
+          and recursive function theory.'
+      fact_kind: fact
+      related_to:
+      - type: is_a
+        target_key: concept:computability_theory
+    related_to:
+    - type: related_to
+      target_key: concept:calculus
+    - type: is_a
+      target_key: concept:evaluation_order
+    - type: related_to
+      target_key: concept:computability_theory
+    subtopics: []
+  - key: topic:repetition_and_recursion
+    summary:
+      name: Repetition and Recursion
+      oneliner: Loops in imperative languages vs recursion in functional languages.
+      short: Imperative uses loops and variable reuse; functional uses recursive calls
+        to create fresh bindings per call.
+      long: 'Describes how imperative languages repeat work by reusing names (loops,
+        mutable variables). Functional languages express repetition via recursion:
+        a function calls itself with updated parameters, creating new local bindings
+        each call. Example: summing an array via a WHILE loop vs a recursive SUM(A,I,N)
+        returning 0 when I> N and otherwise A[I] + SUM(A,I+1,N).'
+    entities:
+    - key: example:array_sum_loop_vs_recursive_definition
+      kind: example
+      summary:
+        name: 'Array-sum: loop vs recursive definition'
+        oneliner: Contrasts imperative loop accumulating SUM with recursive SUM function.
+        short: Imperative version uses I and SUM mutable variables; functional version
+          uses SUM(A,I,N) recursively.
+        long: 'Shows imperative pseudocode: I := 0; SUM := 0; WHILE I < N DO ... and
+          contrast with recursive function: FUNCTION SUM(A,I,N): if I > N then 0 else
+          A[I] + SUM(A,I+1,N). Describes how recursion produces new local bindings
+          and returns partial sums through call chain.'
+      fact_kind: null
+      related_to:
+      - type: related_to
+        target_key: concept:recursion
+    related_to:
+    - type: is_a
+      target_key: concept:recursion
+    - type: related_to
+      target_key: concept:functional_programming
+    subtopics: []
+  - key: topic:data_structures_lists_vs_arrays_and_global_state
+    summary:
+      name: 'Data structures: lists vs arrays and global state'
+      oneliner: Immutable nested structures (lists) preferred in functional languages;
+        arrays and in-place updates are awkward without assignment.
+      short: Functional languages provide explicit nested data representations (lists);
+        global mutable structures are avoided because substructure updates require
+        reconstructing whole structures.
+      long: 'Explains that without assignment one cannot update array elements in
+        place conveniently, so functional languages favour recursively defined nested
+        structures such as lists. Lists align with function recursion and have standard
+        printed/stored representations. Global structures and in-place updates are
+        rare: instead entire structures are passed to functions and returned with
+        modifications, making data flow explicit though function calls may become
+        larger. LISP uses same representation for functions and data (code-as-data).'
+    entities:
+    - key: other:implications_for_program_i_o_and_debugging
+      kind: other
+      summary:
+        name: Implications for program I/O and debugging
+        oneliner: Standard structure representation simplifies printing, storage,
+          and I/O.
+        short: Immutable structured representations reduce need for custom printing
+          and file I/O handlers.
+        long: 'Because data structures have standard nested representations, debugging
+          and output are simplified: no need for special printing code per structure
+          type; storage formats are uniform and prototyping/serialization are easier.'
+      fact_kind: null
+      related_to: []
+    related_to:
+    - type: is_a
+      target_key: concept:data_structures_lists_vs_arrays
+    - type: related_to
+      target_key: concept:lisp
+    subtopics: []
+  - key: topic:functions_as_values_higher_order_functions
+    summary:
+      name: Functions as values (Higher-order functions)
+      oneliner: 'Functions are first-class: they can be returned and passed like other
+        values.'
+      short: Demonstrates returning functions from functions and calling the returned
+        function immediately.
+      long: 'Shows that functional languages allow functions to be created and returned
+        as results. Example (Pascal-like contrived): ARITH(OP) returns one of SUM,
+        DIFF, TIMES, DIVIDE depending on OP; then ARITH(ADD)(3,4) applies returned
+        function. Many imperative languages disallow constructing ''function'' typed
+        values. This ability increases expressiveness and modularity.'
+    entities:
+    - key: example:arith_factory_example
+      kind: example
+      summary:
+        name: ARITH factory example
+        oneliner: Function that returns arithmetic functions based on an operation
+          code.
+        short: ARITH(OP) returns SUM, DIFF, TIMES or DIVIDE; demonstrates immediate
+          application ARITH(ADD)(3,4).
+        long: Provides a Pascalish example where ARITH(OP) selects and returns one
+          of several function definitions; illustrates higher-order behaviour where
+          functions are values that can be returned and invoked.
+      fact_kind: null
+      related_to:
+      - type: related_to
+        target_key: concept:functions_as_values_higher_order_functions
+    related_to:
+    - type: is_a
+      target_key: concept:functions_as_values_higher_order_functions
+    - type: related_to
+      target_key: concept:functional_programming
+    subtopics: []
+  - key: topic:lisp_and_historical_languages
+    summary:
+      name: LISP and historical languages
+      oneliner: LISP's design, influence, and relation to functional and imperative
+        features.
+      short: 'LISP: early list-processing language influenced by λ calculus; programs
+        are lists; mixes functional and imperative features; influential in AI.'
+      long: 'Describes McCarthy''s 1963 LISP: simple syntax based on list recursion,
+        untyped variables, code-as-data (programs are lists), influential for functional
+        language design and AI. LISP is not purely functional (contains imperative
+        elements) but provided rigorous definition and techniques for proving recursive
+        programs. Other historical languages (POP-2, SASL, KRC, Miranda, Hope, ML)
+        are mentioned as descendants or relatives, and Backus'' FP systems are noted
+        as influential.'
+    entities:
+    - key: other:language_lineage_and_influences
+      kind: other
+      summary:
+        name: Language lineage and influences
+        oneliner: Summarises development from LISP to modern functional languages
+          and FP movement.
+        short: Lists POP-2, SASL, KRC, Miranda, Hope, ML, and Backus' FP systems as
+          part of the evolution.
+        long: 'Chronicles development: LISP (McCarthy), POP-2 (Popplestone & Burstall),
+          SASL (Turner) leading to KRC and Miranda, Hope (Burstall), ML (Milner) and
+          Standard ML; Backus'' 1977 FP paper advocated FP systems; notes language
+          features and uses (LCF, ALICE, academic and industrial interest).'
+      fact_kind: null
+      related_to:
+      - type: related_to
+        target_key: concept:computability_theory
+    related_to:
+    - type: is_a
+      target_key: concept:lisp
+    - type: related_to
+      target_key: concept:functional_programming
+    subtopics: []
+  - key: topic:computability_theory_and_calculus
+    summary:
+      name: Computability theory and λ calculus
+      oneliner: 'Foundations: Turing machines, recursive functions, and λ calculus
+        equivalence and roles.'
+      short: Three equivalent formal models of computation; λ calculus suitable for
+        modelling functional languages and semantics.
+      long: 'Explains 1936 developments: Turing machines, Kleene''s recursive function
+        theory, and Church''s λ calculus. These models are equivalent (Church''s thesis)
+        and match von Neumann machines. Differences: Turing model emphasises mechanised
+        symbol manipulation and ordered evaluation; λ calculus and recursive functions
+        emphasise structured function application and order independence. Church-Rosser
+        confluence and undecidability (halting) are discussed. λ calculus serves as
+        universal machine code for programming languages and for semantic descriptions
+        (operational & denotational).'
+    entities:
+    - key: definition:calculus_role_in_programming_languages
+      kind: definition
+      summary:
+        name: λ calculus role in programming languages
+        oneliner: λ calculus as a basis for functional language design and semantics.
+        short: Abstraction and application suffice to represent programming constructs;
+          λ calculus is evaluation-order independent and easy to implement for prototyping
+          languages.
+        long: States that abstraction ($\lambda$-abstraction) and application are
+          the primitive operations of λ calculus and can represent arbitrary language
+          constructs. Because of confluence and simplicity, λ calculus is well-suited
+          to describe evaluation orders, semantics (operational and denotational),
+          and to prototype language designs.
+      fact_kind: null
+      related_to:
+      - type: is_a
+        target_key: concept:calculus
+    related_to:
+    - type: is_a
+      target_key: concept:computability_theory
+    - type: related_to
+      target_key: concept:calculus
+    subtopics: []
+  - key: topic:calculus_lambda_calculus
+    summary:
+      name: λ calculus (lambda calculus)
+      oneliner: Introduction to λ calculus as a compact formal system based on abstraction
+        and application.
+      short: Highlights simplicity, power, properties useful for language description,
+        and use in later chapters.
+      long: 'Describes λ calculus as a simple yet powerful formal system using names,
+        function abstraction ($\lambda$-abstraction) and application. Notes properties:
+        sufficient to encode language constructs, evaluation-order independence (confluence),
+        well-developed proof techniques, and ease of implementation. The book will
+        build a practical functional notation from λ calculus in subsequent chapters.'
+    entities:
+    - key: other:motivation_for_using_calculus_in_the_book
+      kind: other
+      summary:
+        name: Motivation for using λ calculus in the book
+        oneliner: Use λ calculus to stepwise construct a compact functional notation
+          and implementations.
+        short: Pure λ calculus expanded with representations for pairs, booleans,
+          numbers, recursion, types, lists, trees, and evaluation strategies.
+        long: 'Explains pedagogical plan: start from pure λ calculus (names, abstraction,
+          application), develop encodings for pairs, booleans, numbers, recursion
+          (fixpoints), types, lists, trees, discuss evaluation order and termination,
+          then map techniques to Standard ML and LISP.'
+      fact_kind: null
+      related_to: []
+    related_to:
+    - type: is_a
+      target_key: concept:calculus
+    - type: related_to
+      target_key: concept:functional_programming
+    subtopics: []

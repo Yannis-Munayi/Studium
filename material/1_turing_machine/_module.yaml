@@ -1,0 +1,8 @@
+title: Turing Machine
+units:
+  - title: Turing Machine and Computabibility
+    references:
+      - "1_TuringMachines.pdf"
+  - title: Universal Turing Machine and Undecidability
+    references:
+      - 2_AlgorithmicallyUnsolvableProblems.pdf

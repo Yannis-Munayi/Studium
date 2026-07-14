@@ -1,0 +1,276 @@
+concepts:
+  concept:forms:
+    key: concept:forms
+    summary:
+      name: Forms
+      oneliner: Basic syntactic units of Clojure source that the reader parses into
+        data.
+      short: Forms are the pieces of Clojure code read by the reader and evaluated;
+        literals (numbers, strings, vectors, maps, lists), and special forms all are
+        forms.
+      long: In Clojure, source code is composed of forms. The reader converts text
+        into Clojure data structures (forms), which are then compiled/executed. Common
+        forms include numeric literals, strings, characters, lists (used for function
+        calls), vectors, maps, sets, symbols, keywords, and nil. Lists where the first
+        element resolves to a function represent function calls (prefix notation).
+        Forms are the primary unit discussed in Section 2.1 and summarized across
+        the chapter.
+    introduced_by: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  concept:reader_macros:
+    key: concept:reader_macros
+    summary:
+      name: Reader Macros
+      oneliner: 'Syntax shortcuts the reader recognizes (e.g., '', ^, #) that expand
+        to longer forms.'
+      short: 'Reader macros are special reader behaviors triggered by prefix characters
+        that expand into Clojure data (e.g., '' for quote, ^ for metadata, #'' for
+        var-quote, ; for comments, #\"...\" for regex). They are distinct from macros.'
+      long: 'The Clojure reader recognizes a set of reader macros that perform transformations
+        at read time. Examples include ; (comment), '' (quote) which expands to (quote
+        ...), ^ (attach metadata), #'' (var-quote / (var ...)), #\"...\" (regex literal),
+        and shorthand anonymous-function syntax (#(...)). Reader macros reduce clutter
+        by expanding to longer list forms. Clojure does not allow user-defined reader
+        macros.'
+    introduced_by: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  concept:functions:
+    key: concept:functions
+    summary:
+      name: Functions
+      oneliner: Named and anonymous callable values defined with defn and fn; support
+        arities and variadic parameters.
+      short: Functions are defined with defn (top-level, with optional docstring and
+        metadata) and fn (anonymous). They support multiple arities, variadic arguments
+        (&), and are first-class (can be returned, passed, and stored).
+      long: 'Function calls are represented as lists with the function position first.
+        defn defines top-level named functions (optionally with docstring and metadata);
+        defn supports multiple arities and arity enforcement (ArityException on mismatch).
+        Anonymous functions are created with fn or the shorthand #(...) with implicit
+        parameters % %1 %2. Closures capture lexical bindings. Examples include greeting,
+        make-greeter, and anonymous predicates used with higher-order functions like
+        filter.'
+    introduced_by: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  concept:vars:
+    key: concept:vars
+    summary:
+      name: Vars
+      oneliner: Top-level locations (bindings) created by def/defn that hold values
+        and metadata.
+      short: 'def and defn create vars (e.g., #''user/foo). Vars have a root binding,
+        can carry metadata, can be dynamically rebound per-thread, and can be referred
+        to directly via var or reader macro #''symbol.'
+      long: 'Vars are the named holders for top-level bindings in namespaces. A var
+        has a root binding (initial value), may have metadata (doc, :tag, :arglists),
+        and supports advanced features such as dynamic/thread-local rebinding. The
+        var special form returns the var object; #'' is the reader shorthand. Most
+        code treats symbols as resolving to var values transparently, but the distinction
+        matters for metadata and rebinding.'
+    introduced_by: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  concept:bindings:
+    key: concept:bindings
+    summary:
+      name: Bindings
+      oneliner: Lexical associations of names to values (function parameters, let
+        bindings, loop bindings).
+      short: Bindings are created by function parameters, let, loop, and destructuring.
+        They have lexical scope and are used to name intermediate values without mutating
+        state.
+      long: Lexical bindings associate names with values inside a scope. Functions
+        bind parameters; let creates local bindings; loop establishes recursive bindings
+        usable with recur. Destructuring in bindings (vectors/maps and :as) lets you
+        bind parts of collections directly. Bindings avoid mutable local variables
+        by giving immutable names to values in scope.
+    introduced_by: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  concept:namespaces:
+    key: concept:namespaces
+    summary:
+      name: Namespaces
+      oneliner: Named containers for vars; control resolution and provide aliasing/importing
+        of Clojure vars and Java classes.
+      short: Namespaces group root bindings. Use in-ns, ns, require, use, import,
+        and :require/:import in ns to manage symbol resolution and aliases; java.lang
+        is auto-imported.
+      long: Root bindings live in namespaces (e.g., user/foo). in-ns switches/creates
+        namespaces; ns declares namespace and reference forms at the top of a file.
+        require with :as creates aliases (e.g., [clojure.string :as str]). import
+        brings Java classes into the namespace. resolve returns the var/class a symbol
+        maps to in the current namespace. Namespaces enable modular code and controlled
+        symbol visibility.
+    introduced_by: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  concept:destructuring:
+    key: concept:destructuring
+    summary:
+      name: Destructuring
+      oneliner: Binding syntax that extracts parts of collections (vectors/maps) into
+        local names.
+      short: Destructuring lets you bind elements of sequential collections with vectors
+        and keys of associative collections with maps directly in parameter lists
+        and let bindings; supports :as and skipping via _.
+      long: Destructuring is a mini-language used wherever bindings occur. Vector
+        destructuring binds sequential elements by position; map destructuring binds
+        by key names. Use :as to bind the whole structure alongside parts. The idiom
+        _ indicates an ignored binding. Destructuring simplifies extracting nested
+        data without manual indexing or lookups.
+    introduced_by: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  concept:flow_control:
+    key: concept:flow_control
+    summary:
+      name: Flow Control
+      oneliner: 'Small set of control constructs: if, do, loop/recur (and derived
+        macros like when).'
+      short: 'Clojure favors a few composable control forms: if for branching, do
+        for sequencing side-effecting expressions, and loop/recur for explicit recursion
+        (recur is optimized tail recursion). Other macros like when build on if.'
+      long: 'Control flow in Clojure is minimal: if evaluates a test and returns the
+        then/else expression; do evaluates multiple expressions for side effects and
+        returns the last value; loop establishes recursion points and recur rebinds
+        loop variables and jumps to the loop head (optimized by the compiler). Tail-call
+        optimization is not generally performed, but recur is optimized. Sequence
+        library functions often replace explicit loops.'
+    introduced_by: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  concept:metadata:
+    key: concept:metadata
+    summary:
+      name: Metadata
+      oneliner: Auxiliary data attached to vars and objects that does not affect logical
+        value (e.g., :doc, :tag).
+      short: Metadata is a map of key/value pairs attached to vars and literals via
+        the ^ reader macro or explicit meta forms; common keys include :doc, :arglists,
+        :file, :line, :tag, :ns, and :name.
+      long: Metadata represents data about data and is orthogonal to an object's value.
+        Vars carry metadata used for documentation, type hints (:tag), source location,
+        and macro flags. Attach metadata with the ^reader-macro (e.g., ^String or
+        ^{:tag String}) to annotate args/returns and assist the compiler or tooling.
+        Use meta to inspect var metadata.
+    introduced_by: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  concept:symbols:
+    key: concept:symbols
+    summary:
+      name: Symbols
+      oneliner: Names used to refer to functions, vars, classes, namespaces, and data.
+      short: Symbols name functions, operators, Java classes, namespaces, and data
+        structures. They have syntactic rules (cannot start with a number) and special
+        characters like / and . are treated specially for namespaces and interop.
+      long: Symbols (e.g., +, concat, java.lang.String) are identifiers used throughout
+        Clojure to refer to functions, classes, namespaces, and vars. They resolve
+        to vars or classes in the current namespace. Clojure allows a restricted set
+        of symbol characters and treats / and . specially to support namespaced symbols
+        and Java interop naming. Unresolved symbols cause runtime/compile errors.
+    introduced_by: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  concept:strings_and_characters:
+    key: concept:strings_and_characters
+    summary:
+      name: Strings and Characters
+      oneliner: Java String and char literals in Clojure; strings are sequences of
+        characters and interoperate with Java methods.
+      short: Clojure strings are Java strings (double-quoted); characters are written
+        as \c. Strings are sequences; use apply str to build strings from character
+        sequences; Java interop calls invoke methods like (.toUpperCase "hello").
+      long: Strings are Java java.lang.String instances and support Java interop directly.
+        Character literals use backslash notation (e.g., \a, \space, \newline). Strings
+        are sequences of characters, so sequence functions operate on them. To convert
+        a sequence of characters to a string, use (apply str ...). Clojure provides
+        str (which concatenates and ignores nil) as a convenience over Java's toString.
+    introduced_by: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  concept:maps_keywords_and_records:
+    key: concept:maps_keywords_and_records
+    summary:
+      name: Maps, Keywords, and Records
+      oneliner: 'Associative data structures: maps are key/value tables; keywords
+        are self-resolving identifiers often used as keys; defrecord creates typed
+        map-like records.'
+      short: Maps use curly-brace literals {:k v}. Keywords (:k) evaluate to themselves
+        and are functions that look themselves up in maps. defrecord defines record
+        types that behave like maps but with a concrete type and optional constructors
+        and readable literals.
+      long: 'Maps store key/value associations and can be invoked as functions to
+        lookup keys. Keywords begin with : and evaluate to themselves; they serve
+        as convenient map keys and can be used as functions to lookup their value
+        in a map. defrecord creates a new record type (with constructor ->Type and
+        Type. forms and literal #namespace.Type{...}) that behaves like a map but
+        has a concrete class and can carry type semantics. get provides an explicit
+        lookup with optional default.'
+    introduced_by: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  concept:calling_java:
+    key: concept:calling_java
+    summary:
+      name: Calling Java
+      oneliner: 'Clojure Java interoperability: new, ., import, and calling static/instance
+        methods/fields.'
+      short: Create Java objects with (new ClassName ...) or (ClassName. ...), call
+        methods and access fields with (. instance method args) or (. ClassName FIELD)
+        for statics; import to allow short class names; use javadoc from REPL.
+      long: 'Clojure provides direct Java interop: (new java.util.Random) to construct,
+        (. rnd nextInt) or (. rnd nextInt 10) to call instance methods, (. Math PI)
+        for static fields, and import to shorten class references. javadoc helper
+        aids discovery. Java primitives/arrays have special-casing where needed. Clojure''s
+        interop lets you use Java libraries seamlessly from the REPL and source.'
+    introduced_by: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  concept:anonymous_functions:
+    key: concept:anonymous_functions
+    summary:
+      name: Anonymous Functions
+      oneliner: 'Functions without names created with fn or shorthand #(...) used
+        for short callbacks and closures.'
+      short: 'fn creates anonymous functions; shorthand syntax #( ... ) uses implicit
+        params % %1 %2. Anonymous functions are useful for small callbacks, local
+        names via let, and creating closures at runtime.'
+      long: 'Anonymous functions are created with (fn [params] body) or the shorthand
+        #(...). The shorthand names parameters % (first), %1, %2, etc. Anonymous functions
+        are used when a brief function is needed inline, to create functions that
+        close over lexical values, or to provide local named functions via let. Examples
+        include filter (fn [w] (> (count w) 2)) and #(> (count %) 2).'
+    introduced_by: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+highlights:
+  chunk:programming_clojure_2nd_edition--2_exploring_clojure:
+  - text: Identify and use the primary Clojure forms (numbers, strings, lists, vectors,
+      maps, sets, symbols, keywords, records, booleans, nil) as the basis for programs.
+    concepts:
+    - concept:forms
+    reference_id: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  - text: 'Understand reader macros and how they transform source text into data:
+      quote, comment, var-quote (#''), anonymous-function (#()), regex (#\"...\"),
+      metadata (^), and syntax/unquote forms.'
+    concepts:
+    - concept:reader_macros
+    reference_id: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  - text: 'Define and call functions with defn, including multiple arities and variadic
+      parameters, and create anonymous functions (fn and shorthand #%).'
+    concepts:
+    - concept:functions
+    - concept:anonymous_functions
+    reference_id: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  - text: Use vars, lexical bindings (let), and destructuring (vectors and maps) to
+      bind data succinctly and access parts of collections without mutable locals.
+    concepts:
+    - concept:vars
+    - concept:bindings
+    - concept:destructuring
+    reference_id: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  - text: Organize code with namespaces, require/use/alias libraries, and import Java
+      classes; resolve names across namespaces and work in REPL-driven development.
+    concepts:
+    - concept:namespaces
+    reference_id: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  - text: 'Perform Java interop: construct objects (new), call instance/static methods
+      and fields (.), import classes, and use REPL tools like javadoc.'
+    concepts:
+    - concept:java_interop
+    reference_id: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  - text: 'Control flow using expression-oriented constructs: if, do for side effects,
+      and loop/recur for optimized recursion and explicit recurrence points.'
+    concepts:
+    - concept:flow_control
+    - concept:recursion
+    reference_id: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  - text: Prefer sequence abstractions and comprehensions (map-indexed, for, filter,
+      apply, sequence library functions) over imperative loops and mutable variables
+      to produce simpler, more general code (illustrated with index-of-any).
+    concepts:
+    - concept:sequence_library
+    - concept:for_comprehensions
+    reference_id: chunk:programming_clojure_2nd_edition--2_exploring_clojure
+  - text: Attach and inspect metadata on vars and forms (meta, ^reader-metadata),
+      including common keys (:doc, :arglists, :tag), to document and optimize code.
+    concepts:
+    - concept:metadata
+    reference_id: chunk:programming_clojure_2nd_edition--2_exploring_clojure
