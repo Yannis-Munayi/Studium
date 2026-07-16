@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>λearn — AI Course Tutor</title>
+<style>
+:root{
+  --bg:#0e1016; --bg2:#141824; --card:#1a1f2e; --card2:#222840;
+  --line:#2b3350; --text:#e8ecf6; --dim:#8b93ad;
+  --acc:#8b5cf6; --acc2:#22d3ee; --good:#34d399; --warn:#fbbf24; --bad:#f87171;
+  --grad:linear-gradient(90deg,#8b5cf6,#22d3ee);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:"Segoe UI",system-ui,-apple-system,sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+button{font-family:inherit;cursor:pointer;border:none;border-radius:10px;font-size:.95rem}
+textarea,input{font-family:inherit;background:var(--bg2);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:.95rem;width:100%}
+textarea:focus,input:focus{outline:2px solid var(--acc)}
+::-webkit-scrollbar{width:9px;height:9px}::-webkit-scrollbar-thumb{background:var(--line);border-radius:9px}
+
+/* ---------- header ---------- */
+#hdr{display:flex;align-items:center;gap:18px;padding:10px 20px;background:var(--bg2);border-bottom:1px solid var(--line);flex-shrink:0}
+#logo{font-size:1.35rem;font-weight:800;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;letter-spacing:.5px}
+#courseTitle{color:var(--dim);font-size:.9rem}
+#hdr .spacer{flex:1}
+#xpWrap{display:flex;align-items:center;gap:10px;font-size:.85rem}
+#lvlBadge{background:var(--card2);border:1px solid var(--line);padding:4px 12px;border-radius:999px;font-weight:600;white-space:nowrap}
+#xpBar{width:140px;height:10px;background:var(--card2);border-radius:99px;overflow:hidden}
+#xpFill{height:100%;background:var(--grad);width:0%;transition:width .6s ease}
+#streak{font-weight:700}
+#who{background:var(--card2);border:1px solid var(--line);color:var(--text);padding:6px 14px;border-radius:999px}
+#who:hover{border-color:var(--acc)}
+
+/* ---------- layout ---------- */
+#main{display:flex;flex:1;min-height:0}
+#side{width:300px;background:var(--bg2);border-right:1px solid var(--line);overflow-y:auto;padding:14px;flex-shrink:0}
+#stage{flex:1;overflow-y:auto;padding:26px;position:relative}
+.mod{margin-bottom:14px}
+.mod h3{font-size:.8rem;text-transform:uppercase;letter-spacing:1.2px;color:var(--dim);margin:10px 6px}
+.unitBtn{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:transparent;color:var(--text);padding:10px 10px;border-radius:10px;margin-bottom:2px;border:1px solid transparent}
+.unitBtn:hover{background:var(--card)}
+.unitBtn.active{background:var(--card2);border-color:var(--acc)}
+.unitBtn.locked{color:var(--dim)}
+.unitBtn .ico{width:22px;text-align:center;flex-shrink:0}
+.unitBtn .t{flex:1;font-size:.9rem;line-height:1.25}
+.unitBtn .pct{font-size:.75rem;color:var(--good)}
+
+/* ---------- cards / common ---------- */
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px;max-width:860px;margin:0 auto 18px;animation:pop .35s ease}
+@keyframes pop{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.btn{background:var(--grad);color:#0b0d13;font-weight:700;padding:12px 22px}
+.btn:hover{filter:brightness(1.15)}
+.btn2{background:var(--card2);color:var(--text);border:1px solid var(--line);padding:11px 18px}
+.btn2:hover{border-color:var(--acc2)}
+.btn:disabled,.btn2:disabled{opacity:.45;cursor:not-allowed}
+.dimtext{color:var(--dim)}
+h1{font-size:1.5rem;margin-bottom:10px} h2{font-size:1.2rem;margin-bottom:8px}
+
+/* ---------- markdown ---------- */
+.md{line-height:1.65;font-size:1.02rem}
+.md p{margin:10px 0}.md ul,.md ol{margin:10px 0 10px 24px}.md li{margin:4px 0}
+.md h1,.md h2,.md h3,.md h4{margin:16px 0 8px;color:var(--acc2);font-size:1.05rem}
+.md code{background:#0b0d13;border:1px solid var(--line);padding:1px 6px;border-radius:6px;font-family:Consolas,monospace;font-size:.92em;color:#a5f3fc}
+.md pre{background:#0b0d13;border:1px solid var(--line);padding:14px;border-radius:12px;overflow-x:auto;margin:12px 0}
+.md pre code{border:none;padding:0;background:none}
+.md strong{color:#fff}
+
+/* ---------- lesson player ---------- */
+#timeline{display:flex;align-items:center;gap:6px;max-width:860px;margin:0 auto 16px;flex-wrap:wrap}
+.tdot{height:10px;border-radius:99px;flex:1;min-width:26px;background:var(--card2);border:1px solid var(--line);cursor:pointer;transition:all .25s;position:relative}
+.tdot.done{background:var(--grad);border-color:transparent}
+.tdot.cur{box-shadow:0 0 12px var(--acc);border-color:var(--acc2)}
+.tdot.future{cursor:not-allowed;opacity:.5}
+.tdot:hover::after{content:attr(data-t);position:absolute;bottom:16px;left:50%;transform:translateX(-50%);background:#000;color:#fff;font-size:.72rem;padding:4px 8px;border-radius:6px;white-space:nowrap;z-index:5}
+#segHead{display:flex;align-items:baseline;gap:12px;margin-bottom:10px}
+#segNum{font-size:.8rem;color:var(--dim);white-space:nowrap}
+#controls{display:flex;gap:10px;max-width:860px;margin:0 auto 18px;flex-wrap:wrap}
+#controls .grow{flex:1}
+.subcard{background:var(--bg2);border:1px dashed var(--acc);border-radius:12px;padding:16px;margin-top:16px}
+.subcard h4{color:var(--acc2);margin-bottom:8px;font-size:.9rem}
+
+/* audio / voiceover */
+#audioBar{display:none;gap:12px;align-items:center;max-width:860px;margin:-6px auto 18px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 14px;flex-wrap:wrap}
+#audioBar select{width:auto;background:var(--bg2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-size:.85rem}
+#audioBar label{color:var(--dim);font-size:.85rem;display:flex;align-items:center;gap:6px}
+.speaking{animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(34,211,238,.55)}50%{box-shadow:0 0 0 9px rgba(34,211,238,0)}}
+.bubSpk{background:none;font-size:.95rem;margin-left:8px;opacity:.65;padding:0}
+.bubSpk:hover{opacity:1}
+
+/* practice */
+#practiceCard{border-color:var(--warn)}
+.verdict{padding:10px 14px;border-radius:10px;margin-top:10px;font-size:.95rem;animation:pop .3s}
+.verdict.correct{background:rgba(52,211,153,.12);border:1px solid var(--good)}
+.verdict.partially_correct{background:rgba(251,191,36,.12);border:1px solid var(--warn)}
+.verdict.incorrect{background:rgba(248,113,113,.12);border:1px solid var(--bad)}
+.shake{animation:shake .4s}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+
+/* ---------- exam ---------- */
+.examDots{display:flex;gap:8px;margin:14px 0}
+.edot{width:12px;height:12px;border-radius:50%;background:var(--card2);border:1px solid var(--line);cursor:pointer}
+.edot.filled{background:var(--acc)}
+.edot.cur{box-shadow:0 0 8px var(--acc2);border-color:var(--acc2)}
+.ring{transform:rotate(-90deg)}
+.ring .track{stroke:var(--card2)}
+.ring .val{stroke:url(#rg);stroke-linecap:round;transition:stroke-dashoffset 1.2s ease}
+.critCard{border-radius:12px;padding:14px 16px;margin:10px 0;border:1px solid var(--line);background:var(--bg2)}
+.critCard.p2{border-left:4px solid var(--good)}
+.critCard.p1{border-left:4px solid var(--warn)}
+.critCard.p0{border-left:4px solid var(--bad)}
+.critCard .cc-h{display:flex;justify-content:space-between;font-weight:600;margin-bottom:4px}
+
+/* ---------- chat ---------- */
+#chatFab{position:fixed;bottom:22px;right:22px;width:58px;height:58px;border-radius:50%;background:var(--grad);font-size:1.5rem;box-shadow:0 6px 20px rgba(139,92,246,.45);z-index:40}
+#chat{position:fixed;top:0;right:-400px;width:380px;height:100%;background:var(--bg2);border-left:1px solid var(--line);display:flex;flex-direction:column;transition:right .3s ease;z-index:50}
+#chat.open{right:0}
+#chatHead{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+#chatLog{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
+.bub{max-width:85%;padding:10px 14px;border-radius:14px;font-size:.92rem;line-height:1.5;white-space:pre-wrap}
+.bub.me{align-self:flex-end;background:var(--acc);color:#fff;border-bottom-right-radius:4px}
+.bub.owl{align-self:flex-start;background:var(--card);border:1px solid var(--line);border-bottom-left-radius:4px}
+#chatIn{display:flex;gap:8px;padding:12px;border-top:1px solid var(--line)}
+#chatIn textarea{resize:none;height:60px}
+
+/* ---------- overlay / toast / confetti ---------- */
+#overlay{position:fixed;inset:0;background:rgba(10,12,18,.86);display:none;align-items:center;justify-content:center;flex-direction:column;gap:20px;z-index:60;text-align:center;padding:20px}
+#overlay.show{display:flex}
+.spin{width:56px;height:56px;border-radius:50%;border:5px solid var(--card2);border-top-color:var(--acc2);animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#ovMsg{font-size:1.05rem;max-width:420px}
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--card2);border:1px solid var(--bad);padding:12px 20px;border-radius:12px;transition:transform .3s;z-index:70;max-width:80%}
+#toast.show{transform:translateX(-50%) translateY(0)}
+#confetti{position:fixed;inset:0;pointer-events:none;z-index:80}
+.xpPop{position:fixed;font-weight:800;color:var(--good);z-index:65;animation:rise 1.2s ease forwards;pointer-events:none}
+@keyframes rise{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-60px)}}
+</style>
+</head>
+<body>
+
+<header id="hdr">
+  <span id="logo">λearn</span>
+  <span id="courseTitle"></span>
+  <span class="spacer"></span>
+  <span id="xpWrap">
+    <span id="streak" title="practice streak">🔥 0</span>
+    <span id="lvlBadge">Lv 1 · Syntax Sprout</span>
+    <span id="xpBar"><span id="xpFill"></span></span>
+  </span>
+  <button id="who" title="switch student">👤 …</button>
+</header>
+
+<div id="main">
+  <nav id="side"></nav>
+  <section id="stage"></section>
+</div>
+
+<button id="chatFab" title="Ask the tutor">🦉</button>
+<aside id="chat">
+  <div id="chatHead">
+    <div><b>🦉 Prof. Owl</b><div class="dimtext" id="chatCtx" style="font-size:.78rem"></div></div>
+    <button class="btn2" onclick="toggleChat(false)">✕</button>
+  </div>
+  <div id="chatLog"></div>
+  <div id="chatIn">
+    <textarea id="chatText" placeholder="Ask anything about this unit… (Enter to send)"></textarea>
+    <button class="btn" id="chatSend">➤</button>
+  </div>
+</aside>
+
+<div id="overlay"><div class="spin"></div><div id="ovMsg"></div></div>
+<div id="toast"></div>
+<canvas id="confetti"></canvas>
+
+<script>
+"use strict";
+/* =========================================================================
+   λearn front-end. Talks to the FastAPI backend in tutor/webapp.py.
+   ========================================================================= */
+
+const $ = (id) => document.getElementById(id);
+const LEVELS = ["Syntax Sprout","Recursion Rookie","Lambda Learner","Closure Cadet",
+  "Curry Connoisseur","Higher-Order Hero","Tail-Call Titan","Macro Maestro",
+  "Y-Combinator Wizard","Turing Legend"];
+const CHEERS = ["Nice one! 🎯","You're on fire! 🔥","Textbook answer 📚","Beautiful ✨","Prof. Owl approves 🦉"];
+const LOADING = ["Reading the textbook so you don't have to… 📖","Sharpening pencils… ✏️",
+  "Asking Prof. Owl very nicely… 🦉","Reducing lambda expressions… λλλ",
+  "Feeding the Turing machine more tape… 🎞️","Brewing coffee for the grader… ☕"];
+
+const S = {
+  student: localStorage.getItem("tutor_student") || "",
+  course: null,          // /api/course payload
+  unit: null,            // /api/unit payload for the open unit
+  seg: 0, maxSeen: 0,
+  practiceTries: 0, practiceDone: {},   // per "unitKey:segIndex" -> true (session)
+  exam: null,            // {answers:[], idx}
+  chat: [],              // [{role, content}]
+  busyStream: false,
+};
+
+/* ---------------- tiny helpers ---------------- */
+function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+function md(src){
+  // minimal markdown: fences, inline code, bold, italic, headings, lists, paragraphs
+  let text = esc(src||"");
+  const fences=[];
+  text = text.replace(/```(\w*)\n([\s\S]*?)```/g,(_,lang,code)=>{fences.push(code);return ` ${fences.length-1} `;});
+  text = text.replace(/`([^`\n]+)`/g,"<code>$1</code>");
+  text = text.replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>");
+  text = text.replace(/(^|[^*])\*([^*\n]+)\*/g,"$1<em>$2</em>");
+  const lines = text.split("\n"); const out=[]; let list=null;
+  const closeList=()=>{if(list){out.push(list==="ul"?"</ul>":"</ol>");list=null;}};
+  for(const ln of lines){
+    const h = ln.match(/^(#{1,4})\s+(.*)/);
+    const ul = ln.match(/^\s*[-*]\s+(.*)/);
+    const ol = ln.match(/^\s*\d+[.)]\s+(.*)/);
+    if(h){closeList();out.push(`<h4>${h[2]}</h4>`);}
+    else if(ul){if(list!=="ul"){closeList();out.push("<ul>");list="ul";}out.push(`<li>${ul[1]}</li>`);}
+    else if(ol){if(list!=="ol"){closeList();out.push("<ol>");list="ol";}out.push(`<li>${ol[1]}</li>`);}
+    else if(ln.trim()===""){closeList();}
+    else{closeList();out.push(`<p>${ln}</p>`);}
+  }
+  closeList();
+  let html = out.join("\n");
+  html = html.replace(/ (\d+) /g,(_,i)=>`<pre><code>${fences[+i]}</code></pre>`);
+  return html;
+}
+function toast(msg){const t=$("toast");t.textContent=msg;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),4200);}
+function overlay(on,msg){const o=$("overlay");o.classList.toggle("show",!!on);if(on){$("ovMsg").textContent=msg||LOADING[0];o._i&&clearInterval(o._i);o._i=setInterval(()=>{$("ovMsg").textContent=LOADING[Math.floor(Math.random()*LOADING.length)];},2600);}else{o._i&&clearInterval(o._i);}}
+async function api(path,opts){
+  const res = await fetch(path,opts);
+  if(!res.ok){let d;try{d=(await res.json()).detail;}catch{d=res.statusText;}throw new Error(d);}
+  return res.json();
+}
+async function streamInto(path,body,onChunk){
+  S.busyStream = true;
+  try{
+    const res = await fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    if(!res.ok){let d;try{d=(await res.json()).detail;}catch{d=res.statusText;}throw new Error(d);}
+    const reader=res.body.getReader(); const dec=new TextDecoder(); let all="";
+    for(;;){const {done,value}=await reader.read();if(done)break;const c=dec.decode(value,{stream:true});all+=c;onChunk(c,all);}
+    return all;
+  } finally { S.busyStream = false; }
+}
+
+/* ---------------- gamification ---------------- */
+function gkey(){return "tutor_game_"+S.student;}
+function game(){try{return JSON.parse(localStorage.getItem(gkey()))||{xp:0,streak:0,seen:{}};}catch{return {xp:0,streak:0,seen:{}};}}
+function saveGame(g){localStorage.setItem(gkey(),JSON.stringify(g));}
+function renderGame(){
+  const g=game(); const lvl=Math.min(Math.floor(g.xp/100), LEVELS.length-1);
+  $("lvlBadge").textContent=`Lv ${lvl+1} · ${LEVELS[lvl]}`;
+  $("xpFill").style.width=`${g.xp%100}%`;
+  $("streak").textContent=`🔥 ${g.streak}`;
+}
+function addXP(n,x,y){
+  const g=game(); g.xp+=n; saveGame(g); renderGame();
+  const p=document.createElement("div");p.className="xpPop";p.textContent=`+${n} XP`;
+  p.style.left=(x||window.innerWidth/2)+"px"; p.style.top=(y||120)+"px";
+  document.body.appendChild(p); setTimeout(()=>p.remove(),1200);
+}
+function bumpStreak(ok){const g=game(); g.streak = ok ? g.streak+1 : 0; saveGame(g); renderGame();}
+function seenOnce(tag){const g=game(); if(g.seen[tag])return false; g.seen[tag]=1; saveGame(g); return true;}
+
+/* ---------------- confetti ---------------- */
+function confetti(){
+  const cv=$("confetti"),ctx=cv.getContext("2d");
+  cv.width=innerWidth;cv.height=innerHeight;
+  const cols=["#8b5cf6","#22d3ee","#34d399","#fbbf24","#f87171","#fff"];
+  const ps=Array.from({length:160},()=>({x:Math.random()*cv.width,y:-20-Math.random()*cv.height*.5,
+    vx:(Math.random()-.5)*3,vy:2+Math.random()*4,s:4+Math.random()*6,c:cols[Math.floor(Math.random()*cols.length)],r:Math.random()*Math.PI}));
+  let t=0; const id=setInterval(()=>{ t++; ctx.clearRect(0,0,cv.width,cv.height);
+    for(const p of ps){p.x+=p.vx;p.y+=p.vy;p.r+=.08;ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.r);ctx.fillStyle=p.c;ctx.fillRect(-p.s/2,-p.s/2,p.s,p.s*.6);ctx.restore();}
+    if(t>170){clearInterval(id);ctx.clearRect(0,0,cv.width,cv.height);}
+  },16);
+}
+
+/* ---------------- voiceover (Web Speech API — free, offline, no keys) ---------------- */
+const TTS = {
+  ok: "speechSynthesis" in window,
+  enabled: localStorage.getItem("tutor_tts") === "1",
+  rate: parseFloat(localStorage.getItem("tutor_tts_rate") || "1"),
+  voiceURI: localStorage.getItem("tutor_tts_voice") || "",
+  token: 0, speaking: false, paused: false,
+
+  voices(){ return this.ok ? speechSynthesis.getVoices() : []; },
+  pick(){
+    const vs = this.voices();
+    return vs.find(v => v.voiceURI === this.voiceURI)
+        || vs.find(v => /^en/i.test(v.lang) && /natural|online/i.test(v.name))
+        || vs.find(v => /^en/i.test(v.lang)) || vs[0] || null;
+  },
+  plain(t){
+    // markdown + math symbols -> listenable prose
+    return (t || "")
+      .replace(/```[\s\S]*?```/g, " … code example on screen … ")
+      .replace(/`([^`]+)`/g, "$1")
+      .replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*\n]+)\*/g, "$1")
+      .replace(/^#+\s*/gm, "").replace(/^\s*[-*]\s+/gm, "")
+      .replace(/λ/g, " lambda ").replace(/α/g, " alpha ").replace(/β/g, " beta ")
+      .replace(/η/g, " eta ").replace(/→|->/g, " maps to ").replace(/≡/g, " is equivalent to ");
+  },
+  speak(text){
+    if(!this.ok) return;
+    this.stop();
+    const my = ++this.token;
+    // chunk into sentence groups — very long utterances silently die in Chrome
+    const parts = []; let buf = "";
+    for(const s of this.plain(text).split(/(?<=[.!?;:])\s+/)){
+      if((buf + " " + s).length > 220){ if(buf) parts.push(buf); buf = s; }
+      else buf = buf ? buf + " " + s : s;
+    }
+    if(buf) parts.push(buf);
+    const voice = this.pick();
+    const next = (i) => {
+      if(my !== this.token) return;                      // superseded
+      if(i >= parts.length){ this.speaking = false; this.ui(); return; }
+      const u = new SpeechSynthesisUtterance(parts[i]);
+      if(voice) u.voice = voice;
+      u.rate = this.rate;
+      u.onend = () => next(i + 1);
+      u.onerror = () => next(i + 1);
+      speechSynthesis.speak(u);
+    };
+    this.speaking = true; this.paused = false; next(0); this.ui();
+  },
+  speakCurrent(){
+    const seg = S.unit && S.unit.segments[S.seg];
+    if(seg) this.speak(seg.title + ". " + seg.content);
+  },
+  stop(){
+    if(this.ok){ this.token++; speechSynthesis.cancel(); }
+    this.speaking = false; this.paused = false; this.ui();
+  },
+  pauseToggle(){
+    if(!this.ok || !this.speaking) return;
+    if(this.paused){ speechSynthesis.resume(); this.paused = false; }
+    else { speechSynthesis.pause(); this.paused = true; }
+    this.ui();
+  },
+  ui(){
+    const b = $("bAudio"); if(!b) return;
+    b.textContent = "🔊 Listen: " + (this.enabled ? "on" : "off");
+    b.classList.toggle("speaking", this.speaking && !this.paused);
+    const bar = $("audioBar"); if(bar) bar.style.display = this.enabled ? "flex" : "none";
+    const p = $("aPause"); if(p) p.textContent = this.paused ? "▶ Resume" : "⏸ Pause";
+  },
+  fillVoices(){
+    const sel = $("aVoice"); if(!sel || !this.ok) return;
+    const en = this.voices().filter(v => /^en/i.test(v.lang));
+    const all = en.length ? en : this.voices();
+    sel.innerHTML = all.map(v =>
+      `<option value="${esc(v.voiceURI)}" ${v.voiceURI===this.voiceURI?"selected":""}>${esc(v.name.replace(/^Microsoft /,""))}</option>`
+    ).join("");
+  },
+};
+if(TTS.ok) speechSynthesis.onvoiceschanged = () => TTS.fillVoices();
+
+/* ---------------- student ---------------- */
+function askName(){
+  let n=prompt("Who's studying today? (your name)", S.student||"");
+  if(n&&n.trim()){S.student=n.trim().toLowerCase();localStorage.setItem("tutor_student",S.student);}
+  else if(!S.student){S.student="student";}
+  $("who").textContent="👤 "+S.student; renderGame();
+}
+
+/* ---------------- sidebar ---------------- */
+const ICONS={passed:"✅",unlocked:"▶️",locked:"🔒"};
+async function loadCourse(){
+  S.course = await api(`/api/course?student=${encodeURIComponent(S.student)}`);
+  $("courseTitle").textContent = S.course.title;
+  const side=$("side"); side.innerHTML="";
+  for(const m of S.course.modules){
+    const div=document.createElement("div");div.className="mod";
+    div.innerHTML=`<h3>${esc(m.title)}</h3>`;
+    for(const u of m.units){
+      const b=document.createElement("button");
+      b.className="unitBtn"+(u.status==="locked"?" locked":"")+(S.unit&&S.unit.key===u.key?" active":"");
+      const pct=u.best!=null?`<span class="pct">${Math.round(u.best*100)}%</span>`:"";
+      b.innerHTML=`<span class="ico">${ICONS[u.status]}</span><span class="t">${esc(u.title)}</span>${pct}`;
+      b.onclick=()=>openUnit(u);
+      div.appendChild(b);
+    }
+    side.appendChild(div);
+  }
+}
+
+/* ---------------- views ---------------- */
+function stage(html){TTS.stop();$("stage").innerHTML=html;$("stage").scrollTop=0;}
+
+function viewHome(){
+  const units=S.course.modules.flatMap(m=>m.units);
+  const next=units.find(u=>u.status==="unlocked");
+  const passed=units.filter(u=>u.status==="passed").length;
+  stage(`
+    <div class="card" style="text-align:center;padding:48px">
+      <div style="font-size:3.2rem">🦉</div>
+      <h1>Welcome back, ${esc(S.student)}!</h1>
+      <p class="dimtext" style="margin:8px 0 6px">${esc(S.course.title)} — ${passed}/${units.length} units mastered.
+      Pass each unit's exam with <b>${Math.round(S.course.threshold*100)}%</b> to unlock the next.</p>
+      <p class="dimtext" style="margin-bottom:22px">Lessons play like videos: step through, rewind, slow down, and ask Prof. Owl anything.</p>
+      ${next?`<button class="btn" onclick='openUnitByKey("${next.key}")'>${passed?"Continue":"Start"}: ${esc(next.title)} ▶</button>`
+            :`<h2>🏆 Course complete! Every unit mastered.</h2>`}
+    </div>`);
+}
+
+function openUnitByKey(key){
+  const u=S.course.modules.flatMap(m=>m.units).find(x=>x.key===key);
+  if(u)openUnit(u);
+}
+async function openUnit(u){
+  if(u.status==="locked"){toast("🔒 Locked — pass the earlier units first!");return;}
+  if(!u.ingested){viewPrepare(u);return;}
+  try{
+    S.unit = await api(`/api/unit/${encodeURIComponent(u.key)}`);
+  }catch(e){toast(e.message);return;}
+  S.seg=0; S.maxSeen=Math.max(S.maxSeen,0); S.chat=[]; $("chatLog").innerHTML="";
+  $("chatCtx").textContent="asking about: "+S.unit.title;
+  S.maxSeen=0;
+  await loadCourse();
+  viewLesson();
+}
+
+function viewPrepare(u){
+  stage(`
+    <div class="card" style="text-align:center;padding:48px">
+      <div style="font-size:3rem">📦</div>
+      <h1>${esc(u.title)}</h1>
+      <p class="dimtext" style="margin:10px 0 24px">This unit hasn't been prepared yet. Prof. Owl will read the
+      textbook chapter and build your lesson — segments, practice questions, and the exam rubric.
+      Takes a minute or two (one Claude call).</p>
+      <button class="btn" id="prepBtn">🛠️ Prepare this unit</button>
+    </div>`);
+  $("prepBtn").onclick=async()=>{
+    overlay(true,"Preparing your lesson…");
+    try{
+      const r=await api("/api/ingest",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({unit_key:u.key})});
+      overlay(false);
+      if(!r.already) toast(`✅ Ready! ${r.segments} segments built (~$${r.cost})`);
+      u.ingested=true; await openUnit(u);
+    }catch(e){overlay(false);toast("😵 "+e.message);}
+  };
+}
+
+/* ---------------- lesson player ---------------- */
+function viewLesson(){
+  const u=S.unit;
+  stage(`
+    <div id="timeline"></div>
+    <div class="card" id="segCard">
+      <div id="segHead"><span id="segNum"></span><h2 id="segTitle"></h2></div>
+      <div class="md" id="segBody"></div>
+      <div id="slowerBox"></div>
+      <div id="practiceBox"></div>
+    </div>
+    <div id="controls">
+      <button class="btn2" id="bBack">⏮ Back</button>
+      <button class="btn2" id="bReplay">🔁 Replay</button>
+      <button class="btn2" id="bSlower">🐢 Explain slower</button>
+      <button class="btn2" id="bAudio">🔊 Listen: off</button>
+      <span class="grow"></span>
+      <button class="btn" id="bNext">Next ⏭</button>
+    </div>
+    <div id="audioBar">
+      <span>🎧</span>
+      <button class="btn2" id="aPause">⏸ Pause</button>
+      <button class="btn2" id="aStop">⏹ Stop</button>
+      <label>speed
+        <select id="aRate">
+          <option value="0.8">0.8×</option><option value="1">1×</option>
+          <option value="1.2">1.2×</option><option value="1.5">1.5×</option>
+        </select>
+      </label>
+      <label>voice <select id="aVoice"></select></label>
+    </div>
+    <div class="card" style="padding:16px">
+      <details><summary style="cursor:pointer;color:var(--acc2)">🎯 Learning objectives</summary>
+        <div class="md">${md(u.objectives.map(o=>"- "+o).join("\n"))}</div></details>
+      <details style="margin-top:8px"><summary style="cursor:pointer;color:var(--acc2)">📖 Key definitions</summary>
+        <div class="md">${md(u.definitions.map(d=>`- **${d.term}**: ${d.definition}`).join("\n"))}</div></details>
+    </div>`);
+  $("bBack").onclick=()=>{if(S.seg>0){S.seg--;renderSeg();}};
+  $("bNext").onclick=nextSeg;
+  $("bReplay").onclick=()=>{renderSeg(true);};
+  $("bSlower").onclick=explainSlower;
+  $("bAudio").onclick=()=>{
+    if(!TTS.ok){toast("This browser has no speech support — try Edge or Chrome");return;}
+    TTS.enabled=!TTS.enabled;localStorage.setItem("tutor_tts",TTS.enabled?"1":"0");
+    if(TTS.enabled){TTS.fillVoices();TTS.speakCurrent();}else TTS.stop();
+    TTS.ui();
+  };
+  $("aPause").onclick=()=>TTS.pauseToggle();
+  $("aStop").onclick=()=>TTS.stop();
+  $("aRate").value=String(TTS.rate);
+  $("aRate").onchange=(e)=>{TTS.rate=parseFloat(e.target.value);localStorage.setItem("tutor_tts_rate",e.target.value);TTS.speaking&&TTS.speakCurrent();};
+  $("aVoice").onchange=(e)=>{TTS.voiceURI=e.target.value;localStorage.setItem("tutor_tts_voice",e.target.value);TTS.speaking&&TTS.speakCurrent();};
+  TTS.fillVoices(); TTS.ui();
+  renderSeg();
+}
+
+function renderSeg(replay){
+  const u=S.unit, seg=u.segments[S.seg];
+  S.maxSeen=Math.max(S.maxSeen,S.seg);
+  // timeline
+  const tl=$("timeline"); tl.innerHTML="";
+  u.segments.forEach((s,i)=>{
+    const d=document.createElement("div");
+    d.className="tdot "+(i<S.seg?"done":i===S.seg?"cur":(i<=S.maxSeen?"done":"future"));
+    d.dataset.t=`${i+1}. ${s.title}`;
+    if(i<=S.maxSeen)d.onclick=()=>{S.seg=i;renderSeg();};
+    tl.appendChild(d);
+  });
+  $("segNum").textContent=`${S.seg+1} / ${u.segments.length}`;
+  $("segTitle").textContent=seg.title;
+  const body=$("segBody"); body.innerHTML=md(seg.content);
+  if(replay){body.style.animation="none";void body.offsetWidth;body.style.animation="pop .35s ease";}
+  $("slowerBox").innerHTML="";
+  renderPractice(seg);
+  $("bBack").disabled=S.seg===0;
+  $("bNext").textContent=S.seg===u.segments.length-1?"Finish lesson 🏁":"Next ⏭";
+  if(seenOnce(`seg:${u.key}:${S.seg}`)) addXP(10);
+  if(TTS.enabled) TTS.speakCurrent(); else TTS.stop();
+}
+
+function nextSeg(){
+  if(S.seg<S.unit.segments.length-1){S.seg++;renderSeg();}
+  else{
+    if(seenOnce(`lesson:${S.unit.key}`)) addXP(40);
+    viewExamIntro();
+  }
+}
+
+async function explainSlower(){
+  if(S.busyStream)return;
+  const box=$("slowerBox");
+  box.innerHTML=`<div class="subcard"><h4>🐢 Slow-mo replay</h4><div class="md" id="slowerMd"><p class="dimtext">thinking…</p></div></div>`;
+  const el=$("slowerMd");
+  try{
+    TTS.stop();
+    const full=await streamInto("/api/slower",{unit_key:S.unit.key,segment_index:S.seg},
+      (_,all)=>{el.innerHTML=md(all);});
+    if(TTS.enabled) TTS.speak(full);
+  }catch(e){el.innerHTML=`<p style="color:var(--bad)">${esc(e.message)}</p>`;}
+}
+
+/* ---------------- practice ---------------- */
+function renderPractice(seg){
+  const box=$("practiceBox"); box.innerHTML="";
+  if(!seg.practice)return;
+  const tag=`${S.unit.key}:${S.seg}`;
+  const done=S.practiceDone[tag];
+  S.practiceTries=0;
+  box.innerHTML=`
+    <div class="subcard" id="practiceCard" style="border-color:var(--warn)">
+      <h4>✏️ Quick check ${done?"(done — but go again if you like)":""}</h4>
+      <div class="md">${md(seg.practice.question)}</div>
+      <textarea id="pAns" rows="3" placeholder="Your answer…" style="margin-top:10px"></textarea>
+      <div style="display:flex;gap:10px;margin-top:10px;align-items:center">
+        <button class="btn" id="pGo">Check ✓</button>
+        <span class="dimtext" id="pHint"></span>
+      </div>
+      <div id="pVerdict"></div>
+    </div>`;
+  $("pGo").onclick=async(ev)=>{
+    const ans=$("pAns").value.trim();
+    if(!ans){toast("Write something first 🙂");return;}
+    S.practiceTries++;
+    const reveal=S.practiceTries>=2;
+    $("pGo").disabled=true;$("pGo").textContent="Checking…";
+    try{
+      const r=await api("/api/practice",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({unit_key:S.unit.key,segment_index:S.seg,answer:ans,reveal})});
+      const v=$("pVerdict");
+      const label={correct:"✅ Correct!",partially_correct:"🟡 Almost!",incorrect:"❌ Not quite"}[r.verdict];
+      v.innerHTML=`<div class="verdict ${r.verdict}"><b>${label}</b> ${esc(r.feedback)}
+        ${r.model_answer?`<div style="margin-top:8px"><b>Model answer:</b> ${esc(r.model_answer)}</div>`:""}</div>`;
+      if(r.verdict==="correct"){
+        bumpStreak(true);
+        if(!S.practiceDone[tag]){addXP(15,ev.clientX,ev.clientY);const g=game();if(g.streak>0&&g.streak%3===0)toast(CHEERS[Math.floor(Math.random()*CHEERS.length)]+` Streak ${g.streak}!`);}
+        S.practiceDone[tag]=true;
+      }else{
+        bumpStreak(false);
+        $("practiceCard").classList.add("shake");setTimeout(()=>$("practiceCard").classList.remove("shake"),450);
+        if(r.verdict==="partially_correct"&&!S.practiceDone[tag]){addXP(8,ev.clientX,ev.clientY);}
+        if(!reveal)$("pHint").textContent="💡 Hint: "+seg.practice.hint;
+      }
+    }catch(e){toast(e.message);}
+    $("pGo").disabled=false;$("pGo").textContent="Check ✓";
+  };
+}
+
+/* ---------------- exam ---------------- */
+function viewExamIntro(){
+  const n=S.unit.rubric.length;
+  stage(`
+    <div class="card" style="text-align:center;padding:44px">
+      <div style="font-size:3rem">⚔️</div>
+      <h1>Boss level: ${esc(S.unit.title)}</h1>
+      <p class="dimtext" style="margin:12px auto;max-width:520px">Explain <b>${n} concepts</b> in your own words —
+      like teaching a classmate. Prof. Owl grades each one against the textbook.
+      Score <b>${Math.round(S.course.threshold*100)}%+</b> to unlock the next unit. Fall short and you can review
+      the lesson and try again — no penalty.</p>
+      <div style="display:flex;gap:12px;justify-content:center;margin-top:18px">
+        <button class="btn2" onclick="viewLesson()">↩ Review the lesson first</button>
+        <button class="btn" onclick="startExam()">I'm ready — begin! ⚔️</button>
+      </div>
+    </div>`);
+}
+
+function startExam(){
+  S.exam={answers:S.unit.rubric.map(()=>""),idx:0};
+  renderExam();
+}
+function renderExam(){
+  const ex=S.exam,r=S.unit.rubric,i=ex.idx;
+  stage(`
+    <div class="card">
+      <h2>⚔️ ${esc(S.unit.title)} — exam</h2>
+      <div class="examDots">${r.map((_,k)=>`<div class="edot ${ex.answers[k].trim()?"filled":""} ${k===i?"cur":""}" onclick="S.exam.idx=${k};renderExam()"></div>`).join("")}</div>
+      <p class="dimtext">Concept ${i+1} of ${r.length}</p>
+      <h1 style="margin:10px 0;color:var(--acc2)">${esc(r[i].concept)}</h1>
+      <textarea id="exAns" rows="7" placeholder="Explain it in your own words — definitions, examples, reasoning…"></textarea>
+      <div style="display:flex;gap:10px;margin-top:14px">
+        <button class="btn2" id="exPrev" ${i===0?"disabled":""}>← Prev</button>
+        <span style="flex:1"></span>
+        ${i<r.length-1
+          ?`<button class="btn" id="exNext">Next →</button>`
+          :`<button class="btn" id="exSubmit">Submit for grading 🎓</button>`}
+      </div>
+      <p class="dimtext" style="margin-top:10px;font-size:.85rem">Tip: blank answers score 0 — write what you know, partial credit is real.</p>
+    </div>`);
+  const ta=$("exAns"); ta.value=S.exam.answers[i]; ta.focus();
+  ta.oninput=()=>{S.exam.answers[i]=ta.value;};
+  const prev=$("exPrev"); if(prev)prev.onclick=()=>{ex.idx--;renderExam();};
+  const nxt=$("exNext"); if(nxt)nxt.onclick=()=>{ex.idx++;renderExam();};
+  const sub=$("exSubmit"); if(sub)sub.onclick=submitExam;
+}
+
+async function submitExam(){
+  const empty=S.exam.answers.filter(a=>!a.trim()).length;
+  if(empty && !confirm(`${empty} answer(s) are blank and will score 0. Submit anyway?`))return;
+  overlay(true,"Grading your explanations… 🧐");
+  try{
+    const r=await api("/api/assess",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({unit_key:S.unit.key,student:S.student,
+        answers:S.unit.rubric.map((c,i)=>({criterion_id:c.id,student_explanation:S.exam.answers[i]}))})});
+    overlay(false);
+    await loadCourse();
+    viewResults(r);
+  }catch(e){overlay(false);toast("😵 "+e.message);}
+}
+
+function viewResults(r){
+  const pct=Math.round(r.score*100), C=2*Math.PI*70;
+  stage(`
+    <div class="card" style="text-align:center">
+      <h1>${r.passed?"🏆 UNIT MASTERED!":"📚 Not yet — but close"}</h1>
+      <svg class="ring" width="170" height="170" viewBox="0 0 170 170" style="margin:14px auto;display:block">
+        <defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="${r.passed?"#34d399":"#fbbf24"}"/><stop offset="100%" stop-color="#22d3ee"/>
+        </linearGradient></defs>
+        <circle class="track" cx="85" cy="85" r="70" fill="none" stroke-width="14"/>
+        <circle class="val" id="ringVal" cx="85" cy="85" r="70" fill="none" stroke-width="14"
+          stroke-dasharray="${C}" stroke-dashoffset="${C}"/>
+        <text x="85" y="80" text-anchor="middle" fill="#fff" font-size="30" font-weight="800" transform="rotate(90 85 85)">${pct}%</text>
+        <text x="85" y="104" text-anchor="middle" fill="#8b93ad" font-size="12" transform="rotate(90 85 85)">need ${Math.round(r.threshold*100)}%</text>
+      </svg>
+      <p class="dimtext" style="max-width:560px;margin:0 auto">${esc(r.overall_feedback)}</p>
+      <div style="display:flex;gap:12px;justify-content:center;margin-top:20px;flex-wrap:wrap">
+        ${r.passed
+          ? (r.next_unit?`<button class="btn" onclick='openUnitByKey(${JSON.stringify(r.next_unit.key)})'>Next unit: ${esc(r.next_unit.title)} ▶</button>`
+                        :`<button class="btn" onclick="viewHome()">🏆 Finish — course complete!</button>`)
+          : `<button class="btn2" onclick="viewLesson()">↩ Review the lesson</button>
+             <button class="btn" onclick="startExam()">Retake the exam ⚔️</button>`}
+      </div>
+    </div>
+    <div class="card">
+      <h2>Score card</h2>
+      ${r.criteria.map(c=>`
+        <div class="critCard p${c.points}">
+          <div class="cc-h"><span>${esc(c.concept)}</span><span>${["❌ 0","🟡 1","✅ 2"][c.points]}/2</span></div>
+          <div class="dimtext" style="font-size:.92rem">${esc(c.feedback)}</div>
+          ${c.missing_points.length?`<div style="font-size:.85rem;margin-top:6px;color:var(--warn)">Missing: ${c.missing_points.map(esc).join("; ")}</div>`:""}
+        </div>`).join("")}
+      <p class="dimtext" style="font-size:.8rem;margin-top:8px">grading: ${esc(r.usage)} · ~$${r.cost}</p>
+    </div>`);
+  requestAnimationFrame(()=>{setTimeout(()=>{$("ringVal").style.strokeDashoffset=C*(1-r.score);},60);});
+  if(r.passed){confetti();addXP(100);}
+}
+
+/* ---------------- chat ---------------- */
+function toggleChat(open){$("chat").classList.toggle("open",open);if(open)$("chatText").focus();}
+$("chatFab").onclick=()=>toggleChat(!$("chat").classList.contains("open"));
+$("chatSend").onclick=sendChat;
+$("chatText").addEventListener("keydown",(e)=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendChat();}});
+
+async function sendChat(){
+  const q=$("chatText").value.trim();
+  if(!q||S.busyStream)return;
+  if(!S.unit){toast("Open a unit first — Prof. Owl teaches one unit at a time 🦉");return;}
+  $("chatText").value="";
+  const log=$("chatLog");
+  log.insertAdjacentHTML("beforeend",`<div class="bub me">${esc(q)}</div>`);
+  log.insertAdjacentHTML("beforeend",`<div class="bub owl" id="owlLive">…</div>`);
+  log.scrollTop=log.scrollHeight;
+  const live=$("owlLive");
+  try{
+    const full=await streamInto("/api/ask",{unit_key:S.unit.key,question:q,history:S.chat},
+      (_,all)=>{live.textContent=all;log.scrollTop=log.scrollHeight;});
+    live.removeAttribute("id");
+    if(TTS.ok){
+      const spk=document.createElement("button");
+      spk.className="bubSpk";spk.textContent="🔊";spk.title="Listen to this answer";
+      spk.onclick=()=>TTS.speak(full);
+      live.appendChild(spk);
+    }
+    S.chat.push({role:"user",content:q},{role:"assistant",content:full});
+    S.chat=S.chat.slice(-10);
+  }catch(e){live.textContent="😵 "+e.message;live.removeAttribute("id");}
+}
+
+/* ---------------- keyboard ---------------- */
+document.addEventListener("keydown",(e)=>{
+  if(["TEXTAREA","INPUT"].includes(document.activeElement.tagName))return;
+  if(!S.unit||!$("bNext"))return;
+  if(e.key==="ArrowRight"){$("bNext")?.click();}
+  if(e.key==="ArrowLeft"){$("bBack")?.click();}
+});
+
+/* ---------------- boot ---------------- */
+$("who").onclick=async()=>{askName();S.unit=null;await loadCourse();viewHome();};
+(async function boot(){
+  if(!S.student)askName(); else {$("who").textContent="👤 "+S.student;}
+  renderGame();
+  try{ await loadCourse(); viewHome(); }
+  catch(e){ stage(`<div class="card"><h1>Can't reach the tutor server</h1><p class="dimtext">${esc(e.message)}</p></div>`); }
+})();
+</script>
+</body>
+</html>

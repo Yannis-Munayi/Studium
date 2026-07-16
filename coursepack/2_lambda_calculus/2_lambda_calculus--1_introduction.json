@@ -1,0 +1,232 @@
+{
+  "unit_key": "2_lambda_calculus--1_introduction",
+  "title": "1. Introduction",
+  "module_key": "2_lambda_calculus",
+  "model": "claude-opus-4-8",
+  "ingested_at": "2026-07-16T06:03:11.386939+00:00",
+  "pack": {
+    "overview": "This unit introduces functional programming as an approach based on function calls as the primary programming construct, contrasting it with traditional imperative programming. It examines how the two paradigms differ in their treatment of names and values, execution order, repetition, data structures, and functions as values. It then traces functional programming's roots in mathematical logic and computability theory, and explains the central role of the \u03bb calculus as a basis for the rest of the book.",
+    "learning_objectives": [
+      "The student will be able to define functional programming and explain how it differs from imperative programming in terms of the association of names and values.",
+      "The student will be able to explain why imperative languages have fixed execution orders while functional languages are execution-order independent.",
+      "The student will be able to describe how functional languages achieve repetition using recursive function calls instead of command repetition.",
+      "The student will be able to explain how functional languages handle data structures and treat functions as values.",
+      "The student will be able to trace the origins of functional programming through logic, number theory, and the three 1936 models of computability.",
+      "The student will be able to describe the significance of the \u03bb calculus and Church's thesis to computing theory and practice.",
+      "The student will be able to identify key functional and related languages (LISP, ML, Miranda, etc.) and their historical development."
+    ],
+    "key_definitions": [
+      {
+        "term": "Functional programming",
+        "definition": "An approach to programming based on function calls as the primary programming construct."
+      },
+      {
+        "term": "Variable (imperative)",
+        "definition": "A changeable association between a name and values, which can be altered by assignment during program execution."
+      },
+      {
+        "term": "Imperative language",
+        "definition": "A language consisting of sequences of commands, typically assignments that change a variable's value."
+      },
+      {
+        "term": "Assignment",
+        "definition": "A command that works out the value of an expression and associates the result with a name, written <name> := <expression>."
+      },
+      {
+        "term": "Function composition (nesting)",
+        "definition": "Structuring a functional program so each function receives values from and passes new values back to the calling function through nested function calls."
+      },
+      {
+        "term": "Recursion",
+        "definition": "A function calling itself to create new versions of its formal parameters bound to new actual parameter values, used in functional languages in place of command repetition."
+      },
+      {
+        "term": "Functions as values",
+        "definition": "The ability of functional languages to construct new functions and pass them on to, or return them from, other functions."
+      },
+      {
+        "term": "Propositional calculus",
+        "definition": "A logical system with true and false as basic values and and, or, not as basic operations, using axioms and rules of inference to prove theorems."
+      },
+      {
+        "term": "Predicate calculus",
+        "definition": "An extension of propositional calculus that adds predicates, functions and quantifiers to describe properties of non-logical values like numbers, sets or strings."
+      },
+      {
+        "term": "Church's thesis",
+        "definition": "The hypothesis that all descriptions of computability are equivalent; it cannot be formally proved but every subsequent description has been proved equivalent to existing ones."
+      },
+      {
+        "term": "Halting problem",
+        "definition": "The unsolvable problem of determining whether an arbitrary Turing machine (or \u03bb expression or recursive function call) will ever terminate."
+      },
+      {
+        "term": "\u03bb calculus",
+        "definition": "A simple, powerful system based on function abstraction (generalising expressions by introducing names) and function application (evaluating them by giving names values), proposed by Church in 1936."
+      },
+      {
+        "term": "Abstraction",
+        "definition": "In the \u03bb calculus, generalising expressions through the introduction of names."
+      },
+      {
+        "term": "Application",
+        "definition": "In the \u03bb calculus, evaluating generalised expressions by giving names particular values."
+      },
+      {
+        "term": "Church-Rosser property",
+        "definition": "The result that if different evaluation orders of a \u03bb expression terminate, they produce the same result, and that one particular order is more likely to terminate than any other."
+      }
+    ],
+    "segments": [
+      {
+        "title": "What Functional Programming Is",
+        "content": "Functional programming is an **approach to programming based on function calls as the primary programming construct**. Rather than being a niche curiosity, it offers practical approaches to problem solving and insights into many aspects of computing. Because its roots lie in the theory of computing, it forms a bridge between formal methods and their practical application.\n\nThis unit does four things: it contrasts functional programming with traditional *imperative* programming (like Pascal, FORTRAN and COBOL), it traces functional programming's origins in the theory of computing, it surveys its relevance to contemporary computing, and it introduces the **\u03bb (lambda) calculus** as the basis for functional programming.\n\nA useful starting point is the humble electronic calculator. A calculator carries out arithmetic but cannot *generalise* a calculation \u2014 to reuse it with different numbers you must re-enter everything. Programming languages overcome this by providing **names to stand for arbitrary values**. You write a program using names in general, then run it with those names taking particular values from the input. The program itself does not change; only the input values change, and the computer ensures values are associated with the right names.\n\nThe author's central claim is that the deepest difference between imperative and functional languages lies precisely in **the rules governing the association of names and values**. Everything else in this chapter flows from that single idea, so keep it firmly in mind as we compare the two paradigms.",
+        "practice": {
+          "question": "According to the text, where does the main difference between imperative and functional languages lie?",
+          "hint": "Think about the recurring theme introduced with the calculator example.",
+          "model_answer": "The main difference lies in the rules governing the association of names and values. Imperative and functional languages differ chiefly in how names come to stand for values and whether those associations can change."
+        }
+      },
+      {
+        "title": "Names and Values: Variables vs Function Parameters",
+        "content": "Building on the idea that name\u2013value rules are what separate the paradigms, we now examine each side.\n\nImperative languages are built around the **variable**: a changeable association between a name and values. They are called *imperative* because a program is a sequence of commands (`<command1>; <command2>; ...`). Typically each command is an **assignment**, `<name> := <expression>`, which computes an expression and associates the result with a name. An expression may refer to variables changed by earlier commands, which is how values pass from command to command. Crucially: **in imperative languages, the same name may be associated with different values** over the run of a program.\n\nFunctional languages work differently. A functional program is an *expression* \u2014 a function call that calls other functions in turn: `<function1>(<function2>(<function3> ...))`. Each function receives values from, and passes new values back to, its caller. This is **function composition** or **nesting**. Names are introduced only as the **formal parameters** of functions and are given values by function calls supplying **actual parameters**. Once a formal parameter is bound to a value, there is no way to rebind it \u2014 there is no assignment, no command sequence, no command repetition. The key contrast: **in functional languages, a name is only ever associated with one value.**\n\nThis single restriction \u2014 no reassignment \u2014 is the source of every other difference we will explore: execution order, repetition, data structures, and functions as values.",
+        "practice": null
+      },
+      {
+        "title": "Execution Order",
+        "content": "Because imperative commands pass values through shared variables, **the order in which commands execute is usually crucial**. One command may change a variable before the next uses it. Consider the classic swap of X and Y:\n\n```\nT := X ;\nX := Y ;\nY := T\n```\n\nHere T depends on X, X depends on Y, Y depends on T. Reorder the commands and the meaning changes completely. For instance:\n\n```\nX := Y ;\nT := X ;\nY := T\n```\n\njust sets X to Y (losing the original X). So **imperative languages have fixed execution orders** \u2014 though sequences whose expressions don't share names are an exception, most programs depend on precise sequencing.\n\nFunctional languages are different. Since function calls cannot change values associated with shared names, the order in which nested calls run does not matter \u2014 the calls cannot interact. In the call `F(A(D),B(D),C(D))`, the order of evaluating `A(D)`, `B(D)` and `C(D)` is irrelevant because none can change their common parameter `D`. Hence **in functional languages, there is no necessary execution order.**\n\nOf course, functional programs must run in *some* order, but the order does not affect the final result. This **execution order independence** is one of functional programming's great strengths: it opens the door to formal reasoning and, importantly, to running program parts in parallel.",
+        "practice": {
+          "question": "Why can the three nested calls in F(A(D),B(D),C(D)) be evaluated in any order in a functional language, whereas the imperative swap sequence cannot be reordered?",
+          "hint": "Focus on whether the functions/commands can change shared names.",
+          "model_answer": "In the functional call, A, B and C cannot change their common actual parameter D \u2014 function calls cannot interact through shared names \u2014 so any evaluation order gives the same result. In the imperative swap, each command changes a shared variable used by the next, so values pass through common variables and reordering alters the outcome. This reflects that functional languages have no necessary execution order while imperative ones have fixed execution orders."
+        }
+      },
+      {
+        "title": "Repetition: Loops vs Recursion",
+        "content": "Because imperative languages let commands reassign names, they don't need a new name for every step; instead they **repeat** the same commands. To sum an array A of N elements you don't write SUM1, SUM2, SUM3...; you write a loop reusing SUM and an index I:\n\n```\nI := 0 ; SUM := 0 ;\nWHILE I < N DO\nBEGIN I := I + 1 ; SUM := SUM + A[I] END\n```\n\nSo **in imperative languages, new values may be associated with the same name through command repetition.**\n\nFunctional languages cannot reuse names with new values, so they use **nested function calls** to create fresh versions of names, and **recursive** calls to do so repeatedly. A function calls itself, creating new versions of its formal parameters bound to new actual parameters. A Pascalish recursive sum:\n\n```\nFUNCTION SUM(A:ARRAY[1..N] OF INTEGER; I,N:INTEGER):INTEGER;\nBEGIN\n IF I > N THEN SUM := 0\n ELSE SUM := A[I] + SUM(A,I+1,N)\nEND\n```\n\nThe call `SUM(B,1,M)` unfolds as `B[1] + SUM(B,2,M)` = `B[1]+B[2]+SUM(B,3,M)` ... = `B[1]+...+B[M]+0`. Each recursive call creates new local versions of A, I and N; the previous versions become inaccessible. When a call ends, its locals are lost, the partial sum returns to the previous call, and earlier locals resume. Thus **new values are associated with new names through recursive function call nesting.**",
+        "practice": null
+      },
+      {
+        "title": "Data Structures in Functional Languages",
+        "content": "The no-assignment rule also reshapes how data structures work. In imperative languages, array elements and record fields are changed by successive assignments. Functional languages have no assignment, so sub-structures cannot be changed one at a time; instead you must **write down a whole structure with the appropriate sub-structure explicitly changed**. Functional languages provide explicit representations for data structures.\n\nConsequently functional languages do not provide **arrays**, because without assignment there is no easy way to access an arbitrary element, and rewriting a whole array to change one element would be absurdly unwieldy. Instead they offer nested structures like **lists**, based on recursive notations where operations on a whole structure are described as recursive operations on sub-structures. These representations closely resemble nested function-call notation \u2014 indeed, in LISP the *same* representation serves for both functions and data.\n\nThis ability to represent entire structures brings advantages: a standard format for displaying structures (simplifying debugging and output, with no special printing sub-programs needed) and a standard format for storing them (removing the need for special file I/O routines per structure type).\n\nA related point is the **absence of global structures**. Imperative programs often declare data as globals that sub-programs modify directly via assignment. Functional languages cannot change sub-structures of globals independently, so entire structures are passed explicitly as parameters and the whole changed structure passed back. This makes function calls larger, but ensures all structure manipulation is explicit in definitions and calls, making data flow easier to see.",
+        "practice": {
+          "question": "Why don't functional languages provide arrays, and what do they provide instead?",
+          "hint": "Connect the missing feature to the lack of assignment.",
+          "model_answer": "Without assignment there is no easy way to access or change an arbitrary array element, and writing out an entire array just to change one element would be ludicrously unwieldy. Instead, functional languages provide nested data structures like lists, based on recursive notations where operations on the whole structure are described as recursive operations on sub-structures."
+        }
+      },
+      {
+        "title": "Functions as Values",
+        "content": "The final paradigm difference is the treatment of functions themselves. Many imperative languages allow sub-programs to be passed *in* as parameters, but rarely allow them to be passed *back* as results. **Functional languages allow functions to be treated as values** \u2014 functions may construct new functions and pass them on to other functions.\n\nThe text illustrates with a contrived (and deliberately illegal-in-Pascal) example. A function ARITH takes an operator code and returns an arithmetic *function*:\n\n```\nFUNCTION ARITH(OP:OPTYPE):FUNCTION;\n ... nested SUM, DIFF, TIMES, DIVIDE ...\nBEGIN CASE OP OF\n ADD: ARITH := SUM; SUB: ARITH := DIFF;\n MULT: ARITH := TIMES; QUOT: ARITH := DIVIDE;\nEND END\n```\n\nSo `ARITH(ADD)` returns the function SUM, `ARITH(SUB)` returns DIFF, and so on. You could then add two numbers with `ARITH(ADD)(3,4)`. This is illegal in many imperative languages because you cannot construct values of type 'function'.\n\nThe author stresses that this ability to manipulate functions as values gives functional languages **substantial power and flexibility**. It is the last of the five contrasts (names/values, execution order, repetition, data structures, functions as values) that together characterise the functional approach. Having established *what* functional programming is, the chapter now turns to *where it came from*.",
+        "practice": null
+      },
+      {
+        "title": "Origins in Logic and Number Theory",
+        "content": "Functional programming has its roots in **mathematical logic**. Though informal logic is over 2000 years old, the first modern formalisations came from Hamilton, De Morgan and Boole in the mid-19th century, from which we distinguish two systems.\n\nThe **propositional calculus** has true and false as basic values and and, or, not as basic operations, with names standing for arbitrary truth values. Within it you can *prove* whether an expression is a **theorem** (always true) by starting from **axioms** (elementary always-true expressions) and applying **rules of inference**. It underpins more powerful logics and describes digital electronics (on/off as true/false).\n\nThe **predicate calculus** extends this to non-logical values (numbers, sets, strings) by adding **predicates** (generalising logical expressions to describe properties), **functions** (generalising operations), and **quantifiers** \u2014 universal (all of a sequence) and existential (one of a sequence). It can be specialised to problem areas; number-theoretic predicate calculus reasons about numbers, and predicate calculus underlies logic programming (Prolog) and expert systems. Notably, in both calculi, name\u2013value associations are unchanging and there is no necessary evaluation order \u2014 exactly the properties of functional languages.\n\nThe late 19th century also saw **Peano's** formal number theory, defining numbers via 0 and the successor function, with proofs based on induction \u2014 akin to recursion. At the turn of the century, **Russell and Whitehead's** *Principia Mathematica* tried to derive mathematics from logic, and **Hilbert** proposed a Program to prove *Principia* consistent and complete. But in 1931 **G\u00f6del** showed any system powerful enough to describe arithmetic is necessarily incomplete.",
+        "practice": {
+          "question": "Distinguish the propositional calculus from the predicate calculus, naming what the predicate calculus adds.",
+          "hint": "One deals only with truth values; the other reaches beyond them.",
+          "model_answer": "The propositional calculus works with true and false as basic values and operations like and, or, not, using names for arbitrary truth values, axioms and rules of inference to prove theorems. The predicate calculus extends it to handle non-logical values such as numbers, sets and strings by adding predicates (to describe properties), functions (to generalise operations), and quantifiers \u2014 universal (all of a sequence has a property) and existential (one of a sequence has a property)."
+        }
+      },
+      {
+        "title": "Computability and the Three 1936 Models",
+        "content": "Although G\u00f6del dashed Hilbert's hopes, Hilbert's Program spurred vigorous investigation into the **theory of computability** \u2014 formal systems describing computation in general. In 1936, three distinct approaches appeared: **Turing's Turing machines**, **Kleene's recursive function theory** (based on Hilbert's 1925 work), and **Church's \u03bb calculus**. Each is defined by simple primitive operations and simple structuring rules, and \u2014 most important \u2014 each has a proof theory.\n\nRemarkably, all three were shown formally **equivalent** to each other and to generalised von Neumann machines (digital computers). This means a result in one system has equivalent results in the others, any system can model any other, and all results apply to computer languages \u2014 which in turn can implement any of these systems. **Church's thesis** hypothesises that all descriptions of computability are equivalent; it cannot be formally proved, but every later description has been proved equivalent to existing ones.\n\nThere is a key stylistic difference. Turing machines treat computation as mechanised symbol manipulation based on **assignment and time-ordered evaluation** \u2014 the imperative flavour. Recursive function theory and \u03bb calculus treat computation as **structured function application** and are **evaluation order independent** \u2014 the functional flavour.\n\nTuring showed the **halting problem** is unsolvable: you cannot tell whether an arbitrary Turing machine (or \u03bb expression, or recursive function call) will halt. However, **Church and Rosser** showed for the \u03bb calculus that if different evaluation orders terminate, they give the *same* result, and that one particular order is most likely to terminate. This matters for computing \u2014 including the possibility of running program parts in parallel.",
+        "practice": null
+      },
+      {
+        "title": "From Theory to Practical Languages",
+        "content": "Computability theory directly shaped programming. **ALGOL 60** (an ancestor of Pascal) already had recursion and the \u03bb-calculus-based *call by name* mechanism. As computing exploded in the 1960s, formal ideas re-entered practice. In 1963 **McCarthy** proposed a mathematical basis for computation, influenced by \u03bb calculus and recursive function theory, culminating in **LISP** (LISt Processing) \u2014 a simple, untyped, recursive-function-based language for manipulating lists of words and numbers. In LISP there is no necessary distinction between programs and data (a program is a list), making it easy for programs to manipulate programs. LISP was among the first rigorously defined languages, though it is not pure functional and includes imperative elements; McCarthy also introduced techniques for proving recursive programs.\n\nIn the mid-1960s, **Landin** and **Strachey** used the \u03bb calculus to model imperative languages. Landin's *operational* approach defined an abstract interpreter \u2014 the **SECD machine** \u2014 used to describe ALGOL 60, forming the basis of the Vienna Definition Language (VDL) for PL/1; he also created the pure functional language ISWIM. Strachey's approach gave imperative constructs equivalent function **denotations**, strengthened by Scott's lattice-theoretic account, giving rise to **denotational semantics**.\n\nMany languages followed: POP-2 (Popplestone & Burstall, 1971), SASL (Turner, 1974) with offspring KRC and **Miranda**, Hope (Burstall, 1980, for the ALICE parallel computer), and **ML** (Milner, 1979, for the LCF proof system). A 1977 paper by **Backus** promoting FP systems was highly influential. Theory also feeds specification methods like VDM, Z and OBJ, and verification via constructive type theory.",
+        "practice": {
+          "question": "What is notable about the relationship between programs and data in LISP, and why is that useful?",
+          "hint": "Think about what form a LISP program takes.",
+          "model_answer": "In LISP there is no necessary distinction between programs and data \u2014 a LISP program is itself a list, and the same representation is used for functions and data. This makes it easy for programs to manipulate other programs. LISP is untyped (no restrictions on which values names take) and based on recursive functions manipulating lists, though it is not a pure functional language and contains imperative elements."
+        }
+      },
+      {
+        "title": "The \u03bb Calculus and the Road Ahead",
+        "content": "The chapter closes by explaining why the **\u03bb calculus** is the book's foundation. It is a surprisingly simple yet powerful system based on just two ideas: **abstraction** \u2014 generalising expressions by introducing names \u2014 and **application** \u2014 evaluating those generalised expressions by giving the names particular values.\n\nSeveral properties make it ideal for describing programming languages. First, abstraction and application alone suffice to represent arbitrary language constructs, so the \u03bb calculus acts as a kind of *universal machine code* for programming languages. Second, because it is **evaluation order independent**, it can describe and investigate the implications of different evaluation orders in different languages. Third, it has well-developed **proof techniques** applicable to \u03bb-calculus descriptions of other languages. Fourth, being very simple, it is relatively easy to implement \u2014 so a \u03bb-calculus description of a language can serve as a runnable prototype.\n\nThe book's plan is to use the \u03bb calculus to build up functional programming step by step. Pure \u03bb calculus offers only names, abstraction and application, but from this the author constructs a compact, general-purpose functional notation: pairs (ch. 2), booleans/numbers/conditionals (ch. 3), recursion and arithmetic (ch. 4), types and case definitions (ch. 5), lists (ch. 6), nested structures like trees (ch. 7), evaluation orders and termination (ch. 8), and finally functional programming in Standard ML (ch. 9) and LISP (ch. 10). This unit has given the conceptual and historical groundwork for that journey.",
+        "practice": null
+      }
+    ],
+    "rubric": [
+      {
+        "id": "names-values",
+        "concept": "Names and values in imperative vs functional languages",
+        "key_points": [
+          "Imperative languages use variables \u2014 changeable name\u2013value associations altered by assignment",
+          "In imperative languages the same name may be associated with different values",
+          "In functional languages names are introduced only as formal parameters, given values by actual parameters",
+          "In functional languages a name is only ever associated with one value (no reassignment/assignment)"
+        ],
+        "weight": 3
+      },
+      {
+        "id": "execution-order",
+        "concept": "Execution order independence",
+        "key_points": [
+          "Imperative languages have fixed execution orders because commands pass values through shared variables",
+          "Reordering commands (e.g. the X/Y swap) changes the result",
+          "Functional function calls cannot change values of common names, so nested calls can run in any order",
+          "Functional languages have no necessary execution order, enabling parallelism"
+        ],
+        "weight": 2
+      },
+      {
+        "id": "repetition-recursion",
+        "concept": "Repetition via recursion rather than loops",
+        "key_points": [
+          "Imperative languages reuse names and repeat commands (loops) to associate new values with the same name",
+          "Functional languages cannot reuse names, so use nested and recursive function calls",
+          "Recursion creates new versions of formal parameters bound to new actual parameters",
+          "Each recursive call's locals become inaccessible and are lost when the call returns"
+        ],
+        "weight": 2
+      },
+      {
+        "id": "functions-data",
+        "concept": "Data structures and functions as values",
+        "key_points": [
+          "No assignment means whole structures are written out with explicit sub-structure changes",
+          "No arrays (no easy arbitrary element access); nested structures like lists used instead",
+          "Functional languages treat functions as values \u2014 functions can construct and return functions",
+          "Entire structures passed explicitly as parameters rather than modified as globals"
+        ],
+        "weight": 1
+      },
+      {
+        "id": "logic-origins",
+        "concept": "Origins in mathematical logic",
+        "key_points": [
+          "Propositional calculus: true/false, and/or/not, axioms and rules of inference to prove theorems",
+          "Predicate calculus adds predicates, functions and quantifiers (universal, existential) for non-logical values",
+          "In both calculi name\u2013value associations are unchanging and there is no necessary evaluation order",
+          "G\u00f6del (1931) showed any system powerful enough for arithmetic is necessarily incomplete"
+        ],
+        "weight": 2
+      },
+      {
+        "id": "computability",
+        "concept": "Computability theory and the 1936 models",
+        "key_points": [
+          "Three 1936 models: Turing machines, Kleene's recursive function theory, Church's \u03bb calculus",
+          "All shown equivalent to each other and to digital (von Neumann) computers",
+          "Church's thesis: all descriptions of computability are equivalent (unprovable but so far always confirmed)",
+          "Turing machines emphasise assignment/time-ordered evaluation; recursive functions and \u03bb calculus emphasise evaluation-order-independent function application; halting problem is unsolvable"
+        ],
+        "weight": 2
+      },
+      {
+        "id": "lambda-calculus",
+        "concept": "The \u03bb calculus as basis for functional programming",
+        "key_points": [
+          "Based on abstraction (generalising expressions by introducing names) and application (giving names values)",
+          "Acts as a universal machine code able to represent arbitrary language constructs",
+          "Evaluation order independent, with well-developed proof techniques, and simple to implement",
+          "Church-Rosser: if different evaluation orders terminate they give the same result"
+        ],
+        "weight": 3
+      }
+    ]
+  }
+}
