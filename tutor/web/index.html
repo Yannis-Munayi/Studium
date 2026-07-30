@@ -447,6 +447,36 @@ function viewLesson(){
   const u=S.unit;
   stage(`
     <div id="timeline"></div>
+    <div class="card" style="padding:24px 26px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+        <h2 style="margin:0">🧭 Study guide</h2>
+        <span class="dimtext">${esc(u.study_guide.summary || "Break the unit into simpler steps before you dive in.")}</span>
+      </div>
+      <div class="subcard">
+        <h4>Why this matters</h4>
+        <p class="dimtext">${esc(u.study_guide.why_it_matters || "This unit builds important understanding for later work.")}</p>
+      </div>
+      <div class="subcard">
+        <h4>Prerequisites</h4>
+        <ul>${(u.study_guide.prerequisites||[]).map(x=>`<li>${esc(x)}</li>`).join("") || "<li>None listed</li>"}</ul>
+      </div>
+      <div class="subcard">
+        <h4>Connects to earlier concepts</h4>
+        <ul>${(u.study_guide.connects_to_previous||[]).map(x=>`<li>${esc(x)}</li>`).join("") || "<li>None listed</li>"}</ul>
+      </div>
+      <div class="subcard">
+        <h4>Mastery targets</h4>
+        <ul>${(u.study_guide.mastery_targets||[]).map(x=>`<li>${esc(x)}</li>`).join("") || "<li>None listed</li>"}</ul>
+      </div>
+      <div class="subcard">
+        <h4>Common misconceptions</h4>
+        <ul>${(u.study_guide.common_misconceptions||[]).map(x=>`<li>${esc(x)}</li>`).join("") || "<li>None listed</li>"}</ul>
+      </div>
+      <div class="subcard">
+        <h4>Module breakdown</h4>
+        <ul>${(u.module_breakdown||[]).map(x=>`<li><strong>${esc(x.title)}</strong>: ${esc(x.summary)}</li>`).join("") || "<li>No extra breakdown available yet</li>"}</ul>
+      </div>
+    </div>
     <div class="card" id="segCard">
       <div id="segHead"><span id="segNum"></span><h2 id="segTitle"></h2></div>
       <div class="md" id="segBody"></div>

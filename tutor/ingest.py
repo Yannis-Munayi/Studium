@@ -33,6 +33,15 @@ Produce a unit pack with:
   the previous segment. Cover the whole document — typically 6-12 segments.
   Attach a practice question to roughly every second segment: answerable from
   that segment alone, with a hint and a model answer.
+- study_guide: a beginner-friendly summary of the unit with:
+  - summary: 1-2 sentences describing the unit in simple language
+  - prerequisites: 2-4 concepts the learner should know first
+  - common_misconceptions: 2-4 misunderstandings to watch for
+  - worked_example: one short concrete example that makes the main idea clear
+  - next_steps: 2-3 follow-up actions or practice tasks
+- module_breakdown: 3-6 short learning steps that break the unit into simpler
+  chunks. Each item should include a title, a brief summary, and the core
+  concepts it teaches.
 - rubric: 5-8 criteria for a mastery test where the student explains concepts
   in their own words. Each criterion names one concept, lists the key_points a
   correct explanation must contain (specific facts/definitions from the

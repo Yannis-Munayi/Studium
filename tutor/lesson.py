@@ -41,7 +41,39 @@ missing without giving the full model answer away.
 
 
 def build_grounding(unit: Unit, pack: UnitPack) -> str:
-    lines = [f"# Unit: {unit.title}", "", pack.overview, "", "## Key definitions"]
+    lines = [f"# Unit: {unit.title}", "", pack.overview, "", "## Study guide"]
+    sg = pack.study_guide
+    lines.append(sg.summary or "A concise study guide will help the learner break this unit into simpler steps.")
+    if sg.why_it_matters:
+        lines.append("\n### Why this matters")
+        lines.append(sg.why_it_matters)
+    if sg.prerequisites:
+        lines.append("\n### Prerequisites")
+        lines += [f"- {item}" for item in sg.prerequisites]
+    if sg.connects_to_previous:
+        lines.append("\n### Connects to earlier concepts")
+        lines += [f"- {item}" for item in sg.connects_to_previous]
+    if sg.mastery_targets:
+        lines.append("\n### Mastery targets")
+        lines += [f"- {item}" for item in sg.mastery_targets]
+    if sg.common_misconceptions:
+        lines.append("\n### Common misconceptions")
+        lines += [f"- {item}" for item in sg.common_misconceptions]
+    if sg.worked_example:
+        lines.append("\n### Worked example")
+        lines.append(sg.worked_example)
+    if sg.next_steps:
+        lines.append("\n### Next steps")
+        lines += [f"- {item}" for item in sg.next_steps]
+
+    if pack.module_breakdown:
+        lines.append("\n## Module breakdown")
+        for i, step in enumerate(pack.module_breakdown, 1):
+            lines.append(f"\n{i}. **{step.title}**: {step.summary}")
+            if step.concepts:
+                lines.append("   - Concepts: " + ", ".join(step.concepts))
+
+    lines.append("\n## Key definitions")
     lines += [f"- **{d.term}**: {d.definition}" for d in pack.key_definitions]
     lines.append("\n## Lesson content")
     for i, seg in enumerate(pack.segments, 1):

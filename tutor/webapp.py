@@ -171,6 +171,8 @@ def create_app() -> FastAPI:
             "overview": pack.overview,
             "objectives": pack.learning_objectives,
             "definitions": [d.model_dump() for d in pack.key_definitions],
+            "study_guide": pack.study_guide.model_dump(),
+            "module_breakdown": [m.model_dump() for m in pack.module_breakdown],
             "segments": [
                 {
                     "title": s.title,

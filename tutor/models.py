@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 # ---------------------------------------------------------------------------
@@ -39,12 +39,31 @@ class RubricCriterion(BaseModel):
     weight: Literal[1, 2, 3]
 
 
+class StudyGuide(BaseModel):
+    summary: str = ""
+    why_it_matters: str = ""
+    prerequisites: list[str] = Field(default_factory=list)
+    connects_to_previous: list[str] = Field(default_factory=list)
+    mastery_targets: list[str] = Field(default_factory=list)
+    common_misconceptions: list[str] = Field(default_factory=list)
+    worked_example: str = ""
+    next_steps: list[str] = Field(default_factory=list)
+
+
+class ModuleBreakdownItem(BaseModel):
+    title: str
+    summary: str
+    concepts: list[str] = Field(default_factory=list)
+
+
 class UnitPack(BaseModel):
     overview: str
     learning_objectives: list[str]
     key_definitions: list[Definition]
     segments: list[Segment]
     rubric: list[RubricCriterion]
+    study_guide: StudyGuide = Field(default_factory=StudyGuide)
+    module_breakdown: list[ModuleBreakdownItem] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
