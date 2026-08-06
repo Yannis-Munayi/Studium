@@ -1,8 +1,11 @@
+import tempfile
 import unittest
+from pathlib import Path
 
 from tutor.lesson import build_grounding
 from tutor.models import UnitPack
 from tutor.catalog import Unit
+from tutor.progress import Progress
 
 
 class CurriculumStructureTests(unittest.TestCase):
@@ -73,6 +76,18 @@ class CurriculumStructureTests(unittest.TestCase):
         self.assertIn("Prior topic", grounding)
         self.assertIn("It unlocks the next idea", grounding)
         self.assertIn("Define the concept", grounding)
+
+    def test_progress_tracks_best_and_latest_concept_scores(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "student.json"
+            progress = Progress(path, {"student": "alice", "units": {}})
+            progress.record_attempt("unit1", 0.5, False, {"c1": 1, "c2": 0})
+            progress.record_attempt("unit1", 0.75, False, {"c1": 2, "c2": 1})
+
+            self.assertEqual(progress.best_score("unit1"), 0.75)
+            self.assertEqual(progress.best_per_criterion("unit1"), {"c1": 2, "c2": 1})
+            self.assertEqual(progress.latest_per_criterion("unit1"), {"c1": 2, "c2": 1})
+            self.assertFalse(progress.has_passed("unit1"))
 
 
 if __name__ == "__main__":

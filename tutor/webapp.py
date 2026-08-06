@@ -21,7 +21,13 @@ from . import ingest as ingest_mod
 from .assess import grade_answers
 from .catalog import load_course
 from .client import MODEL, cached_system, get_client, usage_cost
-from .lesson import TUTOR_PERSONA, build_grounding, check_practice, slower_prompt
+from .lesson import (
+    TUTOR_PERSONA,
+    build_grounding,
+    check_practice,
+    explanation_style_instruction,
+    slower_prompt,
+)
 from .paths import COURSEPACK_DIR, MATERIAL_DIR, PROGRESS_DIR, WEB_DIR
 from .progress import PASS_THRESHOLD, Progress
 
@@ -50,11 +56,13 @@ class AskRequest(BaseModel):
     unit_key: str
     question: str
     history: list[HistoryItem] = []
+    mode: str = "standard"
 
 
 class SlowerRequest(BaseModel):
     unit_key: str
     segment_index: int
+    mode: str = "standard"
 
 
 class AnswerItem(BaseModel):
@@ -136,9 +144,21 @@ def create_app() -> FastAPI:
     def api_course(student: str):
         progress = Progress.load(PROGRESS_DIR, student)
         modules = []
+        weak_concepts: list[dict[str, str | int]] = []
         for module in course.modules:
             units = []
             for u in module.units:
+                pack = ingest_mod.load_pack(COURSEPACK_DIR, u)
+                if pack is not None:
+                    best = progress.best_per_criterion(u.key)
+                    for crit in pack.rubric:
+                        score = best.get(crit.id, 0)
+                        if score < 2:
+                            weak_concepts.append({
+                                "unit": u.title,
+                                "concept": crit.concept,
+                                "best_score": score,
+                            })
                 if progress.has_passed(u.key):
                     status = "passed"
                 elif progress.is_unlocked(course, u):
@@ -154,18 +174,35 @@ def create_app() -> FastAPI:
                     "attempts": len(progress.attempts(u.key)),
                 })
             modules.append({"key": module.key, "title": module.title, "units": units})
+
+        if weak_concepts:
+            recommendation = (
+                "Focus on these weaker concepts first: " +
+                ", ".join({x['concept'] for x in weak_concepts[:4]}) +
+                (" and more." if len(weak_concepts) > 4 else "")
+            )
+        else:
+            next_unit = progress.current_unit(course)
+            recommendation = (
+                f"Great work! Next up: {next_unit.title}."
+                if next_unit else
+                "Course complete! You have strong mastery across the course."
+            )
+
         return {
             "title": course.title,
             "name": course.name,
             "student": student,
             "threshold": PASS_THRESHOLD,
             "modules": modules,
+            "weak_concepts": weak_concepts[:6],
+            "recommendation": recommendation,
         }
 
     @app.get("/api/unit/{unit_key}")
-    def api_unit(unit_key: str):
+    def api_unit(unit_key: str, student: str | None = None):
         unit, pack = _unit_pack(unit_key)
-        return {
+        response = {
             "key": unit.key,
             "title": unit.title,
             "overview": pack.overview,
@@ -188,6 +225,31 @@ def create_app() -> FastAPI:
             # concepts only; key_points stay server-side
             "rubric": [{"id": c.id, "concept": c.concept} for c in pack.rubric],
         }
+        if student:
+            progress = Progress.load(PROGRESS_DIR, student)
+            best = progress.best_per_criterion(unit.key)
+            latest = progress.latest_per_criterion(unit.key)
+            response["concept_mastery"] = [
+                {
+                    "criterion_id": c.id,
+                    "concept": c.concept,
+                    "best_score": best.get(c.id, 0),
+                    "latest_score": latest.get(c.id, 0),
+                }
+                for c in pack.rubric
+            ]
+            weak = [item["concept"] for item in response["concept_mastery"] if item["best_score"] < 2]
+            response["recommendation"] = (
+                "Review these weaker concepts before continuing: " + ", ".join(weak)
+                if weak else
+                "Your recent exam performance shows strong mastery of this unit."
+            )
+            response["recommendation_details"] = (
+                "You can re-take the mastery exam when you feel ready, or review the lesson segments for these weaker concepts."
+                if weak else
+                "This unit is in great shape — consider moving to the next unlocked unit."
+            )
+        return response
 
     @app.post("/api/ingest")
     def api_ingest(req: IngestRequest):
@@ -226,7 +288,10 @@ def create_app() -> FastAPI:
             {"role": h.role, "content": h.content}
             for h in req.history if h.role in ("user", "assistant")
         ][-10:]
-        messages = history + [{"role": "user", "content": req.question}]
+        content = explanation_style_instruction(req.mode)
+        content += "\n\nAnswer the following question about the unit material:\n"
+        content += req.question
+        messages = history + [{"role": "user", "content": content}]
         return _stream(_system(unit, pack), messages)
 
     @app.post("/api/slower")
@@ -235,7 +300,8 @@ def create_app() -> FastAPI:
         if not (0 <= req.segment_index < len(pack.segments)):
             raise HTTPException(status_code=400, detail="Bad segment index")
         seg = pack.segments[req.segment_index]
-        messages = [{"role": "user", "content": slower_prompt(req.segment_index, seg.title)}]
+        prompt = slower_prompt(req.segment_index, seg.title, req.mode)
+        messages = [{"role": "user", "content": prompt}]
         return _stream(_system(unit, pack), messages)
 
     # -- assessment ---------------------------------------------------------------

@@ -196,6 +196,7 @@ const S = {
   exam: null,            // {answers:[], idx}
   chat: [],              // [{role, content}]
   busyStream: false,
+  mode: "standard",
 };
 
 /* ---------------- tiny helpers ---------------- */
@@ -401,6 +402,13 @@ function viewHome(){
       <p class="dimtext" style="margin-bottom:22px">Lessons play like videos: step through, rewind, slow down, and ask Prof. Owl anything.</p>
       ${next?`<button class="btn" onclick='openUnitByKey("${next.key}")'>${passed?"Continue":"Start"}: ${esc(next.title)} ▶</button>`
             :`<h2>🏆 Course complete! Every unit mastered.</h2>`}
+    </div>
+    <div class="card" style="padding:24px 26px">
+      <h2>📚 Personalized study plan</h2>
+      <p class="dimtext">${esc(S.course.recommendation || "Review weak concepts and continue when you feel ready.")}</p>
+      ${S.course.weak_concepts && S.course.weak_concepts.length
+          ? `<ul>${S.course.weak_concepts.map(x=>`<li><strong>${esc(x.unit)}</strong>: ${esc(x.concept)} (${x.best_score}/2)</li>`).join("")}</ul>`
+          : `<p class="dimtext">No weak concepts detected yet — keep going!</p>`}
     </div>`);
 }
 
@@ -412,7 +420,7 @@ async function openUnit(u){
   if(u.status==="locked"){toast("🔒 Locked — pass the earlier units first!");return;}
   if(!u.ingested){viewPrepare(u);return;}
   try{
-    S.unit = await api(`/api/unit/${encodeURIComponent(u.key)}`);
+    S.unit = await api(`/api/unit/${encodeURIComponent(u.key)}?student=${encodeURIComponent(S.student)}`);
   }catch(e){toast(e.message);return;}
   S.seg=0; S.maxSeen=Math.max(S.maxSeen,0); S.chat=[]; $("chatLog").innerHTML="";
   $("chatCtx").textContent="asking about: "+S.unit.title;
@@ -449,8 +457,18 @@ function viewLesson(){
     <div id="timeline"></div>
     <div class="card" style="padding:24px 26px">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
-        <h2 style="margin:0">🧭 Study guide</h2>
-        <span class="dimtext">${esc(u.study_guide.summary || "Break the unit into simpler steps before you dive in.")}</span>
+        <div>
+          <h2 style="margin:0">🧭 Study guide</h2>
+          <span class="dimtext">${esc(u.study_guide.summary || "Break the unit into simpler steps before you dive in.")}</span>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <label class="dimtext" style="margin:0">Mode</label>
+          <select id="modeSelect" style="background:var(--bg);border:1px solid var(--line);border-radius:10px;color:var(--text);padding:8px;">
+            <option value="beginner">Beginner</option>
+            <option value="standard" selected>Standard</option>
+            <option value="advanced">Advanced</option>
+          </select>
+        </div>
       </div>
       <div class="subcard">
         <h4>Why this matters</h4>
@@ -475,6 +493,14 @@ function viewLesson(){
       <div class="subcard">
         <h4>Module breakdown</h4>
         <ul>${(u.module_breakdown||[]).map(x=>`<li><strong>${esc(x.title)}</strong>: ${esc(x.summary)}</li>`).join("") || "<li>No extra breakdown available yet</li>"}</ul>
+      </div>
+      <div class="subcard">
+        <h4>Concept mastery</h4>
+        <ul>${(u.concept_mastery||[]).map(x=>{
+            const label = x.best_score===2 ? "strong" : x.best_score===1 ? "partial" : "weak";
+            return `<li><strong>${esc(x.concept)}</strong> — ${label} mastery (latest ${x.latest_score}/2)</li>`;
+          }).join("") || "<li>No assessment data yet</li>"}</ul>
+        <p class="dimtext">${esc(u.recommendation || "No personalized recommendation available yet.")}</p>
       </div>
     </div>
     <div class="card" id="segCard">
@@ -519,6 +545,8 @@ function viewLesson(){
     if(TTS.enabled){TTS.fillVoices();TTS.speakCurrent();}else TTS.stop();
     TTS.ui();
   };
+  $("modeSelect").onchange=(e)=>{S.mode=e.target.value;};
+  S.mode = $("modeSelect").value;
   $("aPause").onclick=()=>TTS.pauseToggle();
   $("aStop").onclick=()=>TTS.stop();
   $("aRate").value=String(TTS.rate);
@@ -567,7 +595,7 @@ async function explainSlower(){
   const el=$("slowerMd");
   try{
     TTS.stop();
-    const full=await streamInto("/api/slower",{unit_key:S.unit.key,segment_index:S.seg},
+    const full=await streamInto("/api/slower",{unit_key:S.unit.key,segment_index:S.seg,mode:S.mode},
       (_,all)=>{el.innerHTML=md(all);});
     if(TTS.enabled) TTS.speak(full);
   }catch(e){el.innerHTML=`<p style="color:var(--bad)">${esc(e.message)}</p>`;}
@@ -735,7 +763,7 @@ async function sendChat(){
   log.scrollTop=log.scrollHeight;
   const live=$("owlLive");
   try{
-    const full=await streamInto("/api/ask",{unit_key:S.unit.key,question:q,history:S.chat},
+    const full=await streamInto("/api/ask",{unit_key:S.unit.key,question:q,history:S.chat,mode:S.mode},
       (_,all)=>{live.textContent=all;log.scrollTop=log.scrollHeight;});
     live.removeAttribute("id");
     if(TTS.ok){

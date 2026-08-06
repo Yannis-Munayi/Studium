@@ -107,7 +107,7 @@ def cmd_learn(args) -> None:
         console.print(f"[dim]Previous attempts on this unit: {attempts} "
                       f"(best {progress.best_score(unit.key):.0%})[/dim]")
 
-    finished = LessonSession(unit, pack).run()
+    finished = LessonSession(unit, pack, args.mode).run()
     if not finished:
         return
     if input("Take the mastery assessment now? [Y/n] ").strip().lower() == "n":
@@ -180,6 +180,8 @@ def main(argv: list[str] | None = None) -> None:
 
     p_learn = sub.add_parser("learn", help="study the next unlocked unit (lesson + assessment)")
     p_learn.add_argument("--unit", help="study a specific unlocked/passed unit")
+    p_learn.add_argument("--mode", choices=["beginner","standard","advanced"], default="standard",
+                        help="explanation style for live tutoring and slower explanations")
 
     sub.add_parser("status", help="show progress summary")
 

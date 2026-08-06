@@ -100,21 +100,39 @@ def check_practice(client, pq: PracticeQuestion, answer: str) -> AnswerCheck:
     return response.parsed_output
 
 
-def slower_prompt(index: int, segment_title: str) -> str:
+def explanation_style_instruction(mode: str) -> str:
+    if mode == "beginner":
+        return (
+            "Explain using the simplest possible language, short sentences, everyday analogies, "
+            "and concrete examples. Assume the student is seeing this topic for the first time."
+        )
+    if mode == "advanced":
+        return (
+            "Explain with more precision, use formal terminology where helpful, and include deeper reasoning "
+            "or connections to related concepts. Assume the student already knows the basics."
+        )
+    return (
+        "Explain clearly and directly in a normal university-tutor style: not too basic, not too advanced. "
+        "Use examples when helpful and stay focused on the unit material."
+    )
+
+
+def slower_prompt(index: int, segment_title: str, mode: str = "standard") -> str:
     return (
         f"Re-explain segment {index + 1} ('{segment_title}') more slowly and "
-        "simply: smaller steps, one everyday analogy, and finish with a "
+        f"simply in {mode} style: smaller steps, one everyday analogy, and finish with a "
         "one-sentence takeaway."
     )
 
 
 class LessonSession:
-    def __init__(self, unit: Unit, pack: UnitPack):
+    def __init__(self, unit: Unit, pack: UnitPack, mode: str = "standard"):
         self.unit = unit
         self.pack = pack
         self.client = get_client()
         self.system = cached_system(TUTOR_PERSONA, build_grounding(unit, pack))
         self.history: list[dict] = []  # rolling Q&A history for `a`
+        self.explanation_mode = mode if mode in {"beginner", "standard", "advanced"} else "standard"
 
     # -- live calls -----------------------------------------------------------
 
@@ -138,10 +156,16 @@ class LessonSession:
 
     def explain_slower(self, index: int) -> None:
         seg = self.pack.segments[index]
-        self._stream_reply(slower_prompt(index, seg.title), keep_history=False)
+        prompt = slower_prompt(index, seg.title, self.explanation_mode)
+        self._stream_reply(prompt, keep_history=False)
 
     def ask(self, question: str) -> None:
-        self._stream_reply(question, keep_history=True)
+        prompt = (
+            explanation_style_instruction(self.explanation_mode)
+            + "\n\nAnswer the following question about the unit material:\n"
+            + question
+        )
+        self._stream_reply(prompt, keep_history=True)
 
     # -- practice -------------------------------------------------------------
 

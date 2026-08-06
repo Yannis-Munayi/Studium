@@ -56,6 +56,19 @@ class Progress:
         scores = [a["score"] for a in self.attempts(unit_key)]
         return max(scores) if scores else None
 
+    def best_per_criterion(self, unit_key: str) -> dict[str, int]:
+        best: dict[str, int] = {}
+        for attempt in self.attempts(unit_key):
+            for crit_id, score in attempt.get("per_criterion", {}).items():
+                best[crit_id] = max(best.get(crit_id, 0), score)
+        return best
+
+    def latest_per_criterion(self, unit_key: str) -> dict[str, int]:
+        attempts = self.attempts(unit_key)
+        if not attempts:
+            return {}
+        return attempts[-1].get("per_criterion", {})
+
     def has_passed(self, unit_key: str) -> bool:
         return any(a["passed"] for a in self.attempts(unit_key))
 
