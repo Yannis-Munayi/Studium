@@ -1,0 +1,42 @@
+# Postgres for the Tier 2 (online) test suite.
+#
+# Spec v1.1 §14 CI wiring: "The Docker Compose file at
+# backend/docker-compose.test.yml provisions a pinned postgres:16 image with
+# pgvector preinstalled."
+#
+# Separate from docker-compose.yml so CI can bring up a throwaway database on a
+# non-default port without colliding with a developer's running instance. The
+# volume is tmpfs: this database is recreated per run and should never survive
+# one, which also makes it considerably faster.
+
+services:
+  test-db:
+    # pgvector/pgvector:pg16 is the stock Postgres 16 image with the extension
+    # already built. Pinned to 16 per §4 -- not 15, not 17.
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: studium
+      POSTGRES_PASSWORD: studium
+      POSTGRES_DB: studium_test
+      POSTGRES_INITDB_ARGS: "--locale=C --encoding=UTF8"
+    ports:
+      - "5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    command:
+      # Durability buys nothing for a database that is discarded after the run,
+      # and turning it off roughly halves the suite's fixture-setup time.
+      - postgres
+      - -c
+      - fsync=off
+      - -c
+      - synchronous_commit=off
+      - -c
+      - full_page_writes=off
+    volumes:
+      - ./scripts/init-databases.sh:/docker-entrypoint-initdb.d/10-databases.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U studium -d studium_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30

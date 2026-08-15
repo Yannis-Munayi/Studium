@@ -1,0 +1,37 @@
+[project]
+name = "studium-backend"
+version = "1.0.0"
+description = "Studium data layer (spec subsystem 1)"
+requires-python = ">=3.12"
+dependencies = [
+    "sqlalchemy>=2.0.30",
+    "alembic>=1.13",
+    "psycopg[binary]>=3.1",
+    "pgvector>=0.2.5",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-randomly", "ruff>=0.4"]
+
+# Flat layout: without this, setuptools sees studium/, tests/, scripts/ and
+# migrations/ as candidate packages and refuses to guess. Only studium ships.
+[tool.setuptools.packages.find]
+include = ["studium*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = [
+    "postgres: requires a live Postgres 16 with the schema applied",
+]
+filterwarnings = ["error::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 90
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]

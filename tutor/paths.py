@@ -3,7 +3,7 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-MATERIAL_DIR = ROOT / "sample-curriculum" / "material"
+MATERIAL_DIR = ROOT / "material"
 COURSEPACK_DIR = ROOT / "coursepack"
 PROGRESS_DIR = ROOT / "progress"
 WEB_DIR = Path(__file__).resolve().parent / "web"

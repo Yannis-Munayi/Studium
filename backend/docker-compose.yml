@@ -1,0 +1,28 @@
+# Local Postgres for development and the DB-backed tests.
+#
+# Spec §4 pins Postgres 16.x -- not 15, not 17-beta. pgvector/pgvector:pg16 is
+# the stock 16 image with the vector extension already built, which saves
+# compiling it in the container.
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: studium
+      POSTGRES_PASSWORD: studium
+      POSTGRES_DB: studium
+      # Deterministic collation, so index ordering matches production.
+      POSTGRES_INITDB_ARGS: "--locale=C --encoding=UTF8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - studium-pgdata:/var/lib/postgresql/data
+      - ./scripts/init-databases.sh:/docker-entrypoint-initdb.d/10-databases.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U studium -d studium"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  studium-pgdata:
