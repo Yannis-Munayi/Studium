@@ -78,7 +78,9 @@ class ReviewCard(Base):
     created_at: Mapped[dt.datetime] = created_at()
     updated_at: Mapped[dt.datetime] = updated_at()
 
-    events: Mapped[list[ReviewEvent]] = relationship(back_populates="card")
+    events: Mapped[list[ReviewEvent]] = relationship(
+        back_populates="card", passive_deletes=True
+    )
 
     __table_args__ = (
         UniqueConstraint(

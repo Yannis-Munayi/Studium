@@ -98,6 +98,11 @@ POLICIES: tuple[Policy, ...] = (
     Policy("portfolio_items", None, note="kept until learner deletion"),
     Policy("session_summaries", None, note="added: cascades with its session"),
     Policy("concept_mastery", None, note="added: current state, never aged out"),
+    # Same category as concept_mastery: the live FSRS schedule, not a record of
+    # past reviews. Ageing a card out would silently drop a concept from the
+    # review rotation while its mastery row still claims it is being tracked.
+    # It leaves with the enrollment, by cascade.
+    Policy("review_cards", None, note="added: current schedule, never aged out"),
     Policy("learner_subjects", None, note="added: deleted on erasure only"),
     Policy("users", None, note="soft delete on close; hard delete after 30 days"),
 )

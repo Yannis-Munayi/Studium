@@ -17,9 +17,11 @@ import os
 from collections.abc import Iterator
 
 import pytest
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
+
+from .dbprobe import CONNECT_TIMEOUT_SECONDS, require_database
 
 TEST_DB_ENV = "STUDIUM_TEST_DATABASE_URL"
 DEFAULT_TEST_URL = "postgresql+psycopg://studium:studium@localhost:5432/studium_test"
@@ -35,28 +37,15 @@ def _test_url() -> str:
     return os.environ.get(TEST_DB_ENV, DEFAULT_TEST_URL)
 
 
-#: Fail fast when nothing is listening. Without this the driver waits on the
-#: OS TCP timeout, which on Windows is long enough to look like a hang.
-CONNECT_TIMEOUT_SECONDS = 3
-
-
 @pytest.fixture(scope="session")
 def engine() -> Iterator[Engine]:
     url = _test_url()
+    require_database(url, TEST_DB_ENV)
     eng = create_engine(
         url,
         future=True,
         connect_args={"connect_timeout": CONNECT_TIMEOUT_SECONDS},
     )
-    try:
-        with eng.connect() as conn:
-            conn.execute(text("SELECT 1"))
-    except Exception as exc:  # noqa: BLE001 -- reported as a skip, not a failure
-        eng.dispose()
-        pytest.skip(
-            f"no Postgres at {url!r} ({type(exc).__name__}). "
-            f"Start one with `make db-up`, or point {TEST_DB_ENV} at a database."
-        )
     yield eng
     eng.dispose()
 
@@ -76,5 +65,9 @@ def db(engine: Engine) -> Iterator[Session]:
         yield session
     finally:
         session.close()
-        transaction.rollback()
+        # A test that provoked an IntegrityError has already had this
+        # transaction rolled back and deassociated by SQLAlchemy's own error
+        # handling; rolling back a second time warns rather than helps.
+        if transaction.is_active:
+            transaction.rollback()
         connection.close()

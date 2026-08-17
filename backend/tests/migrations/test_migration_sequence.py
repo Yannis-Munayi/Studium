@@ -18,7 +18,12 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, text
+
+from studium.models import Base
+
+from ..dbprobe import CONNECT_TIMEOUT_SECONDS, require_database
 
 pytestmark = pytest.mark.postgres
 
@@ -32,6 +37,7 @@ def _url() -> str:
         pytest.skip(
             f"set {URL_ENV} to a scratch database this test may drop and recreate"
         )
+    require_database(url, URL_ENV)
     return url
 
 
@@ -46,7 +52,9 @@ def alembic_config() -> Config:
 @pytest.fixture
 def clean_database(alembic_config: Config):
     """Drop and recreate the public schema so each test starts from empty."""
-    engine = create_engine(_url())
+    engine = create_engine(
+        _url(), connect_args={"connect_timeout": CONNECT_TIMEOUT_SECONDS}
+    )
     with engine.begin() as conn:
         conn.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))
         conn.execute(text("CREATE SCHEMA public"))
@@ -57,18 +65,30 @@ def clean_database(alembic_config: Config):
 def _schema_dump(url: str) -> str:
     """pg_dump --schema-only, normalised for comparison."""
     dsn = url.replace("postgresql+psycopg://", "postgresql://")
-    result = subprocess.run(
-        ["pg_dump", "--schema-only", "--no-owner", "--no-acl", dsn],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            ["pg_dump", "--schema-only", "--no-owner", "--no-acl", dsn],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        # Not on PATH at all -- common on Windows, where the Postgres client
+        # tools are not added to it. A missing binary is an absent tool, not a
+        # failing migration, so it skips like every other unmet dependency.
+        pytest.skip("pg_dump is not on PATH; install the Postgres client tools")
     if result.returncode != 0:
         pytest.skip(f"pg_dump unavailable or failed: {result.stderr.strip()[:200]}")
     lines = [
         line
         for line in result.stdout.splitlines()
-        if line.strip() and not line.startswith("--")
+        if line.strip()
+        and not line.startswith("--")
+        # Recent pg_dump wraps output in \restrict/\unrestrict guarded by a
+        # token regenerated on every invocation. Comparing two dumps without
+        # dropping these means comparing two random strings, so the round-trip
+        # would fail on a schema that never changed.
+        and not line.startswith(("\\restrict", "\\unrestrict"))
     ]
     return "\n".join(lines)
 
@@ -84,13 +104,17 @@ def test_full_migration_sequence(alembic_config: Config, clean_database) -> None
                 "WHERE table_schema = 'public' AND table_type = 'BASE TABLE'"
             )
         ).scalar_one()
-        # 34 tables plus alembic_version.
-        assert tables == 35, f"expected 35 tables after head, found {tables}"
+        # Derived, not hard-coded: this assertion sat at "0003" for five
+        # migrations because nothing made it move, and it only surfaced once
+        # the suite could reach a database at all.
+        expected = len(Base.metadata.tables) + 1  # + alembic_version
+        assert tables == expected, f"expected {expected} tables, found {tables}"
 
         version = conn.execute(
             text("SELECT version_num FROM alembic_version")
         ).scalar_one()
-        assert version == "0003"
+        head = ScriptDirectory.from_config(alembic_config).get_current_head()
+        assert version == head
 
 
 def test_migration_round_trip(alembic_config: Config, clean_database) -> None:
@@ -148,5 +172,8 @@ def test_uuid_function_round_trips_through_the_database(
             text("SELECT uuid_generate_v7() FROM generate_series(1, 200)")
         ).scalars().all()
     assert all(v.version == 7 for v in values)
-    assert list(values) == sorted(values), "UUIDv7 must be time-ordered"
     assert len(set(values)) == len(values), "collision in 200 generated ids"
+    # Ordered to millisecond resolution; the sub-millisecond counter of
+    # RFC 9562 §6.2 is optional and this implementation randomises those bits.
+    stamps = [int.from_bytes(v.bytes[:6], "big") for v in values]
+    assert stamps == sorted(stamps), "UUIDv7 timestamp prefix must be ordered"

@@ -100,7 +100,9 @@ class ContentArtifact(Base):
     created_at: Mapped[dt.datetime] = created_at()
     updated_at: Mapped[dt.datetime] = updated_at()
 
-    citations: Mapped[list[ContentCitation]] = relationship(back_populates="artifact")
+    citations: Mapped[list[ContentCitation]] = relationship(
+        back_populates="artifact", passive_deletes=True
+    )
 
     __table_args__ = (
         sha256_check("prompt_hash"),

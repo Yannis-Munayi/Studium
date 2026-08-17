@@ -90,9 +90,57 @@ def erase_user(session: Session, user_id: uuid.UUID, *, reason: str = "") -> Non
         ),
         params,
     )
+    # §6.12 reserves user_id IS NULL for post-erasure aggregates, and
+    # uq_cost_ledger_day is NULLS NOT DISTINCT -- so (NULL, day, model) is one
+    # shared row per day and model, not one per erased learner. A plain
+    # UPDATE ... SET user_id = NULL therefore works for the first learner
+    # erased on a given day and raises a unique violation for the second,
+    # aborting the erasure. Fold the totals into the shared row instead.
+    # cost_usd is generated and must not be written.
     session.execute(
-        text("UPDATE cost_ledger SET user_id = NULL WHERE user_id = :user_id"),
+        text(
+            """
+            INSERT INTO cost_ledger AS cl (
+                user_id, day, model,
+                tokens_in, tokens_out, cache_read_tokens,
+                cache_write_5m_tokens, cache_write_1h_tokens,
+                cost_agent_usd, cost_content_usd, cost_ingestion_usd,
+                cost_summary_usd, cost_grading_usd, session_count
+            )
+            SELECT NULL::uuid, day, model,
+                   tokens_in, tokens_out, cache_read_tokens,
+                   cache_write_5m_tokens, cache_write_1h_tokens,
+                   cost_agent_usd, cost_content_usd, cost_ingestion_usd,
+                   cost_summary_usd, cost_grading_usd, session_count
+              FROM cost_ledger
+             WHERE user_id = :user_id
+            ON CONFLICT (user_id, day, model) DO UPDATE
+               SET tokens_in             = cl.tokens_in + EXCLUDED.tokens_in,
+                   tokens_out            = cl.tokens_out + EXCLUDED.tokens_out,
+                   cache_read_tokens     = cl.cache_read_tokens
+                                         + EXCLUDED.cache_read_tokens,
+                   cache_write_5m_tokens = cl.cache_write_5m_tokens
+                                         + EXCLUDED.cache_write_5m_tokens,
+                   cache_write_1h_tokens = cl.cache_write_1h_tokens
+                                         + EXCLUDED.cache_write_1h_tokens,
+                   cost_agent_usd        = cl.cost_agent_usd
+                                         + EXCLUDED.cost_agent_usd,
+                   cost_content_usd      = cl.cost_content_usd
+                                         + EXCLUDED.cost_content_usd,
+                   cost_ingestion_usd    = cl.cost_ingestion_usd
+                                         + EXCLUDED.cost_ingestion_usd,
+                   cost_summary_usd      = cl.cost_summary_usd
+                                         + EXCLUDED.cost_summary_usd,
+                   cost_grading_usd      = cl.cost_grading_usd
+                                         + EXCLUDED.cost_grading_usd,
+                   session_count         = cl.session_count
+                                         + EXCLUDED.session_count
+            """
+        ),
         params,
+    )
+    session.execute(
+        text("DELETE FROM cost_ledger WHERE user_id = :user_id"), params
     )
     # The erasure request itself keeps its actor for accountability; it is
     # anonymised later, when the audit log's own seven-year window expires.

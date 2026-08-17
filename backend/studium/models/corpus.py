@@ -76,7 +76,9 @@ class Source(Base):
     updated_at: Mapped[dt.datetime] = updated_at()
     deleted_at: Mapped[dt.datetime | None] = nullable_ts()
 
-    chunks: Mapped[list[SourceChunk]] = relationship(back_populates="source")
+    chunks: Mapped[list[SourceChunk]] = relationship(
+        back_populates="source", passive_deletes=True
+    )
 
     __table_args__ = (
         # Prevents re-uploading the same text into one subject. Cross-subject
@@ -126,7 +128,7 @@ class SourceChunk(Base):
 
     source: Mapped[Source] = relationship(back_populates="chunks")
     embedding_row: Mapped[SourceChunkEmbedding | None] = relationship(
-        back_populates="chunk", uselist=False
+        back_populates="chunk", uselist=False, passive_deletes=True
     )
 
     __table_args__ = (

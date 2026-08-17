@@ -12,6 +12,7 @@ Plus the constraints this build added to make §10 and §11 actually hold.
 
 from __future__ import annotations
 
+import time
 import uuid
 
 import pytest
@@ -50,8 +51,21 @@ def test_uuid_generate_v7_produces_valid_uuids(db: Session) -> None:
     assert len(values) == 50
     assert all(isinstance(v, uuid.UUID) for v in values)
     assert all(v.version == 7 for v in values), "not version 7"
-    # UUIDv7 is time-ordered, which is the whole reason for choosing it.
-    assert list(values) == sorted(values)
+    assert len(set(values)) == len(values), "collision in 50 generated ids"
+
+    # UUIDv7 is time-ordered, which is the whole reason for choosing it -- but
+    # only to millisecond resolution. RFC 9562 §6.2 makes the sub-millisecond
+    # monotonic counter optional, and this implementation fills those bits
+    # randomly, so ids minted inside one millisecond have no defined order.
+    # The property that actually buys the B-tree locality is the 48-bit
+    # timestamp prefix never going backwards.
+    stamps = [int.from_bytes(v.bytes[:6], "big") for v in values]
+    assert stamps == sorted(stamps), "timestamp prefix went backwards"
+
+    # And across a millisecond boundary the ordering is total.
+    time.sleep(0.005)
+    later = db.execute(text("SELECT uuid_generate_v7()")).scalar_one()
+    assert later > max(values)
 
 
 def test_deleting_mastery_cascades_to_events(db: Session, fx) -> None:

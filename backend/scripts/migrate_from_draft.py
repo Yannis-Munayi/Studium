@@ -20,6 +20,7 @@ first. See DIVERGENCES.md.
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import hashlib
 import json
 import sys
@@ -57,9 +58,30 @@ from studium.models import (  # noqa: E402
     UserProfile,
 )
 
-#: Sources whose licence we can assert. Everything else is flagged for review
-#: rather than guessed at -- §12 says you review the output before publishing.
-PUBLIC_DOMAIN_HINTS = ("church", "turing", "1936", "1937")
+#: Modules excluded from the migrated subject, with the reason. The rights
+#: posture for MVP is public-domain and open-licence material only; anything
+#: here failed it and is dropped rather than migrated into a draft nobody can
+#: publish.
+EXCLUDED_MODULES = {
+    "3_clojure": (
+        "material is two in-copyright commercial textbooks (Programming "
+        "Clojure, Pragmatic Bookshelf; The Joy of Clojure, Manning). No "
+        "redistribution right. Functional-programming coverage deferred to a "
+        "future subject with properly licensed material."
+    ),
+}
+
+#: Every source defaults here. There is deliberately no heuristic: a filename
+#: cannot establish provenance, and a false positive on licence asserts a right
+#: that does not exist -- categorically worse than over-flagging for review.
+#: An earlier substring rule matched "turing" and marked a named academic's
+#: lecture slides public domain. A human sets this, or it stays unreviewed.
+DEFAULT_LICENSE = "permission_granted"
+UNREVIEWED_NOTE = (
+    "Licence not yet reviewed by a human. Migrated from the v0.4 draft with no "
+    "asserted redistribution right; confirm the basis and update this note "
+    "before the subject leaves draft status."
+)
 
 
 @dataclass
@@ -74,6 +96,7 @@ class Report:
     sources: int = 0
     attempts: int = 0
     responses: int = 0
+    excluded_modules: int = 0
     warnings: list[str] = field(default_factory=list)
 
     def warn(self, message: str) -> None:
@@ -90,6 +113,7 @@ class Report:
             f"  sources           {self.sources}",
             f"  attempts          {self.attempts}",
             f"  responses         {self.responses}",
+            f"  modules excluded  {self.excluded_modules}",
         ]
         if self.warnings:
             lines.append("")
@@ -107,25 +131,54 @@ def slugify(text: str, *, limit: int = 80) -> str:
     return slug or "unit"
 
 
-def load_unit_pack(coursepack_dir: Path, unit_key: str) -> UnitPack | None:
+@dataclass(frozen=True)
+class Provenance:
+    """The envelope v0.4 writes around each pack.
+
+    A coursepack file is ``{unit_key, title, module_key, model, ingested_at,
+    pack}``; only ``pack`` matches ``UnitPack``. The rest is provenance, and
+    the v1.1 schema has columns for it -- ``content_artifacts.model`` and
+    ``.generated_at`` -- so carrying it through is keeping data the schema was
+    built to hold, not decorating the migration.
+    """
+
+    model: str | None = None
+    generated_at: dt.datetime | None = None
+
+
+def load_unit_pack(
+    coursepack_dir: Path, unit_key: str
+) -> tuple[UnitPack, Provenance] | None:
     module_key = unit_key.split("--", 1)[0]
     path = coursepack_dir / module_key / f"{unit_key}.json"
     if not path.exists():
         return None
-    return UnitPack.model_validate_json(path.read_text(encoding="utf-8"))
+
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    # Validating the whole document against UnitPack fails on all five of its
+    # required fields, because they live one level down. Fall back to the whole
+    # document so a future unwrapped pack still loads.
+    pack = UnitPack.model_validate(raw.get("pack", raw))
+
+    ingested = raw.get("ingested_at")
+    return pack, Provenance(
+        model=raw.get("model"),
+        generated_at=dt.datetime.fromisoformat(ingested) if ingested else None,
+    )
 
 
 def licence_for(pdf: Path, report: Report) -> str:
-    """§12: public_domain where genuinely public domain, permission_granted
-    otherwise, with a note describing the basis."""
-    name = pdf.name.lower()
-    if any(hint in name for hint in PUBLIC_DOMAIN_HINTS):
-        return "public_domain"
+    """§12: every source is unreviewed until a human says otherwise.
+
+    This function used to guess public_domain from filename substrings. It is
+    now deliberately a constant. Licence is a claim about a real artifact's
+    provenance, and nothing derivable from a file path can support it.
+    """
     report.warn(
-        f"source {pdf.name!r} defaulted to permission_granted -- confirm the "
-        f"basis and set license_notes before publishing"
+        f"source {pdf.name!r} is unreviewed -- a human must set its licence "
+        f"and license_notes before the subject leaves draft"
     )
-    return "permission_granted"
+    return DEFAULT_LICENSE
 
 
 def migrate_course(
@@ -147,13 +200,27 @@ def migrate_course(
     position = 0
 
     for module in course.modules:
+        if module.key in EXCLUDED_MODULES:
+            report.warn(
+                f"module {module.key!r} excluded: {EXCLUDED_MODULES[module.key]}"
+            )
+            report.excluded_modules += 1
+            continue
         for unit in module.units:
-            pack = load_unit_pack(coursepack_dir, unit.key)
-            if pack is None:
+            loaded = load_unit_pack(coursepack_dir, unit.key)
+            if loaded is None:
                 report.warn(
                     f"unit {unit.key!r} has no coursepack JSON; migrated as a "
                     f"title-only concept"
                 )
+                pack, provenance = None, Provenance()
+            else:
+                pack, provenance = loaded
+                if provenance.model is None:
+                    report.warn(
+                        f"unit {unit.key!r} records no generating model; its "
+                        f"artifacts carry no attribution"
+                    )
 
             slug = slugify(unit.key.split("--", 1)[-1])
             concept = session.execute(
@@ -193,8 +260,8 @@ def migrate_course(
                 _migrate_source(session, subject, pdf, report)
 
             if pack is not None:
-                _migrate_segments(session, concept, pack, report)
-                _migrate_definitions(session, concept, pack, report)
+                _migrate_segments(session, concept, pack, provenance, report)
+                _migrate_definitions(session, concept, pack, provenance, report)
                 _migrate_rubric(session, concept, pack, report)
 
     _migrate_edges(session, subject, course, concepts_by_key, report)
@@ -235,6 +302,7 @@ def _migrate_source(
             subject_id=subject.id,
             title=pdf.stem.replace("_", " ").title(),
             license=licence_for(pdf, report),
+            license_notes=UNREVIEWED_NOTE,
             storage_path=str(pdf.relative_to(REPO_ROOT)).replace("\\", "/"),
             content_sha256=digest,
             status="draft",
@@ -244,7 +312,11 @@ def _migrate_source(
 
 
 def _migrate_segments(
-    session: Session, concept: Concept, pack: UnitPack, report: Report
+    session: Session,
+    concept: Concept,
+    pack: UnitPack,
+    provenance: Provenance,
+    report: Report,
 ) -> None:
     """segments[].content -> lecture_segment; segments[].practice ->
     practice_problem plus a separate model_answer artifact."""
@@ -256,6 +328,8 @@ def _migrate_segments(
                 title=segment.title,
                 body=segment.content,
                 generated_by="lecturer",
+                model=provenance.model,
+                generated_at=provenance.generated_at,
                 status="draft",
                 meta={"segment_index": index, "of": len(pack.segments)},
             )
@@ -271,6 +345,8 @@ def _migrate_segments(
                 title=f"Practice: {segment.title}",
                 body=segment.practice.question,
                 generated_by="lecturer",
+                model=provenance.model,
+                generated_at=provenance.generated_at,
                 status="draft",
                 meta={
                     "segment_index": index,
@@ -285,6 +361,8 @@ def _migrate_segments(
                 title=f"Model answer: {segment.title}",
                 body=segment.practice.model_answer,
                 generated_by="lecturer",
+                model=provenance.model,
+                generated_at=provenance.generated_at,
                 status="draft",
                 meta={"segment_index": index},
             )
@@ -293,7 +371,11 @@ def _migrate_segments(
 
 
 def _migrate_definitions(
-    session: Session, concept: Concept, pack: UnitPack, report: Report
+    session: Session,
+    concept: Concept,
+    pack: UnitPack,
+    provenance: Provenance,
+    report: Report,
 ) -> None:
     for definition in pack.key_definitions:
         session.add(
@@ -303,6 +385,8 @@ def _migrate_definitions(
                 title=definition.term,
                 body=definition.definition,
                 generated_by="lecturer",
+                model=provenance.model,
+                generated_at=provenance.generated_at,
                 status="draft",
                 meta={"kind": "definition", "term": definition.term},
             )

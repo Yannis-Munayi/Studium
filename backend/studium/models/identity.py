@@ -56,7 +56,7 @@ class User(Base):
     deleted_at: Mapped[dt.datetime | None] = nullable_ts()
 
     profile: Mapped[UserProfile | None] = relationship(
-        back_populates="user", uselist=False
+        back_populates="user", uselist=False, passive_deletes=True
     )
 
     __table_args__ = (

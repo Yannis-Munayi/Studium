@@ -78,7 +78,9 @@ class JournalEntry(Base):
     created_at: Mapped[dt.datetime] = created_at()
     updated_at: Mapped[dt.datetime] = updated_at()
 
-    events: Mapped[list[JournalEvent]] = relationship(back_populates="entry")
+    events: Mapped[list[JournalEvent]] = relationship(
+        back_populates="entry", passive_deletes=True
+    )
 
     __table_args__ = (
         ForeignKeyConstraint(

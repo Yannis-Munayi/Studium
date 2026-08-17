@@ -87,11 +87,17 @@ def build(session: Session, *, email: str = "learner@example.com") -> Fixture:
     session.add(user)
     session.flush()
 
+    # subjects.slug is globally unique, so two builds in one transaction -- the
+    # shape every "another learner cannot reach this" test needs -- collided on
+    # it. Sources and concepts are scoped by subject_id and need no such care.
+    local = email.split("@", 1)[0].lower()
+    subject_slug = f"{SUBJECT_SLUG}-{''.join(c if c.isalnum() else '-' for c in local)}"
+
     session.add(UserProfile(user_id=user.id, stated_goals="Understand normalisation"))
     session.add(UserBudgetCap(user_id=user.id))
 
     subject = Subject(
-        slug=SUBJECT_SLUG,
+        slug=subject_slug,
         title="Lambda Calculus",
         short_description="Syntax, reduction, and encodings.",
         status="active",

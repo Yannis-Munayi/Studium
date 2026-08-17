@@ -19,7 +19,14 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-config.set_main_option("sqlalchemy.url", settings.database_url)
+# alembic.ini leaves sqlalchemy.url empty so the application and the migrations
+# read one environment variable. A caller that sets the URL explicitly must
+# still win: the migration tests point Alembic at a scratch database they are
+# allowed to drop. Overriding unconditionally sent them to STUDIUM_DATABASE_URL
+# instead -- the developer's own database -- while the fixture dropped the
+# schema of a scratch database nothing then touched.
+if not config.get_main_option("sqlalchemy.url", None):
+    config.set_main_option("sqlalchemy.url", settings.database_url)
 
 target_metadata = Base.metadata
 
@@ -39,7 +46,7 @@ def include_object(obj, name, type_, reflected, compare_to) -> bool:
 
 def run_migrations_offline() -> None:
     context.configure(
-        url=settings.database_url,
+        url=config.get_main_option("sqlalchemy.url"),
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -56,6 +63,10 @@ def run_migrations_online() -> None:
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        # A misconfigured URL must fail rather than hang. Without this, pointing
+        # at a host that drops packets instead of refusing them blocks on the OS
+        # TCP timeout, which looks exactly like a stuck migration.
+        connect_args={"connect_timeout": 10},
     )
     with connectable.connect() as connection:
         context.configure(

@@ -124,16 +124,31 @@ def test_session_start_queries_are_fast(db: Session, seeded) -> None:
 def test_no_sequential_scan_on_indexed_paths(
     db: Session, seeded, label: str, sql: str, params: dict
 ) -> None:
-    """A seq scan here means an index named in §7 stopped being used."""
+    """Every §7 hot path must have an index capable of serving it.
+
+    Asserting the planner *chooses* an index is not a test of the schema: on a
+    fixture-sized table a sequential scan is genuinely the cheaper plan, and
+    Postgres is right to pick it. That made this test a statement about row
+    counts rather than about §7.
+
+    Disabling seqscan removes the size effect. Postgres still falls back to a
+    sequential scan when no index can serve the predicate -- it just prices it
+    absurdly -- so a Seq Scan under this setting means the index is missing or
+    unusable for these columns, which is the invariant §7 actually asserts.
+    """
     bound = dict(params)
     if "ls" in bound:
         bound["ls"] = seeded.enrollment.id
     if "cid" in bound:
         bound["cid"] = seeded.concept_id("syntax")
 
+    # LOCAL: scoped to the fixture's transaction, which is always rolled back.
+    db.execute(text("SET LOCAL enable_seqscan = off"))
     plan = db.execute(text(f"EXPLAIN (FORMAT JSON) {sql}"), bound).scalar_one()
     rendered = str(plan)
-    assert "Seq Scan" not in rendered, f"{label} fell back to a sequential scan:\n{rendered}"
+    assert "Seq Scan" not in rendered, (
+        f"{label} has no index able to serve it:\n{rendered}"
+    )
 
 
 def test_turn_index_allocation_is_gapless(db: Session, seeded) -> None:

@@ -82,7 +82,9 @@ class LearningSession(Base):
     created_at: Mapped[dt.datetime] = created_at()
     updated_at: Mapped[dt.datetime] = updated_at()
 
-    turns: Mapped[list[SessionTurn]] = relationship(back_populates="session")
+    turns: Mapped[list[SessionTurn]] = relationship(
+        back_populates="session", passive_deletes=True
+    )
 
     __table_args__ = (
         ForeignKeyConstraint(
@@ -150,7 +152,9 @@ class SessionTurn(Base):
     created_at: Mapped[dt.datetime] = created_at()
 
     session: Mapped[LearningSession] = relationship(back_populates="turns")
-    trace: Mapped[AgentTrace | None] = relationship(back_populates="turn", uselist=False)
+    trace: Mapped[AgentTrace | None] = relationship(
+        back_populates="turn", uselist=False, passive_deletes=True
+    )
 
     __table_args__ = (
         UniqueConstraint("session_id", "turn_index", name="uq_session_turns_index"),

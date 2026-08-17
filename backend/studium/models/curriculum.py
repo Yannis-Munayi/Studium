@@ -73,9 +73,11 @@ class Subject(Base):
     updated_at: Mapped[dt.datetime] = updated_at()
     deleted_at: Mapped[dt.datetime | None] = nullable_ts()
 
-    concepts: Mapped[list[Concept]] = relationship(back_populates="subject")
+    concepts: Mapped[list[Concept]] = relationship(
+        back_populates="subject", passive_deletes=True
+    )
     meta_row: Mapped[SubjectMetadata | None] = relationship(
-        back_populates="subject", uselist=False
+        back_populates="subject", uselist=False, passive_deletes=True
     )
 
     __table_args__ = (

@@ -82,7 +82,7 @@ class AssessmentAttempt(Base):
     updated_at: Mapped[dt.datetime] = updated_at()
 
     responses: Mapped[list[AssessmentResponse]] = relationship(
-        back_populates="attempt"
+        back_populates="attempt", passive_deletes=True
     )
 
     __table_args__ = (

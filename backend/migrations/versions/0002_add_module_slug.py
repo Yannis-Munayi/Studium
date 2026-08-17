@@ -42,6 +42,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_constraint("ck_concepts_module_slug_format", "concepts", type_="check")
+    # The bare name, matching create_check_constraint above. Alembic renders
+    # both through the metadata naming convention, so passing the already
+    # prefixed "ck_concepts_module_slug_format" here had the convention applied
+    # a second time and tried to drop
+    # "ck_concepts_ck_concepts_module_slug_format", which never existed.
+    op.drop_constraint("module_slug_format", "concepts", type_="check")
     op.drop_index("idx_concepts_module", table_name="concepts")
     op.drop_column("concepts", "module_slug")

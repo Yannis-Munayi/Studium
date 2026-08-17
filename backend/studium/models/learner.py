@@ -142,7 +142,9 @@ class ConceptMastery(Base):
     created_at: Mapped[dt.datetime] = created_at()
     updated_at: Mapped[dt.datetime] = updated_at()
 
-    events: Mapped[list[MasteryEvent]] = relationship(back_populates="mastery")
+    events: Mapped[list[MasteryEvent]] = relationship(
+        back_populates="mastery", passive_deletes=True
+    )
 
     __table_args__ = (
         UniqueConstraint(

@@ -201,6 +201,155 @@ by `metadata->>'segment_index'`. Promoting it would pre-empt the Content
 Ingestion spec, which owns the per-kind metadata shapes (§16). Left as JSONB,
 with a partial unique index so "the current segment" is at least single-valued.
 
+### V13 — erasure folds ledger rows into the shared aggregate
+
+**Spec:** §10 step 2 anonymises the learner's `cost_ledger` rows by nulling
+`user_id`. §6.12 states that "rows with `user_id IS NULL` represent post-erasure
+aggregates", and `uq_cost_ledger_day` is `UNIQUE ... NULLS NOT DISTINCT`.
+
+**Consequence:** those two rules disagree. `NULLS NOT DISTINCT` makes
+`(NULL, day, model)` a *single* row shared by every erased learner, so the plain
+anonymising UPDATE succeeds for the first learner erased on a given day and
+raises a unique violation for the second — aborting a statutory erasure
+request. The spec's own procedure cannot satisfy the spec's own constraint.
+
+**Built:** `erase_user` folds the learner's rows into the shared row --
+`INSERT ... ON CONFLICT (user_id, day, model) DO UPDATE` summing every token
+and cost column, then deleting the originals. `cost_usd` is generated and is
+never written. This makes the NULL-owner rows true aggregates, which is what
+§6.12 describes; §10 step 2 should say "merge into" rather than "anonymise".
+
+Found the first time the erasure suite ran against Postgres.
+
+---
+
+## Found on first execution against Postgres
+
+The online tier was written before any database existed to run it against.
+Everything below was found the day it first ran, and is fixed. None of these is
+a divergence — the spec was right and the implementation was wrong — but they
+are recorded because each one was invisible to the offline tier, which is worth
+knowing when judging what that tier does and does not prove.
+
+| What | Why it mattered |
+|---|---|
+| **ORM deletes defeated every `ON DELETE CASCADE`.** None of the twelve parent-side relationships set `passive_deletes=True`, so SQLAlchemy issued `UPDATE child SET fk = NULL` before deleting the parent. | Every one of the twelve children is `NOT NULL`, so ORM deletes failed outright. Had any been nullable it would instead have silently orphaned rows the database was told to cascade. `tests/schema/test_relationship_conventions.py` now enforces it offline. |
+| **Migration 0002's `downgrade()` never worked.** It passed the already-prefixed constraint name to `drop_constraint`, which applied the naming convention a second time. | Any rollback past 0002 failed on a constraint that never existed. §13 check 3 exists to catch exactly this and could not run until the harness was fixed. |
+| **Alembic ignored the configured URL.** `env.py` overrode `sqlalchemy.url` unconditionally from `settings.database_url`. | The migration tests dropped the schema of a scratch database and then migrated `STUDIUM_DATABASE_URL` instead. `test_downgrade_to_base_leaves_no_tables` would have dropped every table in a developer's real database. |
+| **`review_cards` had no retention policy.** | See B7 above. |
+| **`alembic.ini` used the pre-1.16 key.** `version_path_separator` governs only `version_locations`; `prepend_sys_path` fell back to splitting on spaces, commas and colons. | A Windows path splits at `C:`. Now `path_separator = os`. |
+
+Four test defects surfaced alongside them and are also fixed: an assertion that
+UUIDv7 is strictly ordered (RFC 9562 §6.2 makes the sub-millisecond counter
+optional, so only the 48-bit timestamp prefix is guaranteed); a head assertion
+frozen at `0003` for five migrations; `pg_dump`'s per-invocation
+`\restrict` nonce breaking the round-trip diff; and query-shape tests asserting
+the planner *chooses* an index, which on a fixture-sized table is a statement
+about row counts rather than about §7.
+
+### V14 — the budget check is not §8's query
+
+**Spec:** §8's "cost budget check", called before every billable operation:
+
+```sql
+FROM cost_ledger cl
+RIGHT JOIN user_budget_caps ubc ON ubc.user_id = :user_id
+WHERE cl.user_id = :user_id OR cl.user_id IS NULL
+```
+
+**Two defects, both found by measurement at university scale (500 learners).**
+
+*Quadratic.* The `ON` clause contains no join predicate — it relates `ubc` to a
+constant, not to `cl` — so the join degenerates into a cross product. Measured
+plan at 500 learners: a nested loop over 500 `user_budget_caps` rows against a
+materialised 182,500-row `cost_ledger`, **91,067,500 rows removed by the join
+filter**, to return one row. Because both tables grow with the user count, the
+cost is O(users²):
+
+| Tier | §8 query | `studium.cost.budget_status` |
+|---|---|---|
+| MVP (3) | 1.34 ms | — |
+| Classroom (30) | 3.30 ms | — |
+| University (500) | **3,515 ms** | **4.67 ms** |
+
+*Incorrect.* `OR cl.user_id IS NULL` pulls in the post-erasure aggregate rows
+that §6.12 reserves, and sums them into an individual learner's spend. Measured
+with one erased-learner row of $999 present: §8's query reports $1000.25 for a
+learner who spent $2.48. Every erasure permanently inflates every remaining
+learner's budget check, and enough of them block everyone.
+
+**Built:** `studium.cost.budget_status` uses two CTEs, each filtered on
+`user_id = :user_id`, and never reads NULL-owner rows. This divergence predates
+the measurement — the query was written correctly and the reasoning was not
+recorded, which is why it is only appearing here now.
+
+**For the spec:** replace the §8 query. The join needs a real predicate and the
+`OR ... IS NULL` has to go.
+
+---
+
+## Content and rights decisions
+
+Not spec divergences — decisions about what the migrated draft subject
+contains. Recorded here because there is no better home yet and the reasoning
+needs to outlive the conversation that produced it.
+
+### Clojure module removed from the MVP subject
+
+**Decided 16 August 2026.** The draft's third module was built on two
+in-copyright commercial textbooks — *Programming Clojure* (Pragmatic
+Bookshelf) and *The Joy of Clojure* (Manning) — recorded in
+`material/3_clojure/_citations.yaml`, both linking to publisher sales pages.
+
+The MVP rights posture is public-domain and open-licence material only. Nothing
+in that posture covers redistributing commercial textbooks, so the module is
+dropped rather than migrated into a draft that could never be published.
+Four concepts and four sources removed.
+
+Functional-programming coverage is deferred to a future subject with properly
+licensed material — the named candidates are *Clojure for the Brave and True*
+(CC-BY-NC) and *SICP* (CC-BY-SA). Lambda calculus was always the seed subject;
+Clojure was aspirational.
+
+Implemented as `EXCLUDED_MODULES` in `scripts/migrate_from_draft.py` rather than
+a one-off delete, so re-running the migration cannot resurrect it.
+
+### Licence guessing removed
+
+`licence_for()` inferred `public_domain` from filename substrings
+(`church`, `turing`, `1936`, `1937`). Run against the real corpus it matched
+`1_TuringMachines.pdf` and marked a named academic's lecture slides — Pramod
+Ganapathi, SUNY Stony Brook — as public domain.
+
+A false positive on licence asserts a redistribution right that does not exist,
+and does it silently. That is categorically worse than over-flagging for review,
+and it is the kind of error that survives until a rights holder notices. The
+heuristic is gone: every source now migrates as `permission_granted` with a
+`license_notes` value saying it is unreviewed. A human sets the licence or it
+stays unreviewed, and the subject stays `draft`.
+
+Two sources carry follow-up beyond the general review:
+
+| Source | Status |
+|---|---|
+| Ganapathi lecture slides (2 PDFs) | Unstated academic-use material; needs the author's confirmation before publish. |
+| Michaelson, *An Introduction to Functional Programming Through Lambda Calculus* (Dover, 2011) | Author hosts a PDF on his Heriot-Watt page, which usually indicates publisher-permitted redistribution but is not itself a licence. Needs the redistribution statement located, or a short email to the author. |
+
+### Still to author
+
+Two items the migration could not produce and deliberately flagged rather than
+guessed:
+
+- **Prerequisite edges.** Six edges were derived from linear unit order because
+  the draft has no dependency structure. The graph drives unlocking, so these
+  are wrong in ways that matter — Church encodings do not require Church-Rosser,
+  and the Y combinator does not require Church encodings. A real graph is being
+  authored separately and will be imported as its own migration step against the
+  draft subject.
+- **Rubric prompts.** Thirteen prompts were synthesised from criterion slugs.
+  Not urgent: no MVP interaction mode reaches summative assessment before
+  subsystem 6 exists.
+
 ---
 
 ## Still open in v1.1, unchanged from the v1.0 review
@@ -218,6 +367,8 @@ forward:
 - **§12** still names `.sql` migrations (`0002_module_slug.sql`,
   `0003_grants.sql`) while §13 mandates `NNNN_verb_object.py`.
 - **§10's retention table** still omits `retrieval_checks`, `session_summaries`,
-  `concept_mastery`, `learner_subjects`, `user_profiles` and `user_budget_caps`
-  while claiming to cover every table. `studium.jobs.retention.POLICIES` covers
-  them; a test asserts completeness (B7).
+  `concept_mastery`, `review_cards`, `learner_subjects`, `user_profiles` and
+  `user_budget_caps` while claiming to cover every table.
+  `studium.jobs.retention.POLICIES` covers them; a test asserts completeness
+  (B7). `review_cards` was the last one found — by the completeness test itself,
+  the first time it ran against a real database.
