@@ -118,7 +118,13 @@ jobs:
           EVENT: ${{ github.event_name }}
           REF: ${{ github.ref }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          INTEGRATION_BRANCHES: ${{ env.INTEGRATION_BRANCHES }}
+          # INTEGRATION_BRANCHES is deliberately NOT re-mapped here. It is
+          # already inherited from the workflow-level env block, and mapping it
+          # again as `${{ env.INTEGRATION_BRANCHES }}` is not merely redundant:
+          # if that expression ever rendered empty it would shadow the inherited
+          # value with "", the match loop would iterate zero times, and this
+          # step would quietly decide "not an integration branch" -- skipping
+          # Tier 2 on every branch while reporting success. Inherited only.
         run: |
           set -euo pipefail
           # §14: "Tier 2 runs on the main branch and on pull requests that
@@ -129,6 +135,21 @@ jobs:
           # on every push to whichever branch work actually integrates on, and
           # on PRs that touch schema-adjacent paths. INTEGRATION_BRANCHES is
           # that first set -- see the note at the top of this file.
+
+          # Print the inputs before deciding anything. A skipped Tier 2 is
+          # otherwise indistinguishable in the UI from a Tier 2 that was never
+          # meant to run, and working that out afterwards means guessing.
+          echo "event=$EVENT  ref=$REF"
+          echo "integration branches: '${INTEGRATION_BRANCHES:-<UNSET>}'"
+
+          if [ -z "${INTEGRATION_BRANCHES:-}" ]; then
+            echo "::error::INTEGRATION_BRANCHES is empty or unset, so no branch"\
+                 "can ever match and Tier 2 would be skipped everywhere."\
+                 "Failing loudly rather than reporting a green run that tested"\
+                 "half of what it claims."
+            exit 1
+          fi
+
           if [ "$EVENT" != "pull_request" ]; then
             branch="${REF#refs/heads/}"
             for candidate in $INTEGRATION_BRANCHES; do

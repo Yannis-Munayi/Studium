@@ -121,12 +121,27 @@ jobs:
           EVENT: ${{ github.event_name }}
           REF: ${{ github.ref }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          INTEGRATION_BRANCHES: ${{ env.INTEGRATION_BRANCHES }}
+          # Not re-mapped here on purpose -- see the matching note in
+          # data-layer.yml. It is inherited from the workflow-level env block;
+          # re-mapping it could shadow that value with an empty string and skip
+          # Tier 2 everywhere while still reporting success.
         run: |
           set -euo pipefail
           # Tier 2 runs on every push to an integration branch, and on PRs that
           # touch runtime- or schema-adjacent paths. See the note at the top of
           # this file for why the set is a list rather than the word "main".
+
+          echo "event=$EVENT  ref=$REF"
+          echo "integration branches: '${INTEGRATION_BRANCHES:-<UNSET>}'"
+
+          if [ -z "${INTEGRATION_BRANCHES:-}" ]; then
+            echo "::error::INTEGRATION_BRANCHES is empty or unset, so no branch"\
+                 "can ever match and Tier 2 would be skipped everywhere."\
+                 "Failing loudly rather than reporting a green run that tested"\
+                 "half of what it claims."
+            exit 1
+          fi
+
           if [ "$EVENT" != "pull_request" ]; then
             branch="${REF#refs/heads/}"
             for candidate in $INTEGRATION_BRANCHES; do
