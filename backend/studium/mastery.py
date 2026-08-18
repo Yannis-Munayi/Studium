@@ -19,7 +19,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from .models import ConceptMastery, MasteryEvent
@@ -210,6 +210,81 @@ def apply_evidence(
         row.first_reached_mastery_at = now
 
     return row
+
+
+def suggest_next_unlocked(
+    session: Session,
+    learner_subject_id: uuid.UUID,
+    *,
+    threshold: float = MASTERY_THRESHOLD,
+) -> uuid.UUID | None:
+    """The deterministic next concept: lowest depth, least mastery, unlocked.
+
+    Added for the Agent Runtime spec §9, which names this function as the
+    Curator's fallback when its own choice fails the unlock check twice. It is
+    the floor under a model that is having a bad day -- never the primary path,
+    and deliberately boring: no ranking, no pedagogy, just the shallowest thing
+    the learner is allowed to attempt and knows least well.
+
+    A concept is unlocked when every prerequisite's *decayed* mastery clears
+    the threshold. Decay is computed in SQL from ``p_known`` and
+    ``last_evidence_at`` rather than read from ``p_known_decayed``, matching
+    ``studium.graph.unlock_status`` -- gating on a column only as fresh as the
+    last decay job would let a learner through on evidence that has faded.
+
+    Returns ``None`` when every concept in the subject is already mastered.
+
+    See DIVERGENCES-RUNTIME.md (R8): the Agent Runtime spec names this function,
+    but subsystem 1 never shipped it, so it is new code added under the name the
+    spec uses. Purely additive -- no existing behaviour changes.
+    """
+    sql = text(
+        """
+        WITH enrollment AS (
+            SELECT subject_id FROM learner_subjects WHERE id = :learner_subject_id
+        ),
+        decayed AS (
+            SELECT cm.concept_id,
+                   cm.p_known
+                   * pow(0.5, EXTRACT(EPOCH FROM (NOW() - cm.last_evidence_at))
+                              / :half_life_seconds) AS p
+              FROM concept_mastery cm
+             WHERE cm.learner_subject_id = :learner_subject_id
+               AND cm.last_evidence_at IS NOT NULL
+        ),
+        candidates AS (
+            SELECT c.id, c.depth, c.position,
+                   COALESCE(d.p, 0.0) AS mastery,
+                   -- A prerequisite with no evidence row has mastery 0 and so
+                   -- fails the threshold, which is the correct reading of
+                   -- "not yet demonstrated".
+                   COUNT(e.id) FILTER (
+                       WHERE COALESCE(dp.p, 0.0) < :threshold
+                   ) AS unmet
+              FROM concepts c
+              JOIN enrollment en ON en.subject_id = c.subject_id
+              LEFT JOIN decayed d ON d.concept_id = c.id
+              LEFT JOIN concept_edges e
+                     ON e.to_concept_id = c.id AND e.kind = 'prerequisite'
+              LEFT JOIN decayed dp ON dp.concept_id = e.from_concept_id
+             GROUP BY c.id, c.depth, c.position, d.p
+        )
+        SELECT id
+          FROM candidates
+         WHERE unmet = 0
+           AND mastery < :threshold
+         ORDER BY depth, mastery, position
+         LIMIT 1
+        """
+    )
+    return session.execute(
+        sql,
+        {
+            "learner_subject_id": learner_subject_id,
+            "threshold": threshold,
+            "half_life_seconds": DECAY_HALF_LIFE.total_seconds(),
+        },
+    ).scalar_one_or_none()
 
 
 def _resolve_correct(kind: str, correct: bool | None) -> bool:

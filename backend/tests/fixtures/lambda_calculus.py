@@ -22,6 +22,7 @@ from studium.models import (
     Concept,
     ConceptEdge,
     ConceptMastery,
+    ConceptSource,
     LearnerSubject,
     RubricCriterion,
     Source,
@@ -59,6 +60,40 @@ EDGES: tuple[tuple[str, str, str], ...] = (
 )
 
 CHUNK_COUNT = 20
+
+
+def _chunk_text(index: int) -> str:
+    """Passage text at roughly the length a real ingested chunk has.
+
+    Length matters, not just presence. Prompt caching has a per-model minimum
+    prefix (1024 tokens on Opus 4.8, 4096 on Haiku 4.5) below which the API
+    accepts a ``cache_control`` marker and silently caches nothing. A fixture
+    whose passages were one sentence each produced prefixes under every
+    minimum, so a cache-behaviour test against it could only ever measure the
+    fixture. These sit at ~150-200 tokens apiece, which is the low end of a
+    real textbook chunk.
+    """
+    topic = (
+        "beta-reduction",
+        "alpha-equivalence",
+        "normal forms",
+        "the Church-Rosser property",
+    )[index % 4]
+    return (
+        f"Passage {index}. A lambda term is a variable, an abstraction, or an "
+        f"application. Writing (lambda x. M) N for the application of an "
+        f"abstraction to an argument, the fundamental computation rule states "
+        f"that this term reduces to M with every free occurrence of x replaced "
+        f"by N, written M[x := N]. This passage concerns {topic}. The "
+        f"substitution is capture-avoiding: if N contains a free variable that "
+        f"would fall under a binder in M, the bound variable in M is renamed "
+        f"first, which is precisely the role alpha-equivalence plays in making "
+        f"the rule well defined. A term containing no redex is in normal form. "
+        f"Not every term has one -- the term (lambda x. x x) (lambda x. x x) "
+        f"reduces to itself indefinitely -- but when a normal form exists the "
+        f"Church-Rosser theorem guarantees it is unique up to renaming, so the "
+        f"order in which redexes are contracted cannot change the result."
+    )
 
 
 @dataclass
@@ -151,15 +186,32 @@ def build(session: Session, *, email: str = "learner@example.com") -> Fixture:
         chunk = SourceChunk(
             source_id=source.id,
             chunk_index=index,
-            text_=f"Passage {index}: a lambda term is a variable, an abstraction, "
-            f"or an application.",
-            token_count=16,
+            text_=_chunk_text(index),
+            token_count=len(_chunk_text(index)) // 4,
             page_start=index // 4 + 1,
             page_end=index // 4 + 1,
             section_path=["Ch 1", f"1.{index // 4 + 1}"],
         )
         session.add(chunk)
         chunks.append(chunk)
+    session.flush()
+
+    # Map concepts to the chunks that ground them. Without these rows nothing
+    # can retrieve anything: `concept_sources.chunk_ids` is the curated pointer
+    # set the Agent Runtime's retriever reads (agent runtime §25), and an empty
+    # one leaves every generated lecture ungrounded. Added when subsystem 2's
+    # retrieval came up empty against this fixture.
+    for position, (slug, *_rest) in enumerate(CONCEPTS):
+        start = (position * 3) % CHUNK_COUNT
+        assigned = [chunks[(start + offset) % CHUNK_COUNT].id for offset in range(4)]
+        session.add(
+            ConceptSource(
+                concept_id=concepts[slug].id,
+                source_id=source.id,
+                chunk_ids=assigned,
+                role="primary_exposition",
+            )
+        )
     session.flush()
 
     session.add(

@@ -8,6 +8,13 @@ into the spec and is no longer a divergence at all.
 Finding IDs (A1–C14) refer to `01-data-layer-review.md`; V-numbers are new
 divergences introduced against v1.1.
 
+**Companion document.** `DIVERGENCES-RUNTIME.md`, in this directory, does the
+same job for the Agent Runtime specification v1.0 and numbers its entries
+R1–R12. The two are kept apart because they answer to different specs and will
+be ratified on different cycles, but they are read together: R4 is a divergence
+from the *runtime* spec that can only be resolved by a change to the *data
+layer* schema, and it is the item that gives the deferral below its trigger.
+
 ---
 
 ## Ratified — no longer divergences
@@ -50,6 +57,29 @@ The reasoning is severity, not convenience:
 
 Three items, two self-announcing, is not worth a revision and a re-ratification
 cycle. Revisit when the next revision happens anyway.
+
+### Update, 17 August 2026: the trigger arrived
+
+The prediction above held. Subsystem 2's build surfaced a schema need on its
+first pass, and it is the silent kind rather than the self-announcing kind:
+
+- **`session_turns` cannot express §22's trace hierarchy.** The runtime spec
+  shows four generations grouped under one `turn_index`, and §3 requires an
+  `agent_traces` row per model call — but `agent_traces.session_turn_id` is
+  `NOT NULL` **and** `UNIQUE`, so one turn can carry at most one trace. Both
+  requirements cannot hold as written. The runtime resolves it by writing one
+  turn row per model call and carrying the learner-facing grouping as an
+  `exchange_index` key inside the turn's `input` JSONB. That works and loses
+  nothing, but it puts a load-bearing grouping in an unindexed JSONB key rather
+  than a column. See `DIVERGENCES-RUNTIME.md` (R4).
+
+The v1.2 revision this section defers to therefore now has a concrete trigger,
+and `exchange_index` joins the previously-pending set rather than replacing it.
+The choice to be ratified is which of two shapes: promote `exchange_index` to a
+column on `session_turns`, or relax `agent_traces.session_turn_id` to a plain
+foreign key and let several traces share a turn. The first keeps one trace per
+turn and makes the grouping queryable; the second matches §22's diagram
+literally. The runtime works either way and does not depend on the outcome.
 
 ---
 

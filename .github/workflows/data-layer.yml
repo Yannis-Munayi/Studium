@@ -30,6 +30,22 @@ defaults:
 env:
   PYTHON_VERSION: "3.12"
 
+  # Branches that get the full Tier 2 run on every push, space separated.
+  #
+  # §14 says "the main branch". That is a stand-in for "wherever work actually
+  # integrates", and here it does not integrate on main: pushing to main is not
+  # available, so `yannis` is the trunk in practice and every commit lands
+  # there. Gating Tier 2 on a branch nothing reaches would mean the online tier
+  # never ran at all -- the failure the tiering exists to prevent.
+  #
+  # The consequence is deliberate: every push to an integration branch pays for
+  # a Postgres spin-up, including doc-only pushes. At this project's commit rate
+  # that is a couple of CI minutes against the alternative of a schema
+  # regression reaching the next subsystem unnoticed. If the cost ever bites,
+  # narrow it by adding the same path filter the pull-request branch below uses
+  # rather than by removing a branch from this list.
+  INTEGRATION_BRANCHES: "main yannis"
+
   # Ruff is scoped to subsystem 1 deliberately, not for convenience.
   #
   # The working tree also contains subsystem 2 material -- studium/llm,
@@ -102,19 +118,28 @@ jobs:
           EVENT: ${{ github.event_name }}
           REF: ${{ github.ref }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          INTEGRATION_BRANCHES: ${{ env.INTEGRATION_BRANCHES }}
         run: |
           set -euo pipefail
           # §14: "Tier 2 runs on the main branch and on pull requests that
           # touch schema, migrations, or the studium.privacy and studium.cost
           # modules."
+          #
+          # Read as intent rather than as the literal word "main": Tier 2 runs
+          # on every push to whichever branch work actually integrates on, and
+          # on PRs that touch schema-adjacent paths. INTEGRATION_BRANCHES is
+          # that first set -- see the note at the top of this file.
           if [ "$EVENT" != "pull_request" ]; then
-            if [ "$REF" = "refs/heads/main" ]; then
-              echo "run_online=true" >> "$GITHUB_OUTPUT"
-              echo "main branch: Tier 2 runs"
-            else
-              echo "run_online=false" >> "$GITHUB_OUTPUT"
-              echo "branch push: Tier 1 only"
-            fi
+            branch="${REF#refs/heads/}"
+            for candidate in $INTEGRATION_BRANCHES; do
+              if [ "$branch" = "$candidate" ]; then
+                echo "run_online=true" >> "$GITHUB_OUTPUT"
+                echo "$branch is an integration branch: Tier 2 runs"
+                exit 0
+              fi
+            done
+            echo "run_online=false" >> "$GITHUB_OUTPUT"
+            echo "$branch is not an integration branch: Tier 1 only"
             exit 0
           fi
 

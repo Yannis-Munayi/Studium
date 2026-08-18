@@ -1,0 +1,229 @@
+# Agent runtime CI (agent runtime spec v1.0 §23 "Testing strategy").
+#
+#   Tier 1 (offline)  gates every push. No database, no API key, no network:
+#                     prefix byte-stability, schema round-trips, the state
+#                     machine sweep, cost arithmetic, primitive dispatch,
+#                     budget thresholds, and the HTTP surface.
+#   Tier 2 (online)   runs on main and on pull requests touching the runtime.
+#                     Needs Postgres. The database-backed half of §23 -- effect
+#                     application, trace writing, context assembly -- runs here.
+#   Tier 3 (paid)     never runs in CI. See the note at the bottom.
+#
+# This is a separate workflow from data-layer.yml rather than a widening of it.
+# That file argues it "certifies subsystem 1, and it should certify exactly
+# that and nothing more", and the argument holds in both directions: a single
+# green check covering both subsystems cannot tell you which one is healthy.
+# Two workflows, two claims, each falsifiable on its own.
+
+name: agent runtime
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  group: agent-runtime-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: backend
+
+env:
+  PYTHON_VERSION: "3.12"
+
+  # Branches that get the full Tier 2 run on every push, space separated.
+  # Kept identical to data-layer.yml deliberately: two workflows disagreeing
+  # about which branch is the trunk would be a confusing way to lose coverage.
+  #
+  # Pushing to main is not available on this repository, so `yannis` is the
+  # trunk in practice and every commit lands there. Gating Tier 2 on a branch
+  # nothing reaches would mean the online tier never ran at all -- the failure
+  # the tiering exists to prevent.
+  INTEGRATION_BRANCHES: "main yannis"
+
+  # Subsystem 2's own surface. studium/review is here rather than in the data
+  # layer's list because studium/review/selection.py implements §14's card
+  # selection and imports the runtime's prompt module.
+  RUFF_PATHS: >-
+    studium/agents studium/llm studium/orchestration studium/session
+    studium/retrieval studium/copy studium/api studium/review
+    studium/asyncdb.py
+    tests/agents tests/llm tests/orchestration tests/session tests/api
+    tests/online tests/fixtures/runtime.py
+
+  TEST_PATHS: >-
+    tests/agents tests/llm tests/orchestration tests/session tests/api
+    tests/online
+
+jobs:
+  offline:
+    name: Tier 1 - offline
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install
+        run: python -m pip install -e ".[dev]"
+
+      - name: Ruff
+        run: python -m ruff check ${{ env.RUFF_PATHS }}
+
+      - name: Tier 1
+        # Deselecting both markers must still select a non-empty set. A tier
+        # that silently ran zero tests would report green while checking
+        # nothing, which is the failure mode a marker-based split invites.
+        run: |
+          set -euo pipefail
+          collected=$(python -m pytest ${{ env.TEST_PATHS }} \
+            -m "not postgres and not anthropic" --collect-only -q \
+            | tail -1)
+          echo "collected: $collected"
+          case "$collected" in
+            "no tests ran"*|"0 tests"*)
+              echo "::error::Tier 1 selected no tests"; exit 1 ;;
+          esac
+          python -m pytest ${{ env.TEST_PATHS }} -q \
+            -m "not postgres and not anthropic"
+
+      - name: Import surface
+        # A circular import between studium.session and studium.agents is easy
+        # to reintroduce and does not show up in a unit test that imports only
+        # one side of it.
+        run: |
+          python -c "
+          import studium.agents, studium.llm, studium.orchestration
+          import studium.session, studium.session.lifecycle, studium.retrieval
+          from studium.api.app import app
+          print('import surface OK')
+          "
+
+  changes:
+    name: Does Tier 2 apply?
+    runs-on: ubuntu-24.04
+    outputs:
+      run_online: ${{ steps.decide.outputs.run_online }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: decide
+        name: Decide
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          INTEGRATION_BRANCHES: ${{ env.INTEGRATION_BRANCHES }}
+        run: |
+          set -euo pipefail
+          # Tier 2 runs on every push to an integration branch, and on PRs that
+          # touch runtime- or schema-adjacent paths. See the note at the top of
+          # this file for why the set is a list rather than the word "main".
+          if [ "$EVENT" != "pull_request" ]; then
+            branch="${REF#refs/heads/}"
+            for candidate in $INTEGRATION_BRANCHES; do
+              if [ "$branch" = "$candidate" ]; then
+                echo "run_online=true" >> "$GITHUB_OUTPUT"
+                echo "$branch is an integration branch: Tier 2 runs"
+                exit 0
+              fi
+            done
+            echo "run_online=false" >> "$GITHUB_OUTPUT"
+            echo "$branch is not an integration branch: Tier 1 only"
+            exit 0
+          fi
+
+          changed=$(git diff --name-only "$BASE_SHA" HEAD)
+          echo "changed files:"; echo "$changed" | sed 's/^/  /'
+
+          # The runtime writes to the schema through orchestration/effects.py,
+          # so a change to either side can break the pairing.
+          if echo "$changed" | grep -qE '^backend/(studium/(agents|llm|orchestration|session|retrieval|review)/|studium/asyncdb\.py|studium/models/|migrations/)'; then
+            echo "run_online=true" >> "$GITHUB_OUTPUT"
+            echo "touches the runtime or the schema it writes to: Tier 2 runs"
+          else
+            echo "run_online=false" >> "$GITHUB_OUTPUT"
+            echo "no runtime-adjacent changes: Tier 1 only"
+          fi
+
+  online:
+    name: Tier 2 - online
+    needs: [offline, changes]
+    if: needs.changes.outputs.run_online == 'true'
+    runs-on: ubuntu-24.04
+    env:
+      STUDIUM_TEST_DATABASE_URL: postgresql+psycopg://studium:studium@localhost:5433/studium_test
+      STUDIUM_DATABASE_URL: postgresql+psycopg://studium:studium@localhost:5433/studium_test
+      # Belt and braces: the paid tier is marker-deselected below as well.
+      # Without a key the fixture skips regardless, but an env var that is
+      # explicitly unset says so to a reader of the log.
+      STUDIUM_RUN_PAID_TESTS: "0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install
+        run: python -m pip install -e ".[dev]"
+
+      - name: Start Postgres
+        run: docker compose -f docker-compose.test.yml up -d test-db
+
+      - name: Wait for health
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 60); do
+            if docker compose -f docker-compose.test.yml exec -T test-db \
+                 pg_isready -U studium -d studium_test >/dev/null 2>&1; then
+              echo "ready"; exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Postgres did not become ready"
+          docker compose -f docker-compose.test.yml logs test-db
+          exit 1
+
+      - name: Apply schema
+        run: python -m alembic upgrade head
+
+      - name: Tier 2
+        # postgres-marked only. The anthropic-marked tests are excluded here
+        # rather than left to skip, so the log distinguishes "not applicable"
+        # from "quietly did nothing".
+        run: python -m pytest ${{ env.TEST_PATHS }} -q -m "postgres and not anthropic"
+
+      - name: Postgres logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.test.yml logs test-db
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v
+
+# Tier 3 -- the anthropic-marked tests -- is deliberately not a job here.
+#
+# Those three checks (end-to-end smoke, grading integrity, cache hit rate) make
+# billable model calls, and their assertions are about *model behaviour*, which
+# is not a property a commit changes. Wiring them to every push would spend
+# money on every branch and produce a flaky gate that blocks merges for reasons
+# unrelated to the diff.
+#
+# Run them deliberately instead:
+#
+#   STUDIUM_RUN_PAID_TESTS=1 python -m pytest tests/online -m anthropic
+#
+# They belong in the prompt-regression flow the Evaluation spec (subsystem 6)
+# will formalise -- run on prompt edits and reviewed by a human, not gated on
+# a commit hash.
