@@ -82,9 +82,9 @@ class Reviewer(Agent):
         ctx = input.session_context
         passages = ctx.passages
         if not passages and ctx.focus_concept_id is not None:
-            passages = await self.retriever.retrieve_passages(
-                ctx.focus_concept_id, k=DEFAULT_K
-            )
+            passages = (
+                await self.retriever.retrieve_passages(ctx.focus_concept_id, k=DEFAULT_K)
+            ).passages
         return build_prefix(
             "reviewer",
             ctx.model_copy(update={"passages": passages}),

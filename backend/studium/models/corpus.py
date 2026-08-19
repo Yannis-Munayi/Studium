@@ -13,6 +13,7 @@ from typing import Any
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
+    Computed,
     ForeignKey,
     Index,
     Integer,
@@ -20,13 +21,14 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TSVECTOR
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import (
     Base,
     artifact_status,
+    chunk_kind,
     created_at,
     license_kind,
     nullable_ts,
@@ -124,6 +126,23 @@ class SourceChunk(Base):
     section_path: Mapped[list[Any]] = mapped_column(
         JSONB, nullable=False, server_default=text("'[]'::jsonb")
     )
+    #: Retrieval §5 addition 1. Assigned by the chunking algorithm; 'body' is
+    #: the default so rows written before migration 0009 migrate cleanly.
+    chunk_type: Mapped[str] = mapped_column(
+        chunk_kind, nullable=False, server_default=text("'body'")
+    )
+    #: Retrieval §5 addition 2. The keyword half of hybrid search (§9).
+    #: STORED rather than VIRTUAL: it is read on every keyword query and
+    #: written once per chunk, and a GIN index needs it materialised anyway.
+    #:
+    #: The 'english' configuration is fixed for MVP. A second language means
+    #: this column becomes per-language -- the config is baked into the
+    #: generation expression, so it cannot be varied per row.
+    tsvector_text: Mapped[Any] = mapped_column(
+        TSVECTOR,
+        Computed("to_tsvector('english', text)", persisted=True),
+        nullable=True,
+    )
     created_at: Mapped[dt.datetime] = created_at()
 
     source: Mapped[Source] = relationship(back_populates="chunks")
@@ -134,6 +153,15 @@ class SourceChunk(Base):
     __table_args__ = (
         UniqueConstraint("source_id", "chunk_index", name="uq_source_chunks_index"),
         Index("idx_source_chunks_source", "source_id"),
+        # Retrieval §5. Ordered (source_id, chunk_type) because the selective
+        # column is the source: chunk_type has seven values and one of them
+        # covers most rows, so leading on it would not narrow anything.
+        Index("idx_source_chunks_type", "source_id", "chunk_type"),
+        Index(
+            "idx_source_chunks_tsvector",
+            "tsvector_text",
+            postgresql_using="gin",
+        ),
     )
 
 

@@ -19,7 +19,7 @@ from collections.abc import AsyncIterator, Sequence
 from typing import Any
 
 from studium.llm.prompts import build_prefix, fmt_float, sorted_passages
-from studium.retrieval import DEFAULT_K, PassageRetriever, grounding_is_thin
+from studium.retrieval import DEFAULT_K, PassageRetriever, RetrievalResult
 from studium.session.context import Passage, SessionContext
 
 from .base import Agent, AgentInput, AgentOutput, StreamChunk, ToolEffect
@@ -95,7 +95,8 @@ class Lecturer(Agent):
 
         ctx = input.session_context
         stance = str(input.payload.get("stance", "default"))
-        passages = await self._ground(ctx, stance)
+        grounding = await self._ground(ctx, stance)
+        passages = grounding.passages
 
         prefix = build_prefix(
             "lecturer",
@@ -112,7 +113,7 @@ class Lecturer(Agent):
 
         # Effects are emitted after the stream closes so a cancelled stream
         # never persists a half-written segment as a reusable artifact.
-        for effect in self._segment_effects(input, body, passages, stance, stream):
+        for effect in self._segment_effects(input, body, grounding, stance, stream):
             yield StreamChunk.effect(effect)
 
         yield StreamChunk.ended(
@@ -123,9 +124,20 @@ class Lecturer(Agent):
 
     # --- grounding ---------------------------------------------------------
 
-    async def _ground(self, ctx: SessionContext, stance: str) -> list[Passage]:
+    async def _ground(self, ctx: SessionContext, stance: str) -> RetrievalResult:
+        """Retrieve grounding for this segment (retrieval §6).
+
+        The whole :class:`RetrievalResult` is kept, not just its passages: the
+        thin-grounding verdict and the reason string travel with it, and §13
+        makes the *caller* responsible for responding to that verdict. Reducing
+        to a list here would throw away the reviewer-facing reason and leave
+        this agent to re-derive a weaker version of it from a count.
+        """
         if ctx.focus_concept_id is None:
-            return []
+            return RetrievalResult(
+                thin_grounding=True,
+                thin_grounding_reason="No focus concept; nothing to ground against.",
+            )
         return await self.retriever.retrieve_passages(
             ctx.focus_concept_id, stance=stance, k=DEFAULT_K
         )
@@ -134,12 +146,13 @@ class Lecturer(Agent):
         self,
         input: AgentInput,
         body: str,
-        passages: list[Passage],
+        grounding: RetrievalResult,
         stance: str,
         stream: Any,
     ) -> list[ToolEffect]:
         """Persist the segment and flag anything a reviewer should see (§10)."""
         ctx = input.session_context
+        passages = grounding.passages
         effects: list[ToolEffect] = []
 
         if not body.strip():
@@ -162,6 +175,12 @@ class Lecturer(Agent):
                     "metadata": {
                         "segment_index": int(input.payload.get("segment_index", 0)),
                         "of": int(input.payload.get("segment_total", 0)),
+                        # Retrieval §13: the artifact-side half of the thin
+                        # grounding record. The queue row says a turn was
+                        # under-grounded; this says which artifact came out of
+                        # it, which is the join a reviewer actually needs.
+                        "thin_grounding": grounding.thin_grounding,
+                        "retrieval_degraded": grounding.degraded,
                     },
                     "citations": [
                         {"source_chunk_id": str(p.chunk_id)} for p in cited
@@ -170,7 +189,11 @@ class Lecturer(Agent):
             )
         )
 
-        if grounding_is_thin(passages):
+        # Retrieval §13 detects; the caller flags. The row is written here, in
+        # the turn's effect batch, because at retrieval time no turn existed to
+        # attach it to -- and content_review_queue rejects a row with neither a
+        # turn nor an artifact. See DIVERGENCES-RETRIEVAL (S2).
+        if grounding.thin_grounding:
             effects.append(
                 ToolEffect(
                     kind="flag_for_review",
@@ -179,9 +202,8 @@ class Lecturer(Agent):
                         "severity": 2,
                         "session_turn_id": str(stream.turn_id) if stream.turn_id else None,
                         "reason": (
-                            f"Thin grounding: retrieval returned {len(passages)} "
-                            f"passage(s) for concept {ctx.focus_concept_id}; §10 "
-                            f"expects at least 3."
+                            grounding.thin_grounding_reason
+                            or f"Thin grounding for concept {ctx.focus_concept_id}."
                         ),
                     },
                 )
@@ -243,7 +265,7 @@ Task: {task}"""
         """A comprehension check after every second segment (§10)."""
         ctx = input.session_context
         stance = str(input.payload.get("stance", "default"))
-        passages = await self._ground(ctx, stance)
+        passages = (await self._ground(ctx, stance)).passages
         prefix = build_prefix(
             "lecturer", _with_passages(ctx, passages), model=self._model(input), stance=stance
         )

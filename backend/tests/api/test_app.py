@@ -158,3 +158,86 @@ class TestValidation:
 
     def test_start_session_requires_a_user(self, client):
         assert client.post("/api/session", json={"mode": "tutorial"}).status_code == 422
+
+    def test_a_malformed_artifact_id_is_rejected(self, client):
+        assert client.get("/api/artifacts/not-a-uuid/citations").status_code == 422
+
+
+class TestCitationResolution:
+    """Retrieval §12's read-time endpoint, at the HTTP boundary.
+
+    The resolution logic itself is Tier 2's (it needs real rows). What these
+    check is the contract subsystem 4 will build against: the response shape,
+    and that a missing artifact is distinguishable from an ungrounded one.
+    """
+
+    def test_it_returns_the_documented_envelope(self, client, monkeypatch):
+        import studium.api.app as app_module
+        from studium.retrieval.citations import ResolvedCitation
+
+        chunk_id = uuid.uuid4()
+        source_id = uuid.uuid4()
+        artifact_id = uuid.uuid4()
+
+        resolved = [
+            ResolvedCitation(
+                marker="P1",
+                chunk_id=chunk_id,
+                source_id=source_id,
+                source_title="An Introduction to Functional Programming",
+                source_authors=["Michaelson, Greg"],
+                page_start=42,
+                page_end=42,
+                section_path=["Chapter 3", "3.2 Beta Reduction"],
+                excerpt="The reduction of a beta-redex proceeds by...",
+                excerpt_start_offset=0,
+                excerpt_end_offset=44,
+            )
+        ]
+
+        calls = {"n": 0}
+
+        async def fake_read_db(fn):
+            calls["n"] += 1
+            return 1 if calls["n"] == 1 else resolved
+
+        monkeypatch.setattr("studium.asyncdb.read_db", fake_read_db)
+        monkeypatch.setattr(app_module, "_ARTIFACT_EXISTS", "unused")
+
+        body = client.get(f"/api/artifacts/{artifact_id}/citations").json()
+
+        assert body["artifact_id"] == str(artifact_id)
+        [citation] = body["citations"]
+        assert citation["marker"] == "P1"
+        assert citation["chunk_id"] == str(chunk_id)
+        assert citation["source_title"]
+        assert citation["source_authors"] == ["Michaelson, Greg"]
+        assert citation["page_start"] == 42
+        assert citation["section_path"] == ["Chapter 3", "3.2 Beta Reduction"]
+        assert citation["excerpt"]
+        assert citation["source_deleted"] is False
+
+    def test_a_missing_artifact_is_a_404(self, client, monkeypatch):
+        """Distinguishable from an artifact that simply cites nothing, which
+        returns 200 and an empty list -- an ungrounded artifact is a real
+        thing the client has to render."""
+        async def fake_read_db(fn):
+            return None
+
+        monkeypatch.setattr("studium.asyncdb.read_db", fake_read_db)
+
+        response = client.get(f"/api/artifacts/{uuid.uuid4()}/citations")
+        assert response.status_code == 404
+
+    def test_an_artifact_with_no_citations_is_200_and_empty(self, client, monkeypatch):
+        calls = {"n": 0}
+
+        async def fake_read_db(fn):
+            calls["n"] += 1
+            return 1 if calls["n"] == 1 else []
+
+        monkeypatch.setattr("studium.asyncdb.read_db", fake_read_db)
+
+        response = client.get(f"/api/artifacts/{uuid.uuid4()}/citations")
+        assert response.status_code == 200
+        assert response.json()["citations"] == []

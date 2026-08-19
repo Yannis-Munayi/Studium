@@ -64,6 +64,34 @@ and no auth sessions, so it cannot be logged into.
 A data migration, separate from 0007 per §13 so it can be re-run without
 re-applying the DDL.
 
+## For the retrieval subsystem (retrieval spec v1.0 §5)
+
+### 0009_add_chunk_type_and_tsvector
+
+The two additive columns the retrieval spec asks be folded into the data
+layer's v1.2 batch. Both are prerequisites for hybrid search, so they are here
+rather than waiting on the rest of that batch.
+
+`source_chunks.chunk_type` (new `chunk_kind` enum, `DEFAULT 'body'`) says what
+kind of text a chunk is. It is what lets retrieval exclude headings and
+bibliography entries from results — structurally present, useless as evidence —
+and what keeps code and math blocks atomic through chunking.
+
+`source_chunks.tsvector_text` is a `GENERATED ALWAYS AS ... STORED` column with
+a GIN index: the keyword half of hybrid search. Generated rather than
+trigger-maintained so it cannot drift from `text`; stored because Postgres
+cannot index a virtual generated column, and because it is read on every
+keyword query and written once per chunk.
+
+The `english` configuration is baked into the generation expression — the
+two-argument `to_tsvector` is immutable, which is what makes it legal in a
+generated column at all, while the one-argument form reads a GUC and is only
+stable. A second corpus language therefore means a per-language column, not a
+parameter.
+
+Additive. The generated column backfills in one pass, which is seconds at MVP
+corpus size.
+
 ## Initial build (against spec v1.0)
 
 ### 0001_initial_schema

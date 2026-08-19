@@ -18,8 +18,8 @@ export STUDIUM_MIGRATION_TEST_DATABASE_URL ?= $(MIGRATE_URL)
 
 .DEFAULT_GOAL := help
 .PHONY: help install db-up db-down db-wait test-db-up test-db-down migrate \
-        downgrade revision seed db-reset test test-offline test-db lint fmt \
-        check migrate-draft
+        downgrade revision seed db-reset test test-offline test-db test-paid \
+        lint fmt check migrate-draft
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -83,8 +83,13 @@ test-offline: ## Schema, enum, migration-hygiene and pure-logic tests (no DB)
 test-db: ## Integrity, query-shape and migration-sequence tests (needs a DB)
 	$(PY) -m pytest tests -q -m postgres
 
-test: ## Everything
-	$(PY) -m pytest tests -q
+test: ## Everything except the paid tiers
+	$(PY) -m pytest tests -q -m "not anthropic"
+
+test-paid: ## Tier 3: real Voyage calls. Costs money; needs VOYAGE_API_KEY.
+	@test -n "$(VOYAGE_API_KEY)" || (echo "VOYAGE_API_KEY is not set" && exit 1)
+	STUDIUM_RUN_PAID_TESTS=1 $(PY) -m pytest tests/online/test_retrieval_paid.py \
+		-q -m anthropic
 
 lint: ## Ruff
 	ruff check studium tests scripts

@@ -261,3 +261,178 @@ def build(session: Session, *, email: str = "learner@example.com") -> Fixture:
     session.flush()
 
     return fixture
+
+
+# --- retrieval corpus extension (retrieval spec §17 "Fixture data") ---------
+
+#: title, authors, year, license, the section the chunks sit under, and the
+#: ``concept_sources.role`` this source is curated under. §17 asks for four
+#: sources; the first is the Church paper :func:`build` already creates, and
+#: these are the other three.
+EXTRA_SOURCES: tuple[tuple[str, list[str], int, str, str, str], ...] = (
+    (
+        "An Introduction to Functional Programming Through Lambda Calculus",
+        ["Michaelson, Greg"],
+        1989,
+        "fair_use",
+        "Chapter 3: Beta Reduction",
+        "primary_exposition",
+    ),
+    (
+        "Lecture Notes on the Lambda Calculus",
+        ["Selinger, Peter"],
+        2013,
+        "cc_by",
+        "Chapter 2: The Untyped Lambda Calculus",
+        "canonical_definition",
+    ),
+    (
+        "Problem Sheet: Reduction Strategies",
+        ["Course Staff"],
+        2026,
+        "user_uploaded",
+        "Exercises",
+        "exercise",
+    ),
+)
+
+#: Chunks per extra source, per §17.
+EXTRA_CHUNK_COUNT = 20
+
+
+def extend_corpus(session: Session, fixture: Fixture) -> dict[str, list[SourceChunk]]:
+    """Add §17's three further sources with realistic chunk structure.
+
+    Opt-in rather than folded into :func:`build`. Every existing test asserts
+    against a one-source, twenty-chunk corpus -- ``len(ctx.subject_concepts)``,
+    passage counts, prefix token budgets -- and silently tripling the corpus
+    under them would change what those tests measure without changing what they
+    claim. Retrieval's Tier 2 tests call this; nothing else does.
+
+    What it adds that ``build`` does not:
+
+    * **Varied ``chunk_type``.** Headings, a code block, a math block, captions,
+      and exercise chunks, so §9's exclusion filter and §6's atomic-sibling
+      expansion have something real to act on. A corpus of undifferentiated
+      body chunks cannot exercise either.
+    * **Varied ``concept_sources.role``.** §11's stance weighting is a no-op
+      when every curated row carries the same role.
+    * **Real page ranges and section paths**, so a resolved citation carries the
+      provenance §12's hover card renders.
+    """
+    added: dict[str, list[SourceChunk]] = {}
+
+    for position, (title, authors, year, licence, section, role) in enumerate(
+        EXTRA_SOURCES
+    ):
+        digest = hashlib.sha256(f"{title}{position}".encode()).hexdigest()
+        source = Source(
+            subject_id=fixture.subject.id,
+            title=title,
+            authors=authors,
+            publication_year=year,
+            license=licence,
+            storage_path=f"material/2_lambda_calculus/extra_{position}.pdf",
+            content_sha256=digest,
+            status="active",
+        )
+        session.add(source)
+        session.flush()
+
+        chunks = _extra_chunks(session, source, section)
+        added[title] = chunks
+        session.flush()
+
+        # Curate a slice onto a concept, under this source's role. The slice
+        # skips headings and references: a curator pointing a concept at a
+        # bibliography entry would be an authoring error, not a fixture state
+        # worth reproducing.
+        citable = [c for c in chunks if c.chunk_type not in ("heading", "reference")]
+        slug = ("beta-reduction", "church-rosser", "y-combinator")[position]
+        session.add(
+            ConceptSource(
+                concept_id=fixture.concept_id(slug),
+                source_id=source.id,
+                chunk_ids=[c.id for c in citable[:4]],
+                role=role,
+            )
+        )
+
+    session.flush()
+    return added
+
+
+def _extra_chunks(session: Session, source: Source, section: str) -> list[SourceChunk]:
+    """Twenty chunks spanning every ``chunk_kind`` the retrieval spec defines."""
+    chunks: list[SourceChunk] = []
+
+    for index in range(EXTRA_CHUNK_COUNT):
+        kind, text = _extra_chunk_content(index, section)
+        page = index // 3 + 1
+        chunk = SourceChunk(
+            source_id=source.id,
+            chunk_index=index,
+            text_=text,
+            token_count=max(1, len(text) // 4),
+            page_start=page,
+            page_end=page,
+            section_path=[section, f"{section} — part {index // 5 + 1}"],
+            chunk_type=kind,
+        )
+        session.add(chunk)
+        chunks.append(chunk)
+
+    return chunks
+
+
+def _extra_chunk_content(index: int, section: str) -> tuple[str, str]:
+    """One chunk's ``(chunk_type, text)``.
+
+    The distribution is deliberately body-dominant with a handful of each other
+    kind, which is what a real textbook chapter looks like -- and what makes
+    "headings are excluded from results" a meaningful assertion rather than one
+    that passes because there was nothing to exclude.
+    """
+    if index == 0:
+        return "heading", f"{section}"
+    if index == 7:
+        return (
+            "code",
+            "def beta_reduce(term):\n"
+            "    if is_redex(term):\n"
+            "        return substitute(term.body, term.var, term.arg)\n"
+            "    return term",
+        )
+    if index == 8:
+        # Adjacent to the code chunk above: a two-row atomic block, which is
+        # what §6's k+3 sibling allowance exists for.
+        return (
+            "code",
+            "def substitute(body, var, arg):\n"
+            "    return body.replace(var, arg, avoid_capture=True)",
+        )
+    if index == 11:
+        return "math", r"\begin{equation}(\lambda x. M)\,N \to_\beta M[x := N]\end{equation}"
+    if index == 12:
+        return "figure_caption", "Figure 3.1: The one-step beta reduction relation."
+    if index == 18:
+        return "exercise", (
+            "Exercise 3.4. Reduce (lambda x. x x)(lambda y. y) to normal form, "
+            "showing each step and naming the redex contracted."
+        )
+    if index == 19:
+        return "reference", (
+            "Barendregt, H. P. (1984). The Lambda Calculus: Its Syntax and "
+            "Semantics. North-Holland."
+        )
+
+    return "body", (
+        f"Section {index}. Beta reduction is the computational rule of the "
+        f"lambda calculus: the redex (lambda x. M) N contracts to M with every "
+        f"free occurrence of x replaced by N, written M[x := N]. Substitution "
+        f"must avoid capturing the free variables of N, which is why "
+        f"alpha-equivalence is introduced before reduction rather than after. "
+        f"A term with no remaining redex is in normal form, and the "
+        f"Church-Rosser theorem guarantees that if a normal form exists it is "
+        f"unique up to alpha-equivalence."
+    )

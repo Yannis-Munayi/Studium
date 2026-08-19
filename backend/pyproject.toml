@@ -30,6 +30,11 @@ dev = [
 # hook is a no-op. Observability must not be able to fail a learner's turn.
 observability = ["langfuse>=2.0"]
 serve = ["uvicorn[standard]>=0.29"]
+# Retrieval (subsystem 3 §4). Optional at runtime: without it, chunking falls
+# back to a character-ratio token estimate and the retriever runs on stub
+# embeddings, which is enough for Tier 1 and Tier 2 but not for a deployment.
+# studium.retrieval.default_retriever warns when it takes that path.
+retrieval = ["voyageai>=0.2"]
 
 # Flat layout: without this, setuptools sees studium/, tests/, scripts/ and
 # migrations/ as candidate packages and refuses to guess. Only studium ships.
@@ -42,7 +47,11 @@ pythonpath = ["."]
 asyncio_mode = "auto"
 markers = [
     "postgres: requires a live Postgres 16 with the schema applied",
-    "anthropic: requires a live Anthropic API key and spends real money",
+    # Also carries retrieval's paid tier (Voyage). One paid marker rather than
+    # two: every CI workflow already deselects this one, and a second would
+    # need each of them updated to stay excluded -- the one that got missed
+    # would start billing.
+    "anthropic: requires a live model/embedding API key and spends real money",
 ]
 filterwarnings = ["error::DeprecationWarning"]
 

@@ -46,9 +46,15 @@ class Passage(BaseModel):
     """One retrieved source passage.
 
     The contract subsystem 3 fills in (§25): retrieval returns ranked passages
-    carrying at minimum a ``chunk_id`` and ``text``. Everything else here is
-    what citation resolution needs and is optional so a thinner retrieval
-    implementation still satisfies the contract.
+    carrying at minimum a ``chunk_id`` and ``text``. Everything else is what
+    citation resolution and the frontend's hover card need, and is optional so
+    a thinner retrieval implementation still satisfies the contract.
+
+    Retrieval spec §6 fixes the full shape. The fields below ``page_end`` were
+    added by subsystem 3; they carry provenance ("there is no valid retrieval
+    result that lacks provenance") and the audit trail for *why* a passage was
+    returned. They stay optional because ``StaticRetriever`` and the fixture
+    retrievers construct passages without them.
     """
 
     chunk_id: uuid.UUID
@@ -57,7 +63,19 @@ class Passage(BaseModel):
     source_title: str | None = None
     page_start: int | None = None
     page_end: int | None = None
-    score: float | None = None
+
+    #: Retrieval §6. Ordered breadcrumbs into the source's structure.
+    section_path: list[str] = Field(default_factory=list)
+    source_authors: list[str] = Field(default_factory=list)
+    #: A ``chunk_kind`` enum value (retrieval §5).
+    chunk_type: str = "body"
+    #: Normalised 0.0-1.0, from the reranker. Feeds §13's score threshold.
+    relevance_score: float | None = None
+    #: 'curated' | 'vector' | 'keyword' | 'expanded' (retrieval §10). What makes
+    #: a retrieval decision auditable at read time: a reviewer seeing a claim
+    #: grounded in an 'expanded' passage knows to check whether the expansion
+    #: was appropriate.
+    retrieval_reason: str = "curated"
 
 
 class SessionContext(BaseModel):

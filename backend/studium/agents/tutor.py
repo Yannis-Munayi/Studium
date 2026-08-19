@@ -161,9 +161,14 @@ class Tutor(Agent):
         ctx = input.session_context
         passages: list[Passage] = ctx.passages
         if not passages and ctx.focus_concept_id is not None:
-            passages = await self.retriever.retrieve_passages(
-                ctx.focus_concept_id, k=DEFAULT_K
-            )
+            # The Tutor answers from a stance the learner is already in, so it
+            # takes retrieval's default ranking rather than asking for one.
+            # A thin result is not flagged here: the Lecturer's segment on this
+            # concept already flagged it, and one under-curated concept should
+            # produce one queue item, not one per tutorial turn.
+            passages = (
+                await self.retriever.retrieve_passages(ctx.focus_concept_id, k=DEFAULT_K)
+            ).passages
         return build_prefix(
             "tutor",
             ctx.model_copy(update={"passages": passages}),

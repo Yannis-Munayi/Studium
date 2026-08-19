@@ -153,6 +153,21 @@ concept_source_role = _enum(
     "alternative_stance",
 )
 
+#: Retrieval spec §5 addition 1. What kind of text a chunk is, which decides
+#: how retrieval treats it: headings never return as standalone evidence, code
+#: and math blocks stay atomic through chunking, exercises are preferred for
+#: lab problems.
+chunk_kind = _enum(
+    "chunk_kind",
+    "body",
+    "heading",
+    "code",
+    "math",
+    "figure_caption",
+    "exercise",
+    "reference",
+)
+
 artifact_kind = _enum(
     "artifact_kind",
     "lecture_segment",
@@ -239,6 +254,7 @@ ALL_ENUMS: tuple[PgEnum, ...] = (
     license_kind,
     concept_edge_kind,
     concept_source_role,
+    chunk_kind,
     artifact_kind,
     artifact_stance,
     mastery_event_kind,

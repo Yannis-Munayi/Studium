@@ -23,6 +23,7 @@ from typing import Any
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from sqlalchemy import text as sql
 
 from studium.agents.orchestrator import LearnerInput, Orchestrator
 from studium.agents.schemas import PRIMITIVE_NAMES
@@ -90,6 +91,10 @@ class OrchestratorRegistry:
 
 
 registry = OrchestratorRegistry()
+
+#: Distinguishes "this artifact has no citations" from "this artifact does not
+#: exist" -- the citations query alone returns an empty list for both.
+_ARTIFACT_EXISTS = sql("SELECT 1 FROM content_artifacts WHERE id = :artifact_id")
 
 
 def get_registry() -> OrchestratorRegistry:
@@ -286,6 +291,43 @@ async def session_state(
             }
             for r in orchestrator.machine.log
         ],
+    }
+
+
+@app.get("/api/artifacts/{artifact_id}/citations")
+async def artifact_citations(artifact_id: uuid.UUID) -> dict[str, Any]:
+    """Resolve an artifact's ``[Pn]`` markers to passages (retrieval §12).
+
+    One call per artifact, not per marker: a lecture segment carries six or
+    more citations and the client renders them together, so per-marker requests
+    would be six round trips to draw one paragraph.
+
+    The numbering is reconstructed from the stored ``content_citations`` rows in
+    ``chunk_id`` order -- the same order retrieval numbered them in. Nothing
+    stores the passage number itself, because chunk ids are stable and passage
+    numbers are per-call ephemera.
+
+    An artifact with no citations returns an empty list rather than a 404: an
+    ungrounded artifact is a real thing the client must render (as prose with
+    no markers), and a 404 would make it indistinguishable from a bad id.
+    """
+    from studium.asyncdb import read_db
+    from studium.retrieval import resolve_artifact_citations
+
+    exists = await read_db(
+        lambda s: s.execute(
+            _ARTIFACT_EXISTS, {"artifact_id": artifact_id}
+        ).scalar()
+    )
+    if not exists:
+        raise HTTPException(status_code=404, detail=f"no artifact {artifact_id}")
+
+    citations = await read_db(
+        lambda s: resolve_artifact_citations(s, artifact_id)
+    )
+    return {
+        "artifact_id": str(artifact_id),
+        "citations": [c.as_json() for c in citations],
     }
 
 

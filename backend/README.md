@@ -1,16 +1,15 @@
-# Studium — data layer
+# Studium — backend
 
-Subsystem 1 of 7, implementing `spec/Sub System 1 - Data Layer/01-data-layer-v1.1.md`.
-Persistence only:
-34 tables, the migrations that build them, the deterministic rules the schema's
-invariants depend on, and the lifecycle jobs.
+Subsystems 1 through 3 of 7:
 
-Agent behaviour, retrieval ranking, prompt content, and the API surface belong
-to later subsystems and are deliberately absent.
+| # | Subsystem | Spec | Divergences |
+|---|---|---|---|
+| 1 | Data layer | `spec/Sub System 1 - Data Layer/01-data-layer-v1.1.md` | [DIVERGENCES.md](DIVERGENCES.md) |
+| 2 | Agent runtime | `spec/Sub System 2 - Agent Runtime/02-agent-runtime-v1.0.md` | [DIVERGENCES-RUNTIME.md](DIVERGENCES-RUNTIME.md) |
+| 3 | Retrieval | `spec/Sub System 3 - Retrieval/03-retrieval-v1.0.md` | [DIVERGENCES-RETRIEVAL.md](DIVERGENCES-RETRIEVAL.md) |
 
-The spec was ratified as v1.1 on 15 August 2026, folding in the corrections
-from the v1.0 build. Where the implementation still differs — and why — is in
-[DIVERGENCES.md](DIVERGENCES.md).
+The frontend (subsystem 4), ingestion (5), the evaluation harness (6), and
+infrastructure (7) are deliberately absent.
 
 ## Layout
 
@@ -27,9 +26,27 @@ studium/
   review/fsrs.py   spaced-repetition scheduling
   jobs/            retention, cost roll-up, decay refresh
   db.py            engine, isolation levels, serialization retry
-migrations/        Alembic: 0001-0003 the v1.0 build, 0004-0008 the v1.1 changes
+
+  agents/          the seven agents; one module each
+  llm/             the Anthropic wrapper, routing, prompts, retries, traces
+  orchestration/   state machine, effects, streaming, handoff
+  session/         lifecycle, context assembly, budget gate
+  api/app.py       SSE turn endpoint, interrupt channel, citation resolution
+
+  retrieval/       subsystem 3
+    types.py           the retrieve_passages contract and its thresholds
+    chunking.py        the chunking algorithm (pure, deterministic)
+    providers.py       embeddings, reranking, backoff, circuit breakers
+    search.py          hybrid SQL, RRF fusion, the concept-graph constraint
+    service.py         the pipeline, end to end
+    citations.py       [Pn] markers in, provenance out
+    cache.py           five-minute results, warm starts
+    embedding_worker.py  the background embedder
+
+migrations/        Alembic: 0001-0003 v1.0, 0004-0008 v1.1, 0009 retrieval
 scripts/           seed.py, migrate_from_draft.py
-tests/             schema, integrity, queries, migrations, unit, fixtures
+tests/             schema, integrity, queries, migrations, unit, fixtures,
+                   agents, llm, orchestration, session, api, retrieval, online
 ```
 
 ## Getting started
@@ -62,7 +79,21 @@ asks CI to enforce, minus the two that genuinely need a live server.
 The database tier covers the integrity properties (cascades, `RESTRICT` on
 citations, the composite owner keys, cycle detection), the erasure procedure,
 and query shapes — including an assertion that no session-start query falls
-back to a sequential scan.
+back to a sequential scan. Retrieval's share of it covers HNSW ordering, the
+generated tsvector column, the concept-graph filter, and citation resolution.
+
+A third tier spends real money and never runs in CI:
+
+```sh
+pip install -e ".[dev,retrieval]"
+VOYAGE_API_KEY=... STUDIUM_RUN_PAID_TESTS=1 \
+  python -m pytest tests/online/test_retrieval_paid.py -m anthropic
+```
+
+Worth re-running on any embedding or reranker change: one of those tests checks
+that hand-labelled relevant passages score above the 0.5 floor thin-grounding
+detection assumes. If they stop doing so, every well-grounded retrieval gets
+flagged and the review queue floods.
 
 ## Conventions worth knowing before you edit
 
@@ -86,6 +117,21 @@ back to a sequential scan.
   category and generates the total. If you add a sixth thing that spends money,
   it needs a column, a roll-up statement, and an attribution rule — otherwise
   budget enforcement silently under-reports.
+- **Passage numbering is a contract, not a formatting choice.** Retrieval
+  returns passages sorted by `chunk_id`, and citation resolution renumbers
+  stored citations the same way. Both sides must agree or every `[Pn]` in every
+  stored artifact resolves to the wrong chunk — silently, because the lists are
+  the same length. It is also what keeps the Lecturer's cached prefix
+  byte-stable, so breaking it costs money before it costs correctness.
+- **Retrieval degrades, it does not raise.** `retrieve_passages` returns an
+  empty flagged result rather than an exception, on every path. A concept whose
+  curation is thin is a normal state of an evolving corpus; the caller's job is
+  to say less, not to fail the learner's turn.
+- **`voyageai` is optional and must stay optional.** `studium.retrieval` is
+  imported by `studium.agents`, so a hard dependency would break the whole
+  runtime for anyone without a Voyage key. Without it, chunking uses a
+  character-ratio token estimate and the retriever runs on stub embeddings —
+  fine for tests, not for a deployment, which is why `default_retriever` warns.
 
 ## Carrying the draft forward
 

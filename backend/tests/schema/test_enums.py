@@ -61,6 +61,16 @@ SNAPSHOT: dict[str, tuple[str, ...]] = {
         "historical",
         "alternative_stance",
     ),
+    # Added by migration 0009 for the retrieval subsystem (retrieval §5).
+    "chunk_kind": (
+        "body",
+        "heading",
+        "code",
+        "math",
+        "figure_caption",
+        "exercise",
+        "reference",
+    ),
     "artifact_kind": (
         "lecture_segment",
         "tutorial_seed",

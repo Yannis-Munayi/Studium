@@ -65,6 +65,14 @@ MESSAGES: dict[str, str] = {
         "There's no concept in focus for this session yet. Pick a topic to start "
         "on and we'll go from there."
     ),
+    # Retrieval §16 asks for this copy to live here alongside the rest. It is
+    # what a learner sees when the source lookup itself is unavailable -- the
+    # tutor can still talk, but it should not claim anything it cannot cite.
+    "retrieval_unavailable": (
+        "I can't look up the source material right now, so I'll keep this "
+        "general rather than cite something I can't check. Try again shortly "
+        "for the grounded version."
+    ),
 }
 
 DEFAULT = MESSAGES["unknown"]

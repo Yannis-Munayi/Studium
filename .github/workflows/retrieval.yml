@@ -1,0 +1,271 @@
+# Retrieval CI (retrieval spec v1.0 §17 "Testing strategy").
+#
+#   Tier 1 (offline)  gates every push. No database, no API key, no network:
+#                     chunking determinism and correctness, RRF arithmetic,
+#                     the citation-numbering contract, marker parsing, stance
+#                     mapping, thin-grounding thresholds, cache behaviour, and
+#                     the circuit breaker.
+#   Tier 2 (online)   runs on the integration branches and on pull requests
+#                     touching retrieval or the schema it reads. Needs Postgres
+#                     with pgvector: HNSW ordering, the generated tsvector
+#                     column, the concept-graph filter, the curated boost, and
+#                     citation resolution.
+#   Tier 3 (paid)     never runs here. See the note at the bottom.
+#
+# A separate workflow from data-layer.yml and agent-runtime.yml, per the same
+# argument both of those make: one green check spanning several subsystems
+# cannot tell you which of them is healthy. Three workflows, three claims, each
+# falsifiable on its own.
+
+name: retrieval
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  group: retrieval-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: backend
+
+env:
+  PYTHON_VERSION: "3.12"
+
+  # Kept identical to the other two workflows deliberately: three workflows
+  # disagreeing about which branch is the trunk would be a confusing way to
+  # lose coverage. Pushing to main is not available on this repository, so
+  # `yannis` is the trunk in practice.
+  INTEGRATION_BRANCHES: "main yannis"
+
+  RUFF_PATHS: >-
+    studium/retrieval
+    tests/retrieval
+    tests/online/test_retrieval_db.py
+    tests/online/test_retrieval_paid.py
+
+  TEST_PATHS: >-
+    tests/retrieval
+    tests/online/test_retrieval_db.py
+
+jobs:
+  offline:
+    name: Tier 1 - offline
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install
+        # Deliberately without the 'retrieval' extra. Tier 1 must pass with no
+        # provider SDK installed, because that is the path a contributor
+        # without a Voyage key takes -- if the offline tier quietly depended on
+        # voyageai being present, it would break for exactly the people least
+        # able to diagnose it.
+        run: python -m pip install -e ".[dev]"
+
+      - name: Ruff
+        run: python -m ruff check ${{ env.RUFF_PATHS }}
+
+      - name: Tier 1
+        # Deselecting both markers must still select a non-empty set. A tier
+        # that silently ran zero tests would report green while checking
+        # nothing, which is the failure mode a marker-based split invites.
+        run: |
+          set -euo pipefail
+          collected=$(python -m pytest ${{ env.TEST_PATHS }} \
+            -m "not postgres and not anthropic" --collect-only -q \
+            | tail -1)
+          echo "collected: $collected"
+          case "$collected" in
+            "no tests ran"*|"0 tests"*)
+              echo "::error::Tier 1 selected no tests"; exit 1 ;;
+          esac
+          python -m pytest ${{ env.TEST_PATHS }} -q \
+            -m "not postgres and not anthropic"
+
+      - name: Chunking determinism is not vacuous
+        # §17 asks for a coverage guard on this specific test: a determinism
+        # assertion that runs against zero fixtures passes and proves nothing.
+        run: |
+          set -euo pipefail
+          python -m pytest tests/retrieval/test_chunking.py::TestDeterminism \
+            -q --collect-only | tail -1
+          python -m pytest tests/retrieval/test_chunking.py::TestDeterminism -q
+
+      - name: Import surface
+        # studium.retrieval must import with no provider SDK present. It is
+        # imported by studium.agents, so a hard dependency here would break the
+        # whole runtime rather than just retrieval.
+        run: |
+          python -c "
+          import studium.retrieval
+          from studium.retrieval import HybridRetriever, chunk_blocks
+          from studium.api.app import app
+          assert HybridRetriever() is not None
+          print('import surface OK without voyageai')
+          "
+
+  changes:
+    name: Does Tier 2 apply?
+    runs-on: ubuntu-24.04
+    outputs:
+      run_online: ${{ steps.decide.outputs.run_online }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: decide
+        name: Decide
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          # Not re-mapped here on purpose -- see the matching note in
+          # agent-runtime.yml. It is inherited from the workflow-level env
+          # block; re-mapping could shadow it with an empty string and skip
+          # Tier 2 everywhere while still reporting success.
+        run: |
+          set -euo pipefail
+
+          echo "event=$EVENT  ref=$REF"
+          echo "integration branches: '${INTEGRATION_BRANCHES:-<UNSET>}'"
+
+          if [ -z "${INTEGRATION_BRANCHES:-}" ]; then
+            echo "::error::INTEGRATION_BRANCHES is empty or unset, so no branch"\
+                 "can ever match and Tier 2 would be skipped everywhere."\
+                 "Failing loudly rather than reporting a green run that tested"\
+                 "half of what it claims."
+            exit 1
+          fi
+
+          if [ "$EVENT" != "pull_request" ]; then
+            branch="${REF#refs/heads/}"
+            for candidate in $INTEGRATION_BRANCHES; do
+              if [ "$branch" = "$candidate" ]; then
+                echo "run_online=true" >> "$GITHUB_OUTPUT"
+                echo "$branch is an integration branch: Tier 2 runs"
+                exit 0
+              fi
+            done
+            echo "run_online=false" >> "$GITHUB_OUTPUT"
+            echo "$branch is not an integration branch: Tier 1 only"
+            exit 0
+          fi
+
+          changed=$(git diff --name-only "$BASE_SHA" HEAD)
+          echo "changed files:"; echo "$changed" | sed 's/^/  /'
+
+          # Retrieval reads source_chunks, concept_sources and concept_edges,
+          # so a migration or model change can break it without any file under
+          # studium/retrieval being touched.
+          if echo "$changed" | grep -qE '^backend/(studium/retrieval/|studium/models/|studium/api/app\.py|migrations/|tests/fixtures/lambda_calculus\.py)'; then
+            echo "run_online=true" >> "$GITHUB_OUTPUT"
+            echo "touches retrieval or the schema it reads: Tier 2 runs"
+          else
+            echo "run_online=false" >> "$GITHUB_OUTPUT"
+            echo "no retrieval-adjacent changes: Tier 1 only"
+          fi
+
+  online:
+    name: Tier 2 - online
+    needs: [offline, changes]
+    if: needs.changes.outputs.run_online == 'true'
+    runs-on: ubuntu-24.04
+    env:
+      STUDIUM_TEST_DATABASE_URL: postgresql+psycopg://studium:studium@localhost:5433/studium_test
+      STUDIUM_DATABASE_URL: postgresql+psycopg://studium:studium@localhost:5433/studium_test
+      # Belt and braces: the paid tier is marker-deselected below as well.
+      # Without a key the fixture skips regardless, but an env var that is
+      # explicitly unset says so to a reader of the log.
+      STUDIUM_RUN_PAID_TESTS: "0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install
+        run: python -m pip install -e ".[dev]"
+
+      - name: Start Postgres
+        run: docker compose -f docker-compose.test.yml up -d test-db
+
+      - name: Wait for health
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 60); do
+            if docker compose -f docker-compose.test.yml exec -T test-db \
+                 pg_isready -U studium -d studium_test >/dev/null 2>&1; then
+              echo "ready"; exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Postgres did not become ready"
+          docker compose -f docker-compose.test.yml logs test-db
+          exit 1
+
+      - name: Apply schema
+        run: python -m alembic upgrade head
+
+      - name: pgvector and the generated column are actually present
+        # Retrieval's whole online tier assumes both. Failing here names the
+        # cause directly instead of surfacing it as a dozen confusing query
+        # errors thirty seconds later.
+        run: |
+          set -euo pipefail
+          docker compose -f docker-compose.test.yml exec -T test-db \
+            psql -U studium -d studium_test -v ON_ERROR_STOP=1 -c \
+            "SELECT 1 FROM pg_extension WHERE extname = 'vector'" | grep -q 1
+          docker compose -f docker-compose.test.yml exec -T test-db \
+            psql -U studium -d studium_test -v ON_ERROR_STOP=1 -c \
+            "SELECT attgenerated FROM pg_attribute
+              WHERE attrelid = 'source_chunks'::regclass
+                AND attname = 'tsvector_text'" | grep -q s
+          echo "pgvector present, tsvector_text is STORED generated"
+
+      - name: Tier 2
+        # postgres-marked only. The paid tests are excluded here rather than
+        # left to skip, so the log distinguishes "not applicable" from
+        # "quietly did nothing".
+        run: python -m pytest ${{ env.TEST_PATHS }} -q -m "postgres and not anthropic"
+
+      - name: Postgres logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.test.yml logs test-db
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v
+
+# Tier 3 -- the anthropic-marked tests in tests/online/test_retrieval_paid.py --
+# is deliberately not a job here.
+#
+# Those checks make billable Voyage calls, and their assertions are about
+# *provider behaviour*: whether rerank-2 surfaces hand-labelled relevant
+# passages, whether its scores land on the 0-1 scale §13's threshold assumes.
+# That is not a property a commit changes. Wiring them to every push would
+# spend money on every branch and produce a flaky gate blocking merges for
+# reasons unrelated to the diff.
+#
+# Run them deliberately instead:
+#
+#   pip install -e ".[dev,retrieval]"
+#   VOYAGE_API_KEY=... STUDIUM_RUN_PAID_TESTS=1 \
+#     python -m pytest tests/online/test_retrieval_paid.py -m anthropic
+#
+# The reranker calibration check is the one to re-run on any provider or model
+# change: if genuinely relevant passages start scoring below 0.5, §13's score
+# threshold flags every well-grounded retrieval and the review queue floods.

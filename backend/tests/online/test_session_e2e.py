@@ -197,13 +197,19 @@ class TestEffectApplication:
 
 class TestRetrieval:
     async def test_curated_pointer_retriever_returns_grounding(self, seeded):
-        """The subsystem-3 stand-in must actually ground a lecture."""
+        """The zero-dependency retriever must actually ground a lecture.
+
+        It now returns a ``RetrievalResult`` rather than a bare list: subsystem
+        3 needed the thin-grounding verdict to reach the caller, and §13 makes
+        responding to that verdict the caller's job. See
+        DIVERGENCES-RETRIEVAL (S4)."""
         fixture = seeded["fixture"]
 
-        passages = await CuratedPointerRetriever().retrieve_passages(
+        result = await CuratedPointerRetriever().retrieve_passages(
             fixture.concept_id("beta-reduction"), k=6
         )
-        for passage in passages:
+        assert result.passages
+        for passage in result.passages:
             assert passage.text
             assert passage.chunk_id
 
