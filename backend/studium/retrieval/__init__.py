@@ -84,6 +84,7 @@ from .types import (
     sort_for_citation,
     stance_roles,
 )
+from .warming import WARM_INTERVAL_SECONDS, CacheWarmer, WarmReport
 
 log = logging.getLogger(__name__)
 
@@ -240,11 +241,13 @@ __all__ = [
     "MAX_K",
     "STANCE_BOOST",
     "STANCE_ROLES",
+    "WARM_INTERVAL_SECONDS",
     "THIN_GROUNDING_MIN_AVG_SCORE",
     "THIN_GROUNDING_MIN_COUNT",
     "THIN_GROUNDING_THRESHOLD",
     "Block",
     "CacheKey",
+    "CacheWarmer",
     "Chunk",
     "CuratedPointerRetriever",
     "EmbeddingProvider",
@@ -261,6 +264,7 @@ __all__ = [
     "RetrievalResult",
     "StaticRetriever",
     "StubEmbeddings",
+    "WarmReport",
     "chunk_blocks",
     "chunk_text",
     "classify_block",

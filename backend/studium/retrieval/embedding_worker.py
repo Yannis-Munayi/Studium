@@ -30,6 +30,7 @@ from sqlalchemy.orm import Session
 from studium.asyncdb import run_db
 
 from .providers import MAX_BATCH, EmbeddingProvider, EmbeddingUnavailable, StubEmbeddings
+from .search import _as_vector
 
 log = logging.getLogger(__name__)
 
@@ -231,23 +232,27 @@ def _write_vectors(
             f"{len(vectors)} vectors for {len(chunks)} chunks; refusing to misalign"
         )
 
+    # executemany over a parameter list rather than one unnest of text
+    # literals. The text form makes Postgres parse a ~15 KB string per vector,
+    # which is the same cost that dominated query latency before the binary
+    # adapter went in (see studium.db._register_vector_type) -- and a batch is
+    # 128 of them, so it is 128x the parse.
     session.execute(
         sql(
             """
             INSERT INTO source_chunk_embeddings (chunk_id, embedding, model_version)
-            SELECT ref.chunk_id, CAST(ref.embedding AS vector), :model_version
-              FROM unnest(
-                       CAST(:chunk_ids AS uuid[]),
-                       CAST(:embeddings AS text[])
-                   ) AS ref(chunk_id, embedding)
+            VALUES (:chunk_id, CAST(:embedding AS vector), :model_version)
             ON CONFLICT (chunk_id) DO NOTHING
             """
         ),
-        {
-            "chunk_ids": [str(c.chunk_id) for c in chunks],
-            "embeddings": ["[" + ",".join(f"{v:.7g}" for v in vec) + "]" for vec in vectors],
-            "model_version": model_version,
-        },
+        [
+            {
+                "chunk_id": chunk.chunk_id,
+                "embedding": _as_vector(vector),
+                "model_version": model_version,
+            }
+            for chunk, vector in zip(chunks, vectors, strict=True)
+        ],
     )
     return len(chunks)
 

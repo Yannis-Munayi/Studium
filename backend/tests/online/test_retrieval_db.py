@@ -43,9 +43,28 @@ def corpus(db):
 
 
 def embed_everything(db, fixture) -> None:
-    """Give every chunk a stub embedding, so vector search has an index to use."""
+    """Give this fixture's chunks a stub embedding, so vector search has an
+    index to use.
+
+    Scoped to the fixture's subject. An unscoped ``SELECT ... FROM
+    source_chunks`` embeds whatever else happens to be in the database one row
+    at a time, which is fine against a fresh CI database and pathological
+    against a developer's, where ``scripts/measure_retrieval.py`` may have left
+    a synthetic corpus of 10,000 chunks behind. That is how this test came to
+    look like a hang.
+    """
     stub = StubEmbeddings()
-    rows = db.execute(sql("SELECT id, text FROM source_chunks")).all()
+    rows = db.execute(
+        sql(
+            """
+            SELECT sc.id, sc.text
+              FROM source_chunks sc
+              JOIN sources s ON s.id = sc.source_id
+             WHERE s.subject_id = :subject_id
+            """
+        ),
+        {"subject_id": fixture.subject.id},
+    ).all()
     for row in rows:
         vector = stub.vector(row.text)
         db.execute(
@@ -189,6 +208,42 @@ class TestConceptGraph:
         assert before > 0
 
 
+def _hnsw_diagnostics(db) -> str:
+    """Context for a vector search that unexpectedly returned nothing.
+
+    These two tests failed once, in one full-suite run, immediately after a
+    bulk delete of 150,000 synthetic rows left by
+    ``scripts/measure_retrieval.py``. They have not reproduced in ten
+    subsequent full-suite runs, and the leading hypothesis -- an HNSW graph
+    still full of dead tuples, so an ``ef_search``-bounded scan spends its
+    candidates on invisible rows -- did not reproduce at a scale that fits in a
+    test.
+
+    So the cause is unestablished. Rather than assert something weaker or
+    pretend it is fixed, the assertions below report the index's state when
+    they fail, so a recurrence arrives with its own evidence instead of a bare
+    ``assert []``.
+    """
+    stats = db.execute(
+        sql(
+            """
+            SELECT n_live_tup, n_dead_tup, last_vacuum, last_autovacuum
+              FROM pg_stat_user_tables
+             WHERE relname = 'source_chunk_embeddings'
+            """
+        )
+    ).first()
+    embedded = db.execute(sql("SELECT count(*) FROM source_chunk_embeddings")).scalar()
+    return (
+        f"vector search returned nothing. embeddings visible={embedded}, "
+        f"live={getattr(stats, 'n_live_tup', '?')}, "
+        f"dead={getattr(stats, 'n_dead_tup', '?')}, "
+        f"last_vacuum={getattr(stats, 'last_vacuum', '?')}, "
+        f"last_autovacuum={getattr(stats, 'last_autovacuum', '?')}. "
+        f"If dead is large relative to live, see the note on _hnsw_diagnostics."
+    )
+
+
 class TestVectorSearch:
     """§17: "Insert chunks with known-distance embeddings, verify vector search
     returns them in expected order"."""
@@ -206,7 +261,7 @@ class TestVectorSearch:
             db, query_embedding=query_vector, subject_id=fixture.subject.id
         )
 
-        assert results
+        assert results, _hnsw_diagnostics(db)
         assert results[0].chunk_id == target.id, "an exact match must rank first"
 
     def test_vector_search_excludes_non_evidence_chunk_types(self, corpus):
@@ -218,7 +273,7 @@ class TestVectorSearch:
             query_embedding=StubEmbeddings().vector("beta reduction"),
             subject_id=fixture.subject.id,
         )
-        assert results
+        assert results, _hnsw_diagnostics(db)
         assert all(r.chunk_type not in ("heading", "reference") for r in results)
 
     def test_a_chunk_with_no_embedding_is_simply_invisible(self, corpus):
@@ -230,6 +285,42 @@ class TestVectorSearch:
             subject_id=fixture.subject.id,
         )
         assert results == []
+
+
+class TestVectorTransport:
+    """The query vector must travel as binary, not as a text literal.
+
+    Not a micro-optimisation: sending the 1024-dimension vector as a ~15KB
+    string cost 43ms per search in Postgres-side parsing, against 2.8ms of
+    actual execution. That is the difference between §9's 50ms MVP budget
+    having 8% headroom and having 93%. Nothing about it is visible in a
+    correctness test, so it needs its own. See SPEC_DEBT.md (SD4).
+    """
+
+    def test_the_binary_adapter_is_registered_on_the_connection(self, corpus):
+        """studium.db registers it for every engine in the process, including
+        the ones the test harness and the volume scripts build themselves."""
+        from pgvector import Vector
+
+        db = corpus["db"]
+        # If the adapter were missing, psycopg would reject the Vector object
+        # as an unadaptable type rather than sending it.
+        got = db.execute(
+            sql("SELECT CAST(:v AS vector) <=> CAST(:v AS vector)"),
+            {"v": Vector([0.1] * 1024)},
+        ).scalar()
+        assert got == pytest.approx(0.0, abs=1e-6)
+
+    def test_vector_search_sends_a_vector_not_a_string(self, corpus):
+        """Guards the specific regression: reverting _as_vector to the text
+        literal would still pass every other test in this file."""
+        from studium.retrieval.search import _as_vector
+
+        sent = _as_vector([0.5] * 1024)
+        assert not isinstance(sent, str), (
+            "_as_vector fell back to the text literal; vector search is on the "
+            "slow path and §9's budgets no longer hold"
+        )
 
 
 class TestKeywordSearch:

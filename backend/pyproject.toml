@@ -7,7 +7,13 @@ dependencies = [
     "sqlalchemy>=2.0.30",
     "alembic>=1.13",
     "psycopg[binary]>=3.1",
-    "pgvector>=0.2.5",
+    # 0.4 is where `from pgvector import Vector` and pgvector.psycopg's
+    # register_vector both settled. studium.db registers the binary adapter on
+    # every connection and search._as_vector wraps embeddings for it -- sending
+    # a query vector as text instead costs 43ms per search in Postgres-side
+    # parsing (SPEC_DEBT.md SD4), so this floor is load-bearing for §9's
+    # latency budgets rather than merely convenient.
+    "pgvector>=0.4",
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
     # Agent runtime (subsystem 2 §4). 0.40 is the spec's floor; messages.parse
@@ -35,6 +41,10 @@ serve = ["uvicorn[standard]>=0.29"]
 # embeddings, which is enough for Tier 1 and Tier 2 but not for a deployment.
 # studium.retrieval.default_retriever warns when it takes that path.
 retrieval = ["voyageai>=0.2"]
+# scripts/chunk_diagnostics.py only. PDF-to-text is subsystem 5's, and nothing
+# in studium/ imports pypdf -- keeping it out of the retrieval extra is what
+# keeps that boundary honest.
+diagnostics = ["pypdf>=4.0"]
 
 # Flat layout: without this, setuptools sees studium/, tests/, scripts/ and
 # migrations/ as candidate packages and refuses to guess. Only studium ships.

@@ -15,16 +15,19 @@ transaction after, so a dropped connection mid-call cannot lose written state.
 
 from __future__ import annotations
 
+import logging
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
 from .config import settings
+
+log = logging.getLogger(__name__)
 
 #: Postgres error code for "could not serialize access due to concurrent update".
 SERIALIZATION_FAILURE = "40001"
@@ -34,7 +37,7 @@ MAX_RETRY_ATTEMPTS = 3
 
 
 def _make_engine(url: str) -> Engine:
-    return create_engine(
+    eng = create_engine(
         url,
         echo=settings.echo_sql,
         pool_pre_ping=True,
@@ -44,6 +47,41 @@ def _make_engine(url: str) -> Engine:
         # with and without the pooler in front.
         connect_args={"prepare_threshold": None},
     )
+    return eng
+
+
+# Registered against the Engine class, not one instance. The test harness and
+# the volume scripts build their own engines with plain ``create_engine``, and
+# an engine that has not been taught the vector type sends a pgvector.Vector as
+# an unadaptable object rather than falling back -- so scoping this per-engine
+# means a passing suite depends on which factory a fixture happened to call.
+@event.listens_for(Engine, "connect")
+def _register_vector_type(dbapi_connection, connection_record) -> None:
+    """Teach psycopg to send ``vector`` values in binary (retrieval §9).
+
+    Without this a 1024-dimension query vector travels as a ~15 KB text literal
+    that Postgres parses on arrival, and that parse dominates the query: at
+    MVP corpus size the same search measured 43.9 ms sending text against
+    1.9 ms sending binary, while ``EXPLAIN ANALYZE`` reported 2.8 ms of actual
+    execution either way. Twenty-three times the latency, none of it in the
+    index.
+
+    It matters most where §9's budgets are tightest. The text path put vector
+    search at 46 ms against §9's 50 ms MVP budget -- nominally passing, with the
+    headroom consumed by parameter marshalling rather than by anything that
+    scales with corpus size.
+
+    Failure here is not fatal: the registration needs a round trip to look up
+    the type OID, and a database without the ``vector`` extension has no OID to
+    find. The query layer keeps working through the text path, which is what
+    makes ``vector`` still optional for anyone running the non-retrieval tests.
+    """
+    try:
+        from pgvector.psycopg import register_vector
+
+        register_vector(dbapi_connection)
+    except Exception:  # noqa: BLE001 -- degrades to the text path
+        log.debug("pgvector binary adapter unavailable on this connection")
 
 
 engine = _make_engine(settings.database_url)

@@ -23,7 +23,7 @@ from studium.agents.lecturer import Lecturer
 from studium.agents.reviewer import Reviewer
 from studium.agents.tutor import Tutor
 from studium.llm.client import AnthropicClient
-from studium.retrieval import CuratedPointerRetriever, PassageRetriever
+from studium.retrieval import PassageRetriever, default_retriever
 from studium.session.context import Passage, SessionContext
 
 log = logging.getLogger(__name__)
@@ -52,7 +52,13 @@ class AgentRegistry:
         retriever: PassageRetriever | None = None,
     ) -> AgentRegistry:
         client = client or AnthropicClient()
-        retriever = retriever or CuratedPointerRetriever()
+        # Subsystem 3's handoff point. Until it existed this defaulted to
+        # CuratedPointerRetriever, which reads an author's pointers and does no
+        # search at all. ``default_retriever`` returns the full hybrid pipeline,
+        # falling back to stub embeddings (with a warning) when the Voyage SDK
+        # is absent -- still an improvement on the curated-only default, since
+        # the keyword half and the curated boost are both real either way.
+        retriever = retriever or default_retriever()
         return cls(
             curator=Curator(client),
             lecturer=Lecturer(client, retriever),

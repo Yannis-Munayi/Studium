@@ -17,7 +17,10 @@ node, three learners) and is the first thing to move to Redis when it is not.
 from __future__ import annotations
 
 import logging
+import os
 import uuid
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -30,16 +33,46 @@ from studium.agents.schemas import PRIMITIVE_NAMES
 from studium.orchestration.handoff import AgentRegistry
 from studium.orchestration.state_machine import reconstruct_state
 from studium.orchestration.streaming import sse_stream
+from studium.retrieval import CacheWarmer, default_retriever
 from studium.session import memory
 from studium.session.budget_gate import BudgetExceededError
 from studium.session.lifecycle import NoEnrollmentError
 
 log = logging.getLogger(__name__)
 
+#: Retrieval §14. Off unless STUDIUM_WARM_CACHE is set, because it makes a
+#: retrieval call every few minutes forever -- which is the intended behaviour
+#: in a deployment and a surprise everywhere else. A test run, a migration
+#: check, or a developer starting the app to look at one endpoint should not
+#: quietly begin billing a reranker on a timer.
+WARM_CACHE_ENV = "STUDIUM_WARM_CACHE"
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Start and stop the §14 cache warmer alongside the app."""
+    warmer: CacheWarmer | None = None
+
+    if os.environ.get(WARM_CACHE_ENV) == "1":
+        warmer = CacheWarmer(retriever=registry.retriever())
+        warmer.start()
+        app.state.cache_warmer = warmer
+    else:
+        app.state.cache_warmer = None
+        log.info("cache warming disabled; set %s=1 to enable", WARM_CACHE_ENV)
+
+    try:
+        yield
+    finally:
+        if warmer is not None:
+            await warmer.stop()
+
+
 app = FastAPI(
     title="Studium Agent Runtime",
     version="1.0.0",
     description="Subsystem 2: the agents that produce every learner-facing behaviour.",
+    lifespan=lifespan,
 )
 
 
@@ -56,10 +89,23 @@ class OrchestratorRegistry:
     def __init__(self) -> None:
         self._by_session: dict[uuid.UUID, Orchestrator] = {}
         self._agents: AgentRegistry | None = None
+        self._retriever: Any = None
+
+    def retriever(self) -> Any:
+        """The one retriever the agents share.
+
+        Held here rather than left to ``AgentRegistry.build``'s default because
+        the cache warmer has to warm *this* instance: the result cache lives on
+        the retriever, so warming a second one would fill a cache nothing reads
+        and leave every real call cold (§14).
+        """
+        if self._retriever is None:
+            self._retriever = default_retriever()
+        return self._retriever
 
     def agents(self) -> AgentRegistry:
         if self._agents is None:
-            self._agents = AgentRegistry.build()
+            self._agents = AgentRegistry.build(retriever=self.retriever())
         return self._agents
 
     def get(self, session_id: uuid.UUID) -> Orchestrator | None:
@@ -332,8 +378,20 @@ async def artifact_citations(artifact_id: uuid.UUID) -> dict[str, Any]:
 
 
 @app.get("/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok", "subsystem": "agent-runtime", "version": "1.0.0"}
+async def health(request: Request) -> dict[str, Any]:
+    """Liveness, plus whether the §14 warmer is actually running.
+
+    Warming is the kind of background work that fails silently and shows up as
+    a latency regression nobody can attribute. Reporting it here means "is the
+    warmer up" is answerable without reading logs.
+    """
+    warmer: CacheWarmer | None = getattr(request.app.state, "cache_warmer", None)
+    return {
+        "status": "ok",
+        "subsystem": "agent-runtime",
+        "version": "1.0.0",
+        "cache_warming": warmer.status() if warmer else {"running": False},
+    }
 
 
 def _last_exchange_index(turns: list[dict[str, Any]]) -> int:

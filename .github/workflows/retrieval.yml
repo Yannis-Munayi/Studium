@@ -46,6 +46,8 @@ env:
     tests/retrieval
     tests/online/test_retrieval_db.py
     tests/online/test_retrieval_paid.py
+    scripts/chunk_diagnostics.py
+    scripts/measure_retrieval.py
 
   TEST_PATHS: >-
     tests/retrieval
@@ -168,7 +170,12 @@ jobs:
           # Retrieval reads source_chunks, concept_sources and concept_edges,
           # so a migration or model change can break it without any file under
           # studium/retrieval being touched.
-          if echo "$changed" | grep -qE '^backend/(studium/retrieval/|studium/models/|studium/api/app\.py|migrations/|tests/fixtures/lambda_calculus\.py)'; then
+          #
+          # studium/db.py is in the list because it registers pgvector's binary
+          # adapter on every connection. Losing that does not fail any
+          # correctness test -- it makes vector search 23x slower and nothing
+          # else. TestVectorTransport catches it, and it only runs in Tier 2.
+          if echo "$changed" | grep -qE '^backend/(studium/retrieval/|studium/models/|studium/db\.py|studium/api/app\.py|migrations/|tests/fixtures/lambda_calculus\.py)'; then
             echo "run_online=true" >> "$GITHUB_OUTPUT"
             echo "touches retrieval or the schema it reads: Tier 2 runs"
           else

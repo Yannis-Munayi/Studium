@@ -291,6 +291,67 @@ class TestStructurePreservation:
         }
 
 
+class TestRealCorpusRegressions:
+    """Defects found by running the chunker over the Michaelson book.
+
+    Both were invisible against the synthetic fixtures. They are pinned here
+    rather than left to the diagnostic script, which needs a PDF and is not
+    part of any tier.
+    """
+
+    def test_overlap_cannot_push_a_chunk_past_the_maximum(self):
+        """The overlap is prepended after the body is sized, so without a guard
+        it escapes the size check: a 583-token paragraph plus an 87-token carry
+        produced a 670-token chunk. 7.6% of Michaelson chunks exceeded the max.
+        """
+        para = "The redex contracts by substitution into the body of the abstraction. " * 30
+        assert MAX_TOKENS * 0.9 < count_tokens(para) <= MAX_TOKENS, (
+            "the fixture must sit just under the ceiling, or it proves nothing"
+        )
+
+        chunks = chunk_blocks([Block(text=para, section_path=("Ch",))] * 2)
+
+        assert len(chunks) >= 2, "two paragraphs must produce a carry"
+        oversized = [c.token_count for c in chunks if c.token_count > MAX_TOKENS]
+        assert not oversized, f"chunks over the {MAX_TOKENS} maximum: {oversized}"
+
+    def test_the_overlap_survives_when_there_is_room_for_it(self):
+        """The guard trims; it must not silently disable overlap entirely."""
+        blocks = [
+            Block(text=" ".join(f"Sentence {i} about reduction." for i in range(120)),
+                  section_path=("Ch",))
+        ]
+        chunks = [c for c in chunk_blocks(blocks) if c.chunk_type == "body"]
+        assert len(chunks) >= 2
+        assert any(
+            previous.text.rstrip()[-30:] in current.text
+            for previous, current in zip(chunks, chunks[1:], strict=False)
+        ), "trimming removed the overlap altogether"
+
+    @pytest.mark.parametrize(
+        ("ligature", "expected"),
+        [("deﬁnition", "definition"), ("ﬂag", "flag"), ("eﬀect", "effect")],
+    )
+    def test_ligatures_are_folded(self, ligature, expected):
+        """Postgres tokenises 'deﬁnition' to 'deﬁnit' and 'definition' to
+        'definit'; they do not match, so a ligature hides the chunk from the
+        keyword half of hybrid search for a word it plainly contains."""
+        [chunk] = chunk_blocks([Block(text=f"{ligature} " * 40)])
+        assert expected in chunk.text
+        assert ligature not in chunk.text
+
+    def test_folding_leaves_mathematical_notation_alone(self):
+        """Targeted rather than NFKC: in this corpus the notation is content."""
+        source = "The term λx.M applies to N, giving M[x := N] with β-reduction."
+        [chunk] = chunk_blocks([Block(text=source + " padding." * 60)])
+        assert "λx.M" in chunk.text
+        assert "β-reduction" in chunk.text
+
+    def test_folding_does_not_break_determinism(self):
+        blocks = [Block(text="deﬁnition of the ﬁrst eﬀective ﬂag. " * 30)]
+        assert digest(chunk_blocks(blocks)) == digest(chunk_blocks(blocks))
+
+
 class TestIndexing:
     def test_chunk_indexes_are_dense_and_ordered(self):
         chunks = chunk_blocks([body(30), Block("def f(): pass", kind="code"), body(30)])

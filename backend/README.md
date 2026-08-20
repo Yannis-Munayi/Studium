@@ -41,13 +41,21 @@ studium/
     service.py         the pipeline, end to end
     citations.py       [Pn] markers in, provenance out
     cache.py           five-minute results, warm starts
+    warming.py         the rolling pre-warm loop
     embedding_worker.py  the background embedder
 
 migrations/        Alembic: 0001-0003 v1.0, 0004-0008 v1.1, 0009 retrieval
-scripts/           seed.py, migrate_from_draft.py
+scripts/           seed.py, migrate_from_draft.py,
+                   seed_volume.py + measure_queries.py    (learner-activity scale)
+                   measure_retrieval.py                   (corpus scale, §9 budgets)
+                   chunk_diagnostics.py                   (chunker vs real PDFs)
 tests/             schema, integrity, queries, migrations, unit, fixtures,
                    agents, llm, orchestration, session, api, retrieval, online
 ```
+
+Open questions the specs cannot yet answer, and defects that belong to a spec
+rather than to code, are in [SPEC_DEBT.md](SPEC_DEBT.md). Each entry names the
+trigger that closes it.
 
 ## Getting started
 
@@ -132,6 +140,16 @@ flagged and the review queue floods.
   runtime for anyone without a Voyage key. Without it, chunking uses a
   character-ratio token estimate and the retriever runs on stub embeddings —
   fine for tests, not for a deployment, which is why `default_retriever` warns.
+- **Query vectors travel as binary, never as text.** `studium.db` registers
+  pgvector's adapter on every connection and `search._as_vector` wraps the
+  embedding so psycopg selects it. Sending the same vector as a text literal
+  costs 43 ms of Postgres-side parsing against 2.8 ms of actual execution — a
+  14x latency difference that no correctness test can see. There is a Tier 2
+  guard (`TestVectorTransport`); do not route around it.
+- **Cache warming is opt-in.** `STUDIUM_WARM_CACHE=1` starts the §14 loop. It
+  is off by default because it makes a billable retrieval call every five
+  minutes forever, which is right in a deployment and a surprise anywhere else.
+  `/health` reports whether it is running.
 
 ## Carrying the draft forward
 

@@ -109,9 +109,11 @@ surface for "this source did not fully ingest". The second is more likely
 right, and it is subsystem 5's call — recorded here rather than decided.
 
 This is the **third** instance of the ingestion-side provenance gap: the schema
-models something no writer can populate. Per the standing note, a third
-instance is the trigger for raising it as a spec invariant rather than another
-per-site workaround.
+models something no writer can populate. A third instance was the standing
+trigger for raising it as a spec concern rather than another per-site
+workaround, so it is now recorded in [SPEC_DEBT.md](SPEC_DEBT.md) as **SD1**,
+with the shape of the fix and the trigger that closes it. The ERROR log here is
+a stopgap and is labelled as one.
 
 ---
 
@@ -223,6 +225,31 @@ existing test asserts against the one-source, twenty-chunk corpus — passage
 counts, prefix token budgets, `len(subject_concepts)` — and tripling it under
 them would change what those tests measure without changing what they claim.
 
+### S13 — the chunker folds typographic ligatures
+
+§7 does not mention text normalisation, and §2 puts extraction in subsystem 5.
+The chunker nevertheless folds the seven Latin ligatures (`ﬀ ﬁ ﬂ ﬃ ﬄ ﬅ ﬆ`) to
+their ASCII equivalents before measuring or storing anything.
+
+The reason is that a ligature is not a display concern here, it is a search
+defect. Postgres tokenises `deﬁnition` to `'deﬁnit'` and `definition` to
+`'definit'`, and the two do not match — so a chunk carrying the ligature is
+invisible to the keyword half of hybrid search for a word it plainly contains.
+The Michaelson book carries 688 instances of U+FB01 alone, which would have
+removed most of its prose from keyword results for "definition", "first" and
+"find". Verified directly against Postgres rather than assumed.
+
+Only those seven are mapped. Full NFKC normalisation would also fold
+superscripts, fractions and several mathematical symbols; in a lambda calculus
+corpus the notation is the content, so the broad form is destructive. `λ`,
+`β-reduction` and `M[x := N]` are pinned by test.
+
+This sits at the chunking boundary rather than the extraction one because
+chunking is the last owner of the text before it becomes a `source_chunks` row,
+and because §7 gives retrieval ownership of chunking quality "which drives
+retrieval quality". If subsystem 5's extractor normalises first, this becomes a
+no-op rather than a conflict.
+
 ---
 
 ## Things the spec locks that were followed despite a reservation
@@ -283,12 +310,22 @@ explicit about.
 
 ## Open questions this build can already answer partially
 
-**§19 question 1 — real chunk-size distribution.** Not answerable without a
-real corpus, but the machinery is in place: `Chunk.token_count` is written on
-every row, so the distribution is one query away once ingestion runs. Against
-the test fixtures, body chunks land at 350-510 tokens against a 400 target,
-which suggests the target is about right and the 600 maximum is not being
-pressed.
+**§19 question 1 — real chunk-size distribution.** Measured against the
+Michaelson book on 19 August 2026 via `scripts/chunk_diagnostics.py`: median
+441 tokens against a 400 target, nothing over the 600 maximum.
+
+That reads like an answer and is not one. Three successive extraction
+heuristics over the *same* PDF, feeding the *same* chunker, produced medians of
+440, 113 and 124 — the distribution is dominated by extraction quality, not by
+the chunker's parameters. Re-tuning the targets now would fit them to artefacts
+of `pypdf` plus a diagnostic script's paragraph heuristics. Held open as
+[SPEC_DEBT.md](SPEC_DEBT.md) **SD3** until subsystem 5's extractor exists.
+
+The run did settle two things independent of extraction quality, both now fixed
+and pinned by regression test: the 15% overlap escaped the size check entirely
+(7.6% of chunks exceeded the 600 maximum, since the overlap is prepended after
+the body is sized), and typographic ligatures were silently removing text from
+the keyword index (S13).
 
 **§19 question 2 — curated-versus-expanded ratio.** Directly measurable now:
 `retrieval_reason` is on every returned passage. S7 makes the measurement

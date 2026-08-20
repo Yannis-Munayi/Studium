@@ -241,8 +241,22 @@ async def close_session(
     #    category from source rather than adding -- so running it here and
     #    again nightly cannot double-count (§19 vs §16 step 5).
     try:
-        await run_db(lambda s: roll_up_day(s, dt.datetime.now(dt.UTC).date()))
+        counts = await run_db(lambda s: roll_up_day(s, dt.datetime.now(dt.UTC).date()))
         report.cost_rolled = True
+
+        # The roll-up's own signal that data-layer V2's attribution gap is
+        # being hit: artifacts whose cost booked to the system account because
+        # no session could be attributed. The count was previously discarded
+        # here, which made the mitigation indistinguishable from its absence.
+        # A log line is the floor, not the answer -- see SPEC_DEBT.md (SD2),
+        # which holds this open for subsystem 7's operational surface.
+        unattributed = int(counts.get("unattributed_content", 0))
+        if unattributed:
+            log.warning(
+                "cost roll-up booked %d content artifact(s) to the system "
+                "account for want of an attributable session (SD2)",
+                unattributed,
+            )
     except Exception as exc:  # noqa: BLE001
         log.exception("cost roll-up failed for %s", context.session_id)
         report.errors.append(f"cost: {exc}")

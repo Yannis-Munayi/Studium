@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Iterator, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 # --- §7 target parameters --------------------------------------------------
 
@@ -81,6 +81,43 @@ ABBREVIATIONS = frozenset(
 )
 
 _SENTENCE_END = re.compile(r"(?<=[.!?])[\"')\]]?\s+(?=[\"'(\[]?[A-Z0-9])")
+
+#: Typographic ligatures that survive PDF extraction as single codepoints.
+#:
+#: These are not cosmetic. Postgres tokenises "deﬁnition" to 'deﬁnit'
+#: and "definition" to 'definit', and the two do not match -- so a chunk
+#: carrying the ligature is invisible to the keyword half of hybrid search for
+#: the word it plainly contains. The Michaelson book has 688 instances of
+#: U+FB01 alone, which would have silently removed most of its prose from
+#: keyword results for "definition", "first" and "find".
+#:
+#: Only these seven are mapped. Full NFKC normalisation would also fold
+#: superscripts, fractions and several mathematical symbols, which in a lambda
+#: calculus corpus is destructive: the notation is the content.
+LIGATURES = {
+    "ﬀ": "ff",
+    "ﬁ": "fi",
+    "ﬂ": "fl",
+    "ﬃ": "ffi",
+    "ﬄ": "ffl",
+    "ﬅ": "st",
+    "ﬆ": "st",
+}
+
+_LIGATURE_RE = re.compile("[" + "".join(LIGATURES) + "]")
+
+
+def normalize_text(text: str) -> str:
+    """Fold extraction artefacts that would corrupt the search index.
+
+    Applied to every chunk's text before it is measured or stored, so the
+    stored text, the generated tsvector, and what a learner sees in a hover
+    card all agree. Deterministic: a pure character mapping, so §7's
+    byte-identical guarantee is unaffected.
+    """
+    if not text:
+        return text
+    return _LIGATURE_RE.sub(lambda m: LIGATURES[m.group()], text)
 
 
 def count_tokens(text: str) -> int:
@@ -232,6 +269,16 @@ def chunk_blocks(blocks: Sequence[Block]) -> list[Chunk]:
     from spanning a code fence and citing as prose evidence something that is
     half program text.
     """
+    # Normalisation happens here, once, before anything measures or classifies:
+    # doing it per-chunk instead would mean a ligature could still influence a
+    # break decision or a size, and doing it in the caller would make it
+    # optional. See LIGATURES for why it is not cosmetic.
+    blocks = [
+        block if block.text == (fixed := normalize_text(block.text))
+        else replace(block, text=fixed)
+        for block in blocks
+    ]
+
     classified = [(block, classify_block(block)) for block in blocks]
     chunks: list[Chunk] = []
     pending: list[tuple[Block, str]] = []
@@ -326,10 +373,9 @@ def _chunks_from_run(blocks: list[Block]) -> list[Chunk]:
             return
         body = "\n\n".join(buffer).strip()
         if body:
-            text = f"{carry}{body}" if carry else body
             chunks.append(
                 Chunk(
-                    text=text,
+                    text=_with_overlap(carry, body),
                     chunk_index=0,
                     chunk_type="body",
                     section_path=list(section_path),
@@ -355,10 +401,9 @@ def _chunks_from_run(blocks: list[Block]) -> list[Chunk]:
             # then break the paragraph on sentence/word/character preferences.
             close()
             for piece in _split_oversized(paragraph):
-                text = f"{carry}{piece}" if carry else piece
                 chunks.append(
                     Chunk(
-                        text=text,
+                        text=_with_overlap(carry, piece),
                         chunk_index=0,
                         chunk_type="body",
                         section_path=list(section_path),
@@ -461,6 +506,43 @@ def _offset_for_tokens(text: str, tokens: int) -> int:
     decides where to *look*; the preference hierarchy decides where to cut.
     """
     return min(len(text), max(1, int(tokens * CHARS_PER_TOKEN)))
+
+
+def _with_overlap(carry: str, body: str) -> str:
+    """Prepend the previous chunk's tail, trimmed so the total stays under the max.
+
+    The overlap is added *after* the body has been sized, so without this it
+    escapes the size check entirely: a 583-token paragraph plus an 87-token
+    carry produced a 670-token chunk against a 600 maximum. Found by running the
+    chunker over the Michaelson book, where 7.6% of chunks exceeded the max --
+    invisible against the synthetic fixtures, whose uniform paragraph lengths
+    never left a body close enough to the ceiling for the carry to push it over.
+
+    Trimming from the front rather than the back: the carry exists to restore
+    the context immediately preceding the body, so the words nearest the body
+    are the ones worth keeping.
+
+    Over-long chunks are not a cosmetic problem. ``MAX_TOKENS`` exists because
+    the embedding provider has its own input ceiling and because an oversized
+    chunk dilutes the vector it produces -- the passage retrieves worse, and the
+    hover card shows the learner more text than they asked for.
+    """
+    if not carry or count_tokens(body) >= MAX_TOKENS:
+        return body
+
+    # Measured on the joined string, not on the parts. Token counts are not
+    # additive across a concatenation -- the separator and the estimator's
+    # rounding both land in the gap -- and budgeting from
+    # ``MAX_TOKENS - count_tokens(body)`` left chunks one token over the
+    # ceiling on the real corpus.
+    words = carry.split()
+    while words:
+        candidate = " ".join(words) + "\n\n" + body
+        if count_tokens(candidate) <= MAX_TOKENS:
+            return candidate
+        words.pop(0)
+
+    return body
 
 
 def _overlap_suffix(text: str) -> str:
