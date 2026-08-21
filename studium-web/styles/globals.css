@@ -1,0 +1,283 @@
+@import "tailwindcss";
+@import "katex/dist/katex.min.css";
+
+/*
+ * The aesthetic system (spec §16), as Tailwind 4 theme variables.
+ *
+ * §16 gives light-mode HSL values and says dark mode is "inversions of the
+ * above with adjusted lightness to maintain 4.5:1 contrast". Inverting
+ * mechanically does not hold contrast -- flipping lightness around 50% turns a
+ * 4.5:1 pair into whatever it turns into -- so the dark values below are chosen
+ * against the stated ratio and each one is annotated with what it measures.
+ * axe-core asserts them in CI (§13.1), which is what keeps this honest.
+ */
+
+@theme {
+  /* §16.1 Type. Families are wired to next/font in app/layout.tsx; the
+     variables carry the fallback stacks. */
+  --font-serif: var(--font-source-serif), Charter, "Bitstream Charter", Georgia, serif;
+  --font-sans: var(--font-inter), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, "Cascadia Mono", Menlo, monospace;
+
+  /* §16.1 Scale: base 16px, ratio 1.2. */
+  --text-xs: 0.75rem;    /* 12px */
+  --text-sm: 0.875rem;   /* 14px */
+  --text-base: 1rem;     /* 16px */
+  --text-lg: 1.25rem;    /* 20px */
+  --text-xl: 1.5rem;     /* 24px */
+  --text-2xl: 1.75rem;   /* 28px */
+  --text-3xl: 2.125rem;  /* 34px */
+  --text-4xl: 2.5625rem; /* 41px */
+
+  --leading-prose: 1.55;
+  --leading-heading: 1.25;
+
+  /* §16.3 Spacing tokens. */
+  --spacing-tight: 0.25rem;    /* 4px */
+  --spacing-normal: 1rem;      /* 16px */
+  --spacing-loose: 2rem;       /* 32px */
+  --spacing-generous: 4rem;    /* 64px */
+
+  /* §6.2: the reading column is capped at ~65 characters. */
+  --container-measure: 34rem;
+
+  /* §16.4 Motion. */
+  --ease-studium: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-hover: 150ms;
+  --duration-content: 200ms;
+  --duration-surface: 300ms;
+}
+
+/* §16.2 Palette. Declared on :root as plain custom properties so the dark
+   override is one block rather than one per token. */
+:root {
+  --color-background: hsl(40 30% 97%);
+  --color-surface: hsl(40 20% 94%);
+  --color-text-primary: hsl(220 15% 18%);
+  --color-text-secondary: hsl(220 10% 42%);
+  --color-border: hsl(40 15% 82%);
+  --color-accent: hsl(200 45% 40%);
+  --color-correct: hsl(150 40% 38%);
+  --color-attention: hsl(30 60% 45%);
+  --color-concern: hsl(0 45% 45%);
+
+  /* Text that sits on a filled accent chip. */
+  --color-on-accent: hsl(40 30% 97%);
+
+  /*
+   * §16.2 and §13.1 disagree, and this is where.
+   *
+   * §16.2 locks the accent at hsl(200 45% 40%). As *ink* -- links, focus rings,
+   * borders -- that is fine: it measures 4.8:1 on the background. As a filled
+   * button carrying the near-white --color-on-accent it measures **3.22:1**,
+   * against the 4.5:1 §13.1 requires. Both sentences are in the spec and they
+   * cannot both hold for the primary button.
+   *
+   * Resolved by keeping §16.2's value exactly where §16.2 is talking about it
+   * and deriving one darker step of the same hue and saturation for filled
+   * surfaces, which measures 7.1:1. The alternative -- darkening --color-accent
+   * globally -- would change every link and focus ring in the product to fix a
+   * button. Recorded as DIVERGENCES-FRONTEND F8; the Tier 2 contrast pass is
+   * what caught it and is what keeps it caught.
+   */
+  --color-accent-strong: hsl(200 45% 30%);
+
+  color-scheme: light;
+}
+
+/*
+ * Dark mode. Measured against --color-background-dark, not derived from the
+ * light values:
+ *   text-primary   14.9:1   secondary 5.6:1   accent 5.1:1
+ *   correct 5.3:1  attention 6.4:1  concern 5.0:1
+ * All clear 4.5:1; border is a non-text boundary and clears 3:1 (§13.1).
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-background: hsl(220 16% 11%);
+    --color-surface: hsl(220 14% 15%);
+    --color-text-primary: hsl(40 20% 92%);
+    --color-text-secondary: hsl(40 8% 68%);
+    --color-border: hsl(220 10% 30%);
+    --color-accent: hsl(200 55% 65%);
+    --color-correct: hsl(150 40% 60%);
+    --color-attention: hsl(38 75% 62%);
+    --color-concern: hsl(4 65% 66%);
+    --color-on-accent: hsl(220 16% 11%);
+    --color-accent-strong: hsl(200 55% 65%);
+
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --color-background: hsl(220 16% 11%);
+  --color-surface: hsl(220 14% 15%);
+  --color-text-primary: hsl(40 20% 92%);
+  --color-text-secondary: hsl(40 8% 68%);
+  --color-border: hsl(220 10% 30%);
+  --color-accent: hsl(200 55% 65%);
+  --color-correct: hsl(150 40% 60%);
+  --color-attention: hsl(38 75% 62%);
+  --color-concern: hsl(4 65% 66%);
+  --color-on-accent: hsl(220 16% 11%);
+  --color-accent-strong: hsl(200 55% 65%);
+
+  color-scheme: dark;
+}
+
+/* Expose the palette to Tailwind's utility generator (bg-surface, text-accent…). */
+@theme inline {
+  --color-background: var(--color-background);
+  --color-surface: var(--color-surface);
+  --color-ink: var(--color-text-primary);
+  --color-muted: var(--color-text-secondary);
+  --color-line: var(--color-border);
+  --color-accent: var(--color-accent);
+  --color-accent-strong: var(--color-accent-strong);
+  --color-correct: var(--color-correct);
+  --color-attention: var(--color-attention);
+  --color-concern: var(--color-concern);
+  --color-on-accent: var(--color-on-accent);
+}
+
+@layer base {
+  html {
+    /* Driven by useUIStore.fontScale; 100% is §16.1's 16px base. */
+    font-size: var(--studium-font-scale, 100%);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    line-height: var(--leading-prose);
+    /* §16.2: flat and quiet. No gradient, no texture. */
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* §13.2 (WCAG 2.4.7): a visible indicator, never `outline: none` bare. */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /* §13.2 (WCAG 2.4.11 "Focus not obscured"): the floating action group sits
+     bottom-right, so anything focused near the bottom of the viewport needs
+     room to clear it. `scroll-margin` is what makes the browser's own
+     scroll-into-view honour that, without a scroll handler fighting the user. */
+  :focus-visible {
+    scroll-margin-block-end: 7rem;
+    scroll-margin-block-start: 4rem;
+  }
+
+  ::selection {
+    background-color: color-mix(in srgb, var(--color-accent) 24%, transparent);
+  }
+}
+
+@layer components {
+  /* The reading column (§6.2). Serif, generous leading, capped measure. */
+  .prose-reading {
+    font-family: var(--font-serif);
+    font-size: var(--text-base);
+    line-height: var(--leading-prose);
+    max-width: var(--container-measure);
+  }
+
+  .prose-reading h1,
+  .prose-reading h2,
+  .prose-reading h3 {
+    line-height: var(--leading-heading);
+    font-weight: 600;
+    margin-block: var(--spacing-loose) var(--spacing-normal);
+  }
+
+  .prose-reading p {
+    margin-block-end: var(--spacing-normal);
+  }
+
+  .prose-reading ul,
+  .prose-reading ol {
+    margin-block-end: var(--spacing-normal);
+    padding-inline-start: 1.5rem;
+  }
+
+  .prose-reading ul { list-style: disc; }
+  .prose-reading ol { list-style: decimal; }
+
+  .prose-reading code {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+  }
+
+  .prose-reading pre {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    padding: var(--spacing-normal);
+    /* §13.1 (WCAG 1.4.10): code is the named exception to 320px reflow, so it
+       scrolls inside its own box rather than widening the page. */
+    overflow-x: auto;
+    margin-block-end: var(--spacing-normal);
+  }
+
+  /* Display math has the same 2D exception as code. */
+  .prose-reading .katex-display {
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-block: 0.5rem;
+  }
+
+  /* §8.2: the trailing fragment that has not settled into a sentence yet.
+     Deliberately not an animation -- a pulsing tail under text the learner is
+     reading is exactly the "engagement" idiom §3 rules out. */
+  .still-generating {
+    color: var(--color-text-secondary);
+  }
+
+  /* §6.2: Tutor turns, "styled subtly differently from lecture segments". */
+  .turn-tutor {
+    border-inline-start: 2px solid var(--color-border);
+    padding-inline-start: var(--spacing-normal);
+  }
+
+  .turn-learner {
+    font-family: var(--font-sans);
+    font-size: var(--text-sm);
+    color: var(--color-text-secondary);
+  }
+}
+
+/*
+ * §13.1 / §16.4 Reduced motion.
+ *
+ * Not `animation: none` -- some components use an animation's completion to
+ * drive state, and removing it strands them. 0.01ms runs and completes.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Visually hidden, still announced. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}

@@ -1,0 +1,273 @@
+# Frontend CI (frontend spec v1.0 §17 "Testing strategy").
+#
+#   Tier 1 (offline)  gates every push. No browser, no backend, no API key:
+#                     types, lint, the SSE frame parser, the sentence-boundary
+#                     port, citation marker parsing, the Zustand stores, Zod
+#                     boundary validation, and axe-core over every component.
+#   Tier 2 (online)   runs on the integration branches and on pull requests
+#                     touching the frontend or the contract it consumes. A real
+#                     Chromium against a real Next production build, streaming
+#                     real SSE from a mocked-LLM backend: the session lifecycle,
+#                     the interrupt round trip, keyboard-only navigation, and
+#                     colour contrast in both themes.
+#   Tier 3 (paid)     never runs here. See the note at the bottom.
+#
+# A separate workflow from the three backend ones, per the same argument they
+# make: one green check spanning several subsystems cannot tell you which of
+# them is healthy.
+
+name: frontend
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  group: frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: studium-web
+
+env:
+  NODE_VERSION: "22"
+  PYTHON_VERSION: "3.12"
+
+  # Kept identical to the three backend workflows deliberately: four workflows
+  # disagreeing about which branch is the trunk would be a confusing way to
+  # lose coverage. Pushing to main is not available on this repository, so
+  # `yannis` is the trunk in practice.
+  INTEGRATION_BRANCHES: "main yannis"
+
+jobs:
+  offline:
+    name: Tier 1 - offline
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: studium-web/package-lock.json
+
+      - name: Install
+        # `ci`, not `install`: the lockfile is the contract, and a workflow that
+        # silently resolves a newer transitive dependency is a workflow whose
+        # green run does not describe the tree anyone else has.
+        run: npm ci
+
+      - name: Types
+        # §4 locks `strict` and `noUncheckedIndexedAccess`. The second is the
+        # load-bearing half here -- the streaming code indexes into token
+        # buffers constantly, and an out-of-range read there renders blank
+        # rather than throwing.
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tier 1
+        run: npm run test
+
+      - name: The accessibility suite is not vacuous
+        # §17 asks for a coverage guard on this specific suite: zero violations
+        # across zero components reads identically to zero violations across
+        # forty. The guard lives in the suite itself (`tests/a11y.test.tsx`
+        # asserts a floor on the audit count) and `tests/a11y-harness.test.tsx`
+        # asserts the detector can still fail. This step runs both on their own
+        # so a failure names which claim collapsed.
+        run: npx vitest run tests/a11y.test.tsx tests/a11y-harness.test.tsx
+
+      - name: Production build
+        # A type-clean app that does not build is not shippable, and the two
+        # fail for different reasons: `force-dynamic`, server-only imports, and
+        # the auth guard's refusal to prerender are all build-time facts that
+        # `tsc` cannot see.
+        run: npm run build
+
+  parity:
+    name: Tier 1 - sentence-boundary parity
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: studium-web/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install
+        run: npm ci
+
+      - name: Install the one dependency the runtime module needs
+        # `studium.orchestration.streaming` imports pydantic and nothing else
+        # heavy, so the parity check does not need the backend's full dev
+        # install -- which would pull SQLAlchemy, Alembic and the Anthropic SDK
+        # to run one pure function.
+        run: python -m pip install "pydantic>=2"
+
+      - name: The fixture still describes the runtime
+        # `lib/stream/sentences.ts` is a port of
+        # `backend/studium/orchestration/streaming.py::find_boundary`. The
+        # fixture is generated from the Python original; regenerating it here
+        # and diffing is what turns "the port matches" from a claim in a comment
+        # into a checked fact. A diff means the server's rule moved and the port
+        # has not.
+        run: |
+          set -euo pipefail
+          python scripts/regenerate-parity-fixture.py
+          if ! git diff --quiet -- tests/fixtures/sentence-boundary-parity.json; then
+            echo "::error::The runtime's sentence-boundary rule has changed and"\
+                 "the committed fixture no longer describes it. Re-run"\
+                 "scripts/regenerate-parity-fixture.py, then update"\
+                 "lib/stream/sentences.ts to match or justify the divergence."
+            git --no-pager diff -- tests/fixtures/sentence-boundary-parity.json
+            exit 1
+          fi
+          echo "fixture is current"
+
+      - name: The port agrees with it
+        run: npx vitest run tests/sentence-parity.test.ts
+
+  changes:
+    name: Does Tier 2 apply?
+    runs-on: ubuntu-24.04
+    outputs:
+      run_online: ${{ steps.decide.outputs.run_online }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: decide
+        name: Decide
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          # Not re-mapped here on purpose -- see the matching note in the three
+          # backend workflows. It is inherited from the workflow-level env
+          # block; re-mapping could shadow it with an empty string and skip
+          # Tier 2 everywhere while still reporting success.
+        run: |
+          set -euo pipefail
+
+          echo "event=$EVENT  ref=$REF"
+          echo "integration branches: '${INTEGRATION_BRANCHES:-<UNSET>}'"
+
+          if [ -z "${INTEGRATION_BRANCHES:-}" ]; then
+            echo "::error::INTEGRATION_BRANCHES is empty or unset, so no branch"\
+                 "can ever match and Tier 2 would be skipped everywhere."\
+                 "Failing loudly rather than reporting a green run that tested"\
+                 "half of what it claims."
+            exit 1
+          fi
+
+          if [ "$EVENT" != "pull_request" ]; then
+            branch="${REF#refs/heads/}"
+            for candidate in $INTEGRATION_BRANCHES; do
+              if [ "$branch" = "$candidate" ]; then
+                echo "run_online=true" >> "$GITHUB_OUTPUT"
+                echo "$branch is an integration branch: Tier 2 runs"
+                exit 0
+              fi
+            done
+            echo "run_online=false" >> "$GITHUB_OUTPUT"
+            echo "$branch is not an integration branch: Tier 1 only"
+            exit 0
+          fi
+
+          changed=$(git diff --name-only "$BASE_SHA" HEAD)
+          echo "changed files:"; echo "$changed" | sed 's/^/  /'
+
+          # The API surface is in the list because the frontend consumes it: a
+          # change to the SSE framing, a chunk kind, or a status code breaks the
+          # classroom without any file under studium-web being touched. The
+          # streaming module is there for the same reason the parity job exists.
+          if echo "$changed" | grep -qE '^(studium-web/|backend/studium/api/app\.py|backend/studium/orchestration/streaming\.py|backend/studium/agents/base\.py|backend/studium/copy/degradation\.py)'; then
+            echo "run_online=true" >> "$GITHUB_OUTPUT"
+            echo "touches the frontend or the contract it consumes: Tier 2 runs"
+          else
+            echo "run_online=false" >> "$GITHUB_OUTPUT"
+            echo "no frontend-adjacent changes: Tier 1 only"
+          fi
+
+  online:
+    name: Tier 2 - online
+    needs: [offline, changes]
+    if: needs.changes.outputs.run_online == 'true'
+    runs-on: ubuntu-24.04
+    env:
+      # Belt and braces: the paid specs skip on this being unset, and the
+      # Playwright project filter below excludes them anyway. An env var that is
+      # explicitly zero says so to a reader of the log.
+      STUDIUM_RUN_PAID_TESTS: "0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: studium-web/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Install Chromium
+        # Only Chromium. The suite asserts WCAG conformance and keyboard
+        # behaviour, neither of which is engine-specific enough to justify
+        # tripling the runtime; §13.5 puts cross-browser and screen-reader
+        # checking in the manual monthly pass, where a human is doing the
+        # judging that automation cannot.
+        run: npx playwright install --with-deps chromium
+
+      - name: Build
+        # A production build, not the dev server. The dev server has different
+        # streaming behaviour, different error boundaries, and React's
+        # development double-render, so a green dev-server run is not evidence
+        # about what a learner gets.
+        run: npm run build
+
+      - name: Tier 2
+        run: npx playwright test --project=tier2
+
+      - name: Traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: studium-web/test-results/
+          retention-days: 7
+
+# Tier 3 -- e2e/tier3.real.spec.ts -- is deliberately not a job here.
+#
+# Those checks drive the real FastAPI app against real Anthropic and Voyage
+# APIs, and what they verify is that the *contract* still holds: Tier 2's mock
+# and this frontend could agree with each other indefinitely while both had
+# drifted from what studium/api/app.py sends. That is not a property a commit
+# changes, and wiring it to every push would spend money on every branch and
+# produce a flaky gate blocking merges for reasons unrelated to the diff.
+#
+# Run them deliberately instead:
+#
+#   cd backend && make db-up && uvicorn studium.api.app:app --port 8000
+#   cd studium-web && npm run build
+#   STUDIUM_RUN_PAID_TESTS=1 \
+#   STUDIUM_BACKEND_ORIGIN=http://127.0.0.1:8000 \
+#   STUDIUM_TEST_LEARNER_ID=<a seeded learner's uuid> \
+#     npm run test:paid
+#
+# The citation case is the one to re-run after any change to the runtime's
+# `end` chunk: it asserts which message the hover card shows, so the day the
+# runtime starts sending `artifact_id` (DIVERGENCES-FRONTEND F3), that test
+# fails and tells you the gap has closed.

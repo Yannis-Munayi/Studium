@@ -8,8 +8,15 @@ Subsystems 1 through 3 of 7:
 | 2 | Agent runtime | `spec/Sub System 2 - Agent Runtime/02-agent-runtime-v1.0.md` | [DIVERGENCES-RUNTIME.md](DIVERGENCES-RUNTIME.md) |
 | 3 | Retrieval | `spec/Sub System 3 - Retrieval/03-retrieval-v1.0.md` | [DIVERGENCES-RETRIEVAL.md](DIVERGENCES-RETRIEVAL.md) |
 
-The frontend (subsystem 4), ingestion (5), the evaluation harness (6), and
-infrastructure (7) are deliberately absent.
+The frontend is subsystem 4 and lives in [`../studium-web`](../studium-web).
+Ingestion (5), the evaluation harness (6), and infrastructure (7) are
+deliberately absent.
+
+Two things the frontend build found in this code, both recorded rather than
+patched from outside: `api/app.py`'s stream is a POST and so cannot be consumed
+by `EventSource` as the frontend spec assumes, and a generated artifact's id
+never reaches the client, so no `[Pn]` marker can be resolved
+([SPEC_DEBT.md](SPEC_DEBT.md) SD5).
 
 ## Layout
 

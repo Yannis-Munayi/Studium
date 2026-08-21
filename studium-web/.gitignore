@@ -1,0 +1,21 @@
+node_modules/
+.next/
+out/
+build/
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+
+# Vitest
+coverage/
+
+next-env.d.ts
+*.tsbuildinfo
+
+.env
+.env.local
+.env*.local
+.DS_Store

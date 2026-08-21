@@ -1,0 +1,122 @@
+[
+  {
+    "text": "Beta reduction rewrites an application. The next step is",
+    "boundary": 40
+  },
+  {
+    "text": "Beta reduction rewrites an",
+    "boundary": null
+  },
+  {
+    "text": "That is the whole rule.",
+    "boundary": 23
+  },
+  {
+    "text": "One complete sentence. A second one. And a frag",
+    "boundary": 23
+  },
+  {
+    "text": "Still writing the first",
+    "boundary": null
+  },
+  {
+    "text": "Ends with no punctuation and no capital after",
+    "boundary": null
+  },
+  {
+    "text": "No boundary here at all",
+    "boundary": null
+  },
+  {
+    "text": "Multiple.  Spaces.  Between.",
+    "boundary": 11
+  },
+  {
+    "text": "Trailing whitespace after period.   ",
+    "boundary": 36
+  },
+  {
+    "text": "Consider e.g. the identity function is next.",
+    "boundary": 44
+  },
+  {
+    "text": "See i.e. this case. Then continue.",
+    "boundary": 20
+  },
+  {
+    "text": "Compare cf. Church. And then Curry.",
+    "boundary": 20
+  },
+  {
+    "text": "Dr. Michaelson wrote it. He was right.",
+    "boundary": 25
+  },
+  {
+    "text": "Fig. 3 shows the tree. Look closely.",
+    "boundary": 5
+  },
+  {
+    "text": "Ph.D. work on this. It continues.",
+    "boundary": 20
+  },
+  {
+    "text": "Thm. 4 is the key. Prop. 5 follows.",
+    "boundary": 19
+  },
+  {
+    "text": "We set $f(x) = 1.5$ and continue. Then we reduce.",
+    "boundary": 34
+  },
+  {
+    "text": "$$\\lambda x. x$$ is the identity. Next.",
+    "boundary": 34
+  },
+  {
+    "text": "The value is 3.14 exactly. Next sentence.",
+    "boundary": 27
+  },
+  {
+    "text": "Nested $a.b$ and $c.d$ here. Done.",
+    "boundary": 29
+  },
+  {
+    "text": "$$x = 1. y = 2$$ Continue here.",
+    "boundary": 31
+  },
+  {
+    "text": "First. 2 is next",
+    "boundary": 7
+  },
+  {
+    "text": "First. (Second follows)",
+    "boundary": 7
+  },
+  {
+    "text": "He called it \"reduction.\" The name stuck.",
+    "boundary": 26
+  },
+  {
+    "text": "A sentence ending in a bracket.] Next one.",
+    "boundary": 33
+  },
+  {
+    "text": "Is it normalising? Yes it is.",
+    "boundary": 19
+  },
+  {
+    "text": "Stop! Then go.",
+    "boundary": 6
+  },
+  {
+    "text": "",
+    "boundary": null
+  },
+  {
+    "text": ".",
+    "boundary": 1
+  },
+  {
+    "text": "...",
+    "boundary": 3
+  }
+]

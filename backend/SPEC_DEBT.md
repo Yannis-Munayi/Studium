@@ -163,3 +163,58 @@ re-pointed — and read the distribution then.
   pages: 716 ligatures, 355 suspicious line joins, 39 bare page-number lines, 8
   hyphenated line breaks, and no blank lines anywhere — paragraph boundaries are
   not recoverable from whitespace in this source.
+
+---
+
+## SD5 — a generated artifact's id never reaches the client that renders it
+
+**Status:** open. Found building subsystem 4. Blocks a whole spec section.
+
+Frontend §10 builds citation rendering on retrieval §12's endpoint,
+`GET /api/artifacts/{artifact_id}/citations`. The endpoint works. **The client
+has no way to learn the `artifact_id`**, so nothing can call it.
+
+The gap is a consequence of a decision that is right on its own terms. Agent
+runtime §6 has agents *return* side effects rather than apply them, and the
+Orchestrator applies the batch after the call completes — which is what makes a
+retry safe. So when the Lecturer emits its `record_content_artifact` ToolEffect,
+the artifact row does not exist yet and has no id. By the time it does, the
+chunk carrying it has already gone down the wire.
+
+What the client receives:
+
+| Chunk | Carries | Has an artifact id? |
+|---|---|---|
+| `tool_effect` | the effect's *payload* — concept, body, stance, model | No. The row is unwritten. |
+| `end` (Lecturer) | `turn_id`, `segment_index`, `anchor` | No. |
+
+**Why this is spec debt and not a frontend defect.** Every client-side half is
+built and tested — marker parsing, range expansion, the hover card and its
+delays, keyboard activation, the retired-source treatment, the full-passage
+modal. `lib/api/schemas.ts` already parses `artifact_id` off the `end` payload,
+so the day it arrives the cards populate with no frontend change. What is
+missing is one field on one chunk, and deciding its shape from subsystem 4 would
+be designing subsystem 2's contract from outside it — which is how the three
+provenance gaps in SD1 happened.
+
+**What should happen.** After the Orchestrator applies a segment's effects, the
+resulting `content_artifacts.id` goes on the `end` chunk. Agent runtime §20's
+chunk contract needs the field named, and §6's `StreamChunk` docstring should
+say that `end` may carry it.
+
+Worth noting the ordering constraint this implies: effects are applied *after*
+the stream closes, so the `end` chunk cannot be emitted until they have been.
+That is already true of the Lecturer's flow — effects are yielded before `end`
+precisely so a cancelled stream never persists a half-written segment — but it
+becomes load-bearing rather than incidental once something downstream depends on
+it.
+
+**Consequence while it is open.** Every citation marker in the product renders
+and none of them resolves. The frontend says so plainly rather than spinning
+(frontend `DIVERGENCES-FRONTEND.md` F3), and its Tier 3 case asserts *which*
+message the card shows — so the day the runtime sends the id, that test fails
+and reports the gap has closed.
+
+**Trigger to close:** the next revision of the agent runtime spec, or any change
+to the Lecturer's `end` payload. `studium-web/e2e/tier3.real.spec.ts` is the
+check that notices.
