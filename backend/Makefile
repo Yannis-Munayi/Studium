@@ -49,14 +49,14 @@ db-down: ## Stop Postgres (keeps the volume)
 	$(COMPOSE) down
 
 migrate: ## Apply migrations up to head
-	alembic upgrade head
+	$(PY) -m alembic upgrade head
 
 downgrade: ## Roll back one migration
-	alembic downgrade -1
+	$(PY) -m alembic downgrade -1
 
 revision: ## Autogenerate a revision: make revision m="add x to y"
 	@test -n "$(m)" || (echo "usage: make revision m=\"add x to y\"" && exit 1)
-	alembic revision --autogenerate -m "$(m)"
+	$(PY) -m alembic revision --autogenerate -m "$(m)"
 	@echo
 	@echo "Review it by hand before committing -- autogenerate misses check"
 	@echo "constraints, comments and enum evolution (spec 13). Add a"
