@@ -54,8 +54,13 @@ def _parent_side_relationships():
 
 
 def test_every_parent_side_relationship_is_covered() -> None:
-    """Guards the test below: if the walk finds nothing, it proves nothing."""
-    assert sum(1 for _ in _parent_side_relationships()) == 12
+    """Guards the test below: if the walk finds nothing, it proves nothing.
+
+    14 = the original twelve plus ``GoldenDataset.entries`` and
+    ``EvaluationRun.results`` from evaluation §5 (migration 0011). Both are
+    backed by ``ON DELETE CASCADE``, so both must set ``passive_deletes``.
+    """
+    assert sum(1 for _ in _parent_side_relationships()) == 14
 
 
 @pytest.mark.parametrize(

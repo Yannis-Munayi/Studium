@@ -221,12 +221,52 @@ assessment_trigger = _enum(
     "assessment_trigger", "session_close", "learner_initiated", "scheduled", "unit_gate"
 )
 
+#: The first six values are learner *work*: something the learner produced in a
+#: session. The last two are credentials -- evaluation §12.1's "assessment_pass"
+#: and "subject_completion" -- added by migration 0011.
+#:
+#: Evaluation §12 assumes both already exist ("Backed by data layer §6.10's
+#: portfolio_items and signing_keys tables"). Neither did. See
+#: DIVERGENCES-EVALUATION (E1): a credential is signed, externally verifiable
+#: and issued only by the summative flow, which is a different lifecycle from a
+#: proof the learner wrote in a tutorial, and ``studium.eval.credentials``
+#: keeps the two apart by kind.
 portfolio_item_kind = _enum(
-    "portfolio_item_kind", "proof", "code", "prose", "derivation", "diagram", "notebook"
+    "portfolio_item_kind",
+    "proof",
+    "code",
+    "prose",
+    "derivation",
+    "diagram",
+    "notebook",
+    "assessment_pass",
+    "subject_completion",
 )
 
+#: Evaluation §5 addition 1. What question one golden dataset answers, which
+#: decides which runner executes it: ``agent_output`` invokes an agent,
+#: ``retrieval_quality`` invokes the retriever, and the two remaining kinds are
+#: specialisations of the first with their own metric sets (§7.1).
+golden_dataset_kind = _enum(
+    "golden_dataset_kind",
+    "agent_output",
+    "retrieval_quality",
+    "grading_calibration",
+    "content_quality",
+)
+
+#: ``normalize`` is added by migration 0010. Ingestion §6 runs normalisation as
+#: its own stage between extract and chunk, with its own retry policy and its
+#: own version stamp on the source -- so it needs its own job row. See
+#: DIVERGENCES-INGESTION (I1): the ingestion spec names the stage everywhere
+#: but never noticed the enum it writes to has no value for it.
 ingestion_job_kind = _enum(
-    "ingestion_job_kind", "extract_text", "chunk", "embed", "suggest_concept_mapping"
+    "ingestion_job_kind",
+    "extract_text",
+    "normalize",
+    "chunk",
+    "embed",
+    "suggest_concept_mapping",
 )
 
 ingestion_job_status = _enum(
@@ -240,6 +280,24 @@ review_flag_source = _enum(
     "tracker_pattern",
     "evaluator_disagreement",
     "random_sample",
+)
+
+#: Ingestion §5 addition 1. Why an ingestion-side row landed in front of a
+#: reviewer. Deliberately a separate type from ``review_flag_source``: that one
+#: says why *generated content* was flagged, and the two vocabularies have no
+#: value in common. Merging them would make every consumer of either switch on
+#: values that cannot occur in its own table.
+ingestion_flag_source = _enum(
+    "ingestion_flag_source",
+    "extractor_failure",
+    "normalizer_warning",
+    "embedding_failure",
+    "chunk_ambiguous_type",
+    "license_pending",
+    "license_conflict",
+    "concept_source_conflict",
+    "graph_validation_error",
+    "rubric_validation_error",
 )
 
 review_status = _enum("review_status", "pending", "in_review", "resolved", "dismissed")
@@ -267,6 +325,8 @@ ALL_ENUMS: tuple[PgEnum, ...] = (
     ingestion_job_status,
     review_flag_source,
     review_status,
+    ingestion_flag_source,
+    golden_dataset_kind,
 )
 
 #: Tables that carry ``updated_at`` and therefore need the trigger. Migration
@@ -293,6 +353,22 @@ TRIGGERED_TABLES: tuple[str, ...] = (
     # Added in spec v1.1 §6.11: both are regenerable, so both are mutable.
     "session_summaries",
     "retrieval_checks",
+    # Ingestion §5 addition 1, migration 0010. A reviewer assigns, resolves and
+    # escalates rows in place, so it is mutable and needs the trigger.
+    "ingestion_review_queue",
+    # Evaluation §5 additions 1 and 2, migration 0011. Both carry updated_at in
+    # the spec's DDL and both are re-materialised in place by `studium eval
+    # sync` every time the YAML changes, which is precisely the edit the column
+    # exists to date.
+    "golden_datasets",
+    "golden_dataset_entries",
+    # E1's addition. A key is retired in place (retired_at set), so it is
+    # mutable; the material itself is never updated.
+    "signing_keys",
+    # Infrastructure §12.4, migration 0012. A hold is released in place, and
+    # `released_at` is the edit `updated_at` exists to date. `retention_actions`
+    # is deliberately absent: it is append-only, not mutable.
+    "retention_holds",
 )
 
 #: Tables with ``deleted_at``. §14 asserts each has a partial index that
@@ -306,10 +382,20 @@ SOFT_DELETE_TABLES: tuple[str, ...] = (
 
 #: Append-only tables. Migration 0003 revokes UPDATE/DELETE on these from the
 #: application role; the retention and erasure jobs run as the owner instead.
+#:
+#: Later migrations add their own: 0003's ALTER DEFAULT PRIVILEGES grants
+#: UPDATE and DELETE on *future* tables to the app role, so a table added after
+#: it that belongs here has to revoke for itself. The §14 grants test scans the
+#: whole migration history rather than 0003 alone for exactly that reason.
 APPEND_ONLY_TABLES: tuple[str, ...] = (
     "mastery_events",
     "journal_events",
     "review_events",
     "agent_traces",
     "audit_log",
+    # Infrastructure §12.2, migration 0012. The retention worker's own audit
+    # trail. An audit trail the audited process can rewrite answers nothing --
+    # and the app role has no reason to touch it at all, since the worker
+    # connects as studium_owner like the deletes it records.
+    "retention_actions",
 )

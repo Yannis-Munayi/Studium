@@ -1,0 +1,122 @@
+# Studium backend on Fly.io (infrastructure §4.2, §4.4, §4.7, §10.3).
+#
+# Toronto (yyz), one shared-cpu-2x with 2GB, auto-scaling off, no public IP.
+# Every one of those is a §4 decision and each has a comment saying which.
+#
+# This file is committed and contains no secrets (§3, §6.2). The [env] block
+# below is configuration only, and tests/ops/test_deployment.py fails the
+# build if anything the secret registry classifies as a secret appears in it.
+
+app = "studium-backend"
+
+# §4.1. Ontario learners; 15-40ms to eastern Canada, 40-80ms onward to
+# Anthropic's us-east endpoints. Neither dominates the per-turn budget.
+primary_region = "yyz"
+
+[build]
+  dockerfile = "Dockerfile"
+
+# §10.3: "Alembic migrations execute as part of `flyctl deploy` via a release
+# command. Migration failure aborts the deploy; the previous version continues
+# serving." The release command runs once, on a temporary machine, before any
+# new instance takes traffic -- which is what makes that guarantee true rather
+# than a race.
+[deploy]
+  release_command = "python -m alembic upgrade head"
+  # Rolling rather than immediate: with one machine it makes little difference,
+  # and it is the strategy that stays correct when §14.1's trigger raises the
+  # count.
+  strategy = "rolling"
+
+[env]
+  STUDIUM_ENV = "production"
+
+  # §4.5. Source PDFs and intermediates on the Fly volume until §14.3's 30GB
+  # trigger fires, then "r2" plus the four R2 variables as secrets.
+  STUDIUM_STORAGE_BACKEND = "local"
+  STUDIUM_SOURCE_STORAGE_ROOT = "/data/sources"
+
+  # Retrieval §14. On in the deployment and nowhere else: it makes a retrieval
+  # call every few minutes forever, which is intended here and a surprise
+  # everywhere else.
+  STUDIUM_WARM_CACHE = "1"
+
+  # §12.1's nightly retention pass, 02:00 UTC, in-process. Off by default in
+  # the code; this is the one place that turns it on.
+  STUDIUM_RETENTION_WORKER = "1"
+
+  # §7.2. 10% at MVP, adjustable without a code change.
+  SENTRY_TRACES_SAMPLE_RATE = "0.10"
+
+  # §7.3. Langfuse accepts OTLP, so HTTP spans and LLM generations share a
+  # trace id. Not a secret: the endpoint is public and the credentials that
+  # authenticate to it are LANGFUSE_* secrets.
+  OTEL_EXPORTER_OTLP_ENDPOINT = "https://cloud.langfuse.com/api/public/otel"
+
+  # Tier 3 never runs in a deployment.
+  STUDIUM_RUN_PAID_TESTS = "0"
+
+# §4.7: "Only the frontend has a public IP; the backend is reachable only via
+# the frontend's proxy or Fly's `flyctl proxy` for admin access."
+#
+# force_https and the http_service block are deliberately absent: this app has
+# no public service. The frontend reaches it over Fly's private .internal DNS,
+# which does not go through the edge at all.
+[[services]]
+  internal_port = 8000
+  protocol = "tcp"
+  # No `ports` entries -- that is what keeps this app off the public internet.
+  # Adding one here is the single-line change that would expose an API with no
+  # authentication in front of it (frontend §14, DIVERGENCES-FRONTEND F7).
+  auto_stop_machines = false
+  auto_start_machines = false
+
+  # §4.2: "Auto-scaling: Disabled for MVP. Auto-scaling introduces cold-start
+  # latency that hurts the streaming interruption UX; single instance is faster
+  # and simpler at MVP scale."
+  min_machines_running = 1
+
+  [services.concurrency]
+    type = "connections"
+    # §4.2 sizes for ~20 concurrent sessions. SSE holds a connection open for
+    # the length of a turn, so connection count is the meaningful unit here and
+    # request rate is not.
+    soft_limit = 40
+    hard_limit = 60
+
+  # §4.2: "GET /health returns 200 when the FastAPI process is healthy
+  # (checked separately for Postgres connection and Anthropic reachability);
+  # Fly's load balancer routes only to healthy instances."
+  #
+  # The handler returns 503 when Postgres is unreachable and 200 with a
+  # `providers` block when a model provider is not. That asymmetry is the
+  # point: a provider outage would fail this check on every instance at once
+  # and empty the routing pool, turning a degraded product into an absent one.
+  [[services.http_checks]]
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "20s"
+    method = "get"
+    path = "/health"
+
+[[vm]]
+  # §4.2: "shared-cpu-2x with 2GB RAM. Enough headroom for the FastAPI process,
+  # embedding worker, ingestion worker, and the scheduled retention/warming
+  # jobs without CPU or memory pressure at MVP scale (up to ~20 concurrent
+  # sessions, ~10 concurrent ingestion jobs)."
+  size = "shared-cpu-2x"
+  memory = "2gb"
+
+# §4.5. Source PDFs and extracted intermediates. 50GB against the 30GB
+# migration trigger in §14.3, so the trigger fires with room to run the
+# migration rather than with the volume already full.
+[[mounts]]
+  source = "studium_sources"
+  destination = "/data"
+
+[[restart]]
+  # §4.2: "Automatic on unhandled exception (Fly's default). No manual
+  # intervention needed for ordinary crashes; Sentry captures the exception,
+  # the instance restarts within seconds."
+  policy = "on-failure"
+  retries = 10

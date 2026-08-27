@@ -142,6 +142,10 @@ class Orchestrator:
         #: Set by let_me_try_one, consumed by the LAB turn that grades it.
         self.pending_problem: dict[str, Any] | None = None
         self.failed_attempts = 0
+        #: The mode :meth:`start_session` actually opened in, and whether it
+        #: resumed an existing session rather than creating one (R15).
+        self.opened_mode: str | None = None
+        self.resumed = False
         self._background: set[asyncio.Task[Any]] = set()
 
     # --- session lifecycle -------------------------------------------------
@@ -163,15 +167,32 @@ class Orchestrator:
             Event.START_SESSION, GuardContext(budget_ok=gate.allowed, session_mode=mode)
         )
 
-        session_id = await open_session(
+        opened = await open_session(
             user_id=user_id,
             mode=mode,
             focus_concept_id=focus_concept_id,
             learner_subject_id=learner_subject_id,
             target_duration_minutes=target_duration_minutes,
         )
-        log.info("session %s opened in mode %s", session_id, mode)
-        return session_id
+        # The mode the session *has*, which is not the requested one when an
+        # active session was resumed (R15). Held so the endpoint can report it:
+        # every routing decision from here follows this value, so a client told
+        # otherwise would render a lecture that is really a tutorial.
+        self.opened_mode = opened.mode
+        self.resumed = opened.resumed
+        log.info("session %s opened in mode %s", opened.session_id, opened.mode)
+
+        # v1.0.1 §3.1 names this function as `context_ready`'s emission path:
+        # the session leaves OPENING once the context is assembled and the
+        # retrieval check has either run or been skipped. Doing it here rather
+        # than on the first turn is the difference the patch asks for -- the
+        # `POST /api/session` response now reports the state the session is
+        # actually in, so a client that navigates on it is not navigating on a
+        # state the runtime has not reached yet.
+        ctx = await memory.assemble_context(opened.session_id)
+        self._leave_opening(ctx)
+
+        return opened.session_id
 
     async def end_session(self, session_id: uuid.UUID, reason: str = "learner_stop") -> None:
         """Run CLOSING and release resources (§8, §16)."""
@@ -195,6 +216,22 @@ class Orchestrator:
         """Handle one learner turn (§8). Yields chunks to the SSE emitter."""
         self.exchange_index += 1
         ctx = await memory.assemble_context(session_id, exchange_index=self.exchange_index)
+
+        # 1b. Leave OPENING now that there is a context to leave it with (§16).
+        #
+        # §7's table has this row and nothing in the runtime fired it, so a
+        # freshly-opened session sat in OPENING for its entire life. That is not
+        # a cosmetic state error: OPENING is not in `is_interruptible`, so every
+        # interrupt was refused; it has no PRIMITIVE_INVOKED row, so no primitive
+        # could move the session; and `_handle_conversational` falls through to
+        # the Tutor's generic `answer` for any state it does not name, so a
+        # lecture session never reached the Lecturer at all.
+        #
+        # Invisible to every tier below this one, because each supplies the state
+        # the runtime was failing to reach: the Tier 1 and paid tests set
+        # `machine.state` by hand, and Tier 2's mock reports LECTURING. Found by
+        # a real session in a real browser. See DIVERGENCES-RUNTIME (R14).
+        self._leave_opening(ctx)
 
         # 2. Budget gate. A hard cap ends the turn with copy, not an exception.
         try:
@@ -234,6 +271,35 @@ class Orchestrator:
         # 9. Confusion-Tracker, fire and forget.
         if intent not in ("next", "back") and learner_input.text.strip():
             self._fire_tracker(ctx, learner_input, intent)
+
+    def _leave_opening(self, ctx: SessionContext) -> None:
+        """Fire §7's ``context_ready`` once, at the end of ``start_session``.
+
+        Still called from ``handle_turn`` as well, and deliberately: a session
+        rebuilt after a process restart (§7's persistence note) never ran this
+        ``start_session``, and an Orchestrator reconstructed in OPENING would
+        otherwise be stuck there exactly as R14 described. The guard below makes
+        the second call free.
+
+        Both branches of the row land on the mode's entry state -- the
+        prior-summary branch differs by running the retrieval check as the
+        transition's *effect*, not by going somewhere else (R12). The guard is
+        still passed honestly rather than hard-coded to the simple branch, so
+        the transition log records which path a session took.
+        """
+        if self.machine.state is not State.OPENING:
+            return
+
+        target, effect = self.machine.fire(
+            Event.CONTEXT_READY,
+            GuardContext(
+                has_prior_summary=bool(ctx.prior_session_summary),
+                session_mode=ctx.mode,
+            ),
+        )
+        log.info(
+            "session %s left OPENING for %s via %s", ctx.session_id, target, effect
+        )
 
     # --- intent ------------------------------------------------------------
 
@@ -368,6 +434,7 @@ class Orchestrator:
 
         effects: list[ToolEffect] = []
         turn_id: uuid.UUID | None = None
+        end: StreamChunk | None = None
 
         async for chunk in agent.handle_streaming(
             AgentInput(session_context=ctx, kind=kind, payload=payload)
@@ -375,26 +442,44 @@ class Orchestrator:
             if chunk.kind == "tool_effect":
                 effects.append(ToolEffect(**chunk.payload))
             elif chunk.kind == "end":
+                # Held back rather than forwarded here. The artifact this
+                # segment became has no id until the effects below commit, and
+                # the `end` chunk is what carries that id to the client (SD5).
+                # The cost is that the terminator now waits on one transaction
+                # after the prose has fully arrived; the learner is reading by
+                # then, and the alternative is a citation nothing can resolve.
                 turn_id = _as_uuid(chunk.payload.get("turn_id"))
-                yield chunk
+                end = chunk
             else:
                 yield chunk
 
-        await self._apply(effects, turn_id)
+        applied = await self._apply(effects, turn_id)
+
+        if end is not None:
+            yield _with_produced_ids(end, applied)
 
     async def _handle_primitive(
         self, ctx: SessionContext, intent: Intent, learner_input: LearnerInput
     ) -> AsyncIterator[StreamChunk]:
         name = intent.split(":", 1)[1]
 
-        # §7: only let_me_try_one changes state, but the transition is applied
+        # §7: only let_me_try_one changes state, and the transition is applied
         # through the table rather than special-cased here.
-        if self.machine.state is State.TUTORIAL:
-            with contextlib.suppress(IllegalTransition):
-                self.machine.fire(Event.PRIMITIVE_INVOKED, GuardContext(primitive=name))
+        #
+        # Fired wherever the table has a row rather than only from TUTORIAL.
+        # The palette is on the classroom (frontend §9.3), which is LECTURING
+        # for a lecture session -- and gating on TUTORIAL meant a learner asking
+        # for a problem mid-lecture got one while the machine stayed in
+        # LECTURING. The `end` chunk said LAB, the runtime disagreed, and their
+        # answer routed to the Tutor instead of the Evaluator. See
+        # DIVERGENCES-RUNTIME (R13).
+        guards = GuardContext(primitive=name)
+        if self.machine.can(Event.PRIMITIVE_INVOKED, guards):
+            self.machine.fire(Event.PRIMITIVE_INVOKED, guards)
 
         effects: list[ToolEffect] = []
         turn_id: uuid.UUID | None = None
+        ends: list[StreamChunk] = []
 
         async for chunk in dispatch_primitive(
             name, ctx, self.agents, utterance=learner_input.text
@@ -403,21 +488,57 @@ class Orchestrator:
                 effects.append(ToolEffect(**chunk.payload))
                 continue
             if chunk.kind == "end":
+                # Same hold-back as _handle_conversational: explain_differently
+                # and show_worked_example both run the Lecturer, so both write
+                # an artifact whose id belongs on this chunk (SD5).
                 turn_id = _as_uuid(chunk.payload.get("turn_id")) or turn_id
-                self._apply_primitive_outcome(chunk.payload)
+                ends.append(chunk)
+                continue
             yield chunk
 
-        await self._apply(effects, turn_id)
+        applied = await self._apply(effects, turn_id)
 
-    def _apply_primitive_outcome(self, payload: dict[str, Any]) -> None:
-        """Absorb the state changes a primitive reported."""
-        if payload.get("problem"):
-            self.pending_problem = payload["problem"]
+        for chunk in ends:
+            yield StreamChunk(
+                kind="end", payload=self._absorb_end(chunk.payload, applied)
+            )
+
+    def _absorb_end(
+        self, payload: dict[str, Any], applied: effects_module.AppliedEffects
+    ) -> dict[str, Any]:
+        """Take what a primitive reported; return what the client may see.
+
+        Two jobs, deliberately in one place because they read the same fields.
+
+        The Orchestrator keeps the **whole** practice problem -- the Evaluator
+        grades next turn against its key points and model answer, and
+        re-deriving them would be a second Curator call for a problem already
+        chosen. What goes down the wire keeps only what the bench renders.
+        ``problem_private`` is where the handler puts the rest, and this is the
+        only place it is unpacked: a model answer sitting in a chunk the browser
+        receives is the answer key delivered alongside the question, whether or
+        not any component draws it.
+        """
+        public = dict(payload)
+        private = public.pop("problem_private", None)
+
+        problem = public.get("problem")
+        if problem is not None or private is not None:
+            self.pending_problem = {**(problem or {}), **(private or {})}
             self.failed_attempts = 0
-        if payload.get("refocus_concept_id"):
+
+        if public.get("refocus_concept_id"):
             # Recorded for the next context assembly; the concept change is
             # persisted by close_session's focus update, not mid-turn.
-            self.machine.interruption_point["refocus"] = payload["refocus_concept_id"]
+            self.machine.interruption_point["refocus"] = public["refocus_concept_id"]
+
+        # v1.0.1 §4.2: every id the batch produced, so a later feature can
+        # reach a row that only exists once the transaction committed. A value
+        # the handler already put on the chunk wins -- it knew something more
+        # specific than "the batch wrote one of these".
+        for name, value in applied.end_chunk_ids().items():
+            public.setdefault(name, value)
+        return public
 
     async def _handle_lab_answer(
         self, ctx: SessionContext, learner_input: LearnerInput
@@ -537,18 +658,26 @@ class Orchestrator:
 
     async def _apply(
         self, effects: list[ToolEffect], turn_id: uuid.UUID | None
-    ) -> None:
-        """Apply a turn's effects, degrading rather than failing the turn (§21)."""
+    ) -> effects_module.AppliedEffects:
+        """Apply a turn's effects, degrading rather than failing the turn (§21).
+
+        Returns what the batch wrote. An empty result on failure is not a
+        silent one: the `end` chunk then carries no ``artifact_id``, and the
+        client renders the citation markers with the card that says the source
+        is not linked -- which is true, because the artifact was rolled back.
+        """
         if not effects:
-            return
+            return effects_module.AppliedEffects()
         try:
             applied = await effects_module.apply_effects(effects, session_turn_id=turn_id)
-            log.debug("applied effects: %s", applied)
+            log.debug("applied effects: %s", applied.kinds)
+            return applied
         except effects_module.EffectApplicationError:
             # §21: the batch rolls back, the trace still stands, the learner is
             # told their answer was received but not recorded.
             log.exception("effect batch failed; state unchanged")
             self.budget.invalidate()
+            return effects_module.AppliedEffects()
 
     def _fire_tracker(
         self, ctx: SessionContext, learner_input: LearnerInput, intent: Intent
@@ -587,6 +716,26 @@ class Orchestrator:
         """
         if self._background:
             await asyncio.gather(*list(self._background), return_exceptions=True)
+
+
+def _with_produced_ids(
+    chunk: StreamChunk, applied: effects_module.AppliedEffects
+) -> StreamChunk:
+    """Copy an ``end`` chunk with the ids its turn's effects produced (§4.2).
+
+    A copy rather than a mutation: the chunk came from an agent, and an agent's
+    output being edited in place is how a value ends up meaning two things
+    depending on where you read it.
+
+    Ids the agent already set win. It knew which artifact its own prose came
+    from; this only knows which rows the batch wrote.
+    """
+    produced = applied.end_chunk_ids()
+    if not produced:
+        return chunk
+    return StreamChunk(
+        kind="end", payload={**produced, **chunk.payload}
+    )
 
 
 def _as_uuid(value: Any) -> uuid.UUID | None:

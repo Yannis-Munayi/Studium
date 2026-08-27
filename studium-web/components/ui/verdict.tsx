@@ -13,19 +13,28 @@ import { CorrectIcon, IncorrectIcon, PartialIcon, iconProps } from "./icons";
  */
 export type VerdictKind = "correct" | "partial" | "incorrect";
 
+/**
+ * The `-strong` tokens, not §16.2's plain ones.
+ *
+ * The lead word is text at 14px and §13.1 wants 4.5:1 of it. §16.2's `correct`
+ * measures 4.08:1 on the light background and `attention` 3.60:1; `concern`
+ * measures 5.80:1 and therefore keeps its own value. The icon beside each one
+ * inherits the same colour, which is fine either way -- a non-text glyph needs
+ * 3:1 -- so there is no second palette to keep in step. See F20.
+ */
 const VERDICTS = {
   correct: {
     Icon: CorrectIcon,
     // §11.1's copy. The lead word does the work a colour would otherwise do.
     lead: "Nice.",
     label: "Correct",
-    color: "var(--color-correct)",
+    color: "var(--color-correct-strong)",
   },
   partial: {
     Icon: PartialIcon,
     lead: "Close.",
     label: "Partly right",
-    color: "var(--color-attention)",
+    color: "var(--color-attention-strong)",
   },
   incorrect: {
     Icon: IncorrectIcon,
@@ -74,10 +83,11 @@ export function Verdict({
  * distinguishable if something other than the glyph distinguishes them.
  */
 export function StatusPill({ status }: { status: "open" | "partial" | "resolved" | "archived" }) {
+  // Same reason as `VERDICTS` above: the pill is a 12px word, not a dot (F20).
   const styles = {
-    open: { color: "var(--color-attention)", Icon: PartialIcon, label: "Open" },
-    partial: { color: "var(--color-attention)", Icon: PartialIcon, label: "Partial" },
-    resolved: { color: "var(--color-correct)", Icon: CorrectIcon, label: "Resolved" },
+    open: { color: "var(--color-attention-strong)", Icon: PartialIcon, label: "Open" },
+    partial: { color: "var(--color-attention-strong)", Icon: PartialIcon, label: "Partial" },
+    resolved: { color: "var(--color-correct-strong)", Icon: CorrectIcon, label: "Resolved" },
     archived: { color: "var(--color-text-secondary)", Icon: CorrectIcon, label: "Archived" },
   }[status];
 

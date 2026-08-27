@@ -17,7 +17,22 @@ from studium.models import Base  # noqa: E402
 
 config = context.config
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers=False, which Alembic's generated scaffolding
+    # omits and which is not cosmetic.
+    #
+    # `fileConfig` defaults to True, and True means *every logger that already
+    # exists gets `.disabled = True`*. Run in its own process -- which is how
+    # `alembic upgrade head` runs in the deploy's release command -- nothing
+    # else exists yet and the default is harmless. Run in-process, it silences
+    # every `studium.*` logger created by an earlier import, permanently, with
+    # no error and no log line saying so.
+    #
+    # Found by the infrastructure build: `tests/ops/test_observability.py`
+    # asserts a correlation id reaches a record from `studium.agents.lecturer`,
+    # and it failed only in runs where the migration-sequence tests had already
+    # driven Alembic in the same process. The observability code was correct;
+    # the logger it wrote to had been switched off.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # alembic.ini leaves sqlalchemy.url empty so the application and the migrations
 # read one environment variable. A caller that sets the URL explicitly must

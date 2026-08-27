@@ -39,7 +39,13 @@ export function SessionStartForm({ userId }: { userId: string }) {
     mutationFn: () =>
       startSession({ user_id: userId, mode, target_duration_minutes: minutes }),
     onSuccess: (session) => {
-      router.push(`/sessions/${session.session_id}?mode=${mode}&minutes=${minutes}`);
+      // The mode the runtime says the session has, not the one this form sent.
+      // §20 allows one active session per learner, so a learner with an
+      // unfinished session gets that one back — and navigating with the
+      // requested mode gave the classroom a lecture it was never going to be
+      // handed, with every turn routing to the Tutor instead. See F22.
+      const actual = session.mode ?? mode;
+      router.push(`/sessions/${session.session_id}?mode=${actual}&minutes=${minutes}`);
     },
   });
 

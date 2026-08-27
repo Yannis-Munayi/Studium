@@ -17,7 +17,7 @@ from studium.agents.base import StreamChunk
 from studium.agents.orchestrator import Orchestrator
 from studium.api.app import app, registry
 from studium.orchestration.state_machine import State
-from tests.fixtures.runtime import FakeRegistry
+from tests.fixtures.runtime import FakeRegistry, drive_to
 
 
 @pytest.fixture
@@ -35,7 +35,7 @@ def session_id():
 def _install(session_id: uuid.UUID, state: State = State.LECTURING) -> Orchestrator:
     """Register an orchestrator with a canned turn, bypassing the database."""
     orchestrator = Orchestrator(agents=FakeRegistry())  # type: ignore[arg-type]
-    orchestrator.machine.state = state
+    drive_to(orchestrator.machine, state)
 
     async def fake_turn(sid, learner_input):
         yield StreamChunk.text_chunk("Beta-reduction ")
@@ -94,6 +94,63 @@ class TestTurnStreaming:
             f"/api/session/{session_id}/turn", json={"text": "", "primitive": primitive}
         )
         assert response.status_code == 200
+
+    def test_a_client_may_declare_an_intent_it_already_knows(self, client, session_id):
+        """§8's classifier is a model call over words. Some controls are not words.
+
+        The bench's Submit is an answer whatever the learner typed, and a
+        classifier reading "It reduces to the identity." as a comment routes it
+        to the Tutor and never grades it. Declaring the intent is the same move
+        the primitive field already makes, for the same reason.
+        """
+        captured: dict[str, object] = {}
+        orchestrator = _install(session_id, State.LAB)
+
+        async def capture(sid, learner_input):
+            captured["intent"] = learner_input.intent
+            captured["text"] = learner_input.text
+            yield StreamChunk.ended()
+
+        orchestrator.handle_turn = capture  # type: ignore[method-assign]
+
+        response = client.post(
+            f"/api/session/{session_id}/turn",
+            json={"text": "It reduces to the identity.", "intent": "answer"},
+        )
+
+        assert response.status_code == 200
+        assert captured["intent"] == "answer"
+
+    @pytest.mark.parametrize(
+        "intent",
+        # The primitives have their own field, and the two out-of-band signals
+        # have their own endpoints. Accepting them here would give one signal a
+        # second spelling that could disagree with the first.
+        ["primitive:let_me_try_one", "interrupt", "end_session", "daydream"],
+    )
+    def test_an_intent_the_turn_channel_does_not_accept_is_rejected(
+        self, client, session_id, intent
+    ):
+        _install(session_id)
+        response = client.post(
+            f"/api/session/{session_id}/turn", json={"text": "", "intent": intent}
+        )
+        assert response.status_code == 422
+        assert intent in response.json()["detail"]
+
+    def test_a_turn_with_no_declared_intent_still_classifies(self, client, session_id):
+        """The declaration is optional; free-form text is the ordinary path."""
+        captured: dict[str, object] = {}
+        orchestrator = _install(session_id)
+
+        async def capture(sid, learner_input):
+            captured["intent"] = learner_input.intent
+            yield StreamChunk.ended()
+
+        orchestrator.handle_turn = capture  # type: ignore[method-assign]
+
+        client.post(f"/api/session/{session_id}/turn", json={"text": "why?"})
+        assert captured["intent"] is None
 
     def test_a_stale_interrupt_does_not_cut_the_next_turn_short(self, client, session_id):
         """The interrupt state is cleared per turn (§20)."""
@@ -241,3 +298,233 @@ class TestCitationResolution:
         response = client.get(f"/api/artifacts/{uuid.uuid4()}/citations")
         assert response.status_code == 200
         assert response.json()["citations"] == []
+
+
+class TestPrimitiveEndpoint:
+    """v1.0.1 §3.1's named emission path, and §3.2's validity check.
+
+    The value of a dedicated endpoint over ``POST /turn`` with a primitive
+    field is that this one can answer "is that legal here?" *before* opening a
+    stream. §3.2: "Silent no-op is not acceptable."
+    """
+
+    @pytest.mark.parametrize(
+        "primitive,state",
+        [
+            ("let_me_try_one", State.LECTURING),
+            ("let_me_try_one", State.TUTORIAL),
+            ("prove_it_to_me", State.OFFICE_HOURS),
+            ("im_lost", State.LAB),
+            ("show_worked_example", State.PAUSED_FOR_QUESTION),
+            ("where_does_this_fit", State.OFFICE_HOURS),
+        ],
+    )
+    def test_a_valid_combination_streams(self, client, session_id, primitive, state):
+        _install(session_id, state)
+        response = client.post(
+            f"/api/session/{session_id}/primitive", json={"primitive": primitive}
+        )
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/event-stream")
+
+    @pytest.mark.parametrize(
+        "primitive,state",
+        # Checklist item 3 asks for "at least three cross-source-state cases".
+        # These are the four that matter: the bench primitive invoked from
+        # states that have no bench, and the two the matrix withholds from LAB
+        # and OFFICE_HOURS.
+        [
+            ("let_me_try_one", State.LAB),
+            ("let_me_try_one", State.REVIEW),
+            ("explain_differently", State.LAB),
+            ("show_worked_example", State.OFFICE_HOURS),
+        ],
+    )
+    def test_an_invalid_combination_is_refused_before_the_stream_opens(
+        self, client, session_id, primitive, state
+    ):
+        _install(session_id, state)
+        response = client.post(
+            f"/api/session/{session_id}/primitive", json={"primitive": primitive}
+        )
+
+        assert response.status_code == 400
+        assert not response.headers["content-type"].startswith("text/event-stream")
+        detail = response.json()["detail"]
+        assert detail["primitive"] == primitive
+        assert detail["state"] == state.value
+        # The client has to render something. A refusal without "where then?"
+        # leaves the UI unable to say anything useful (§3.2).
+        assert detail["valid_from"], "a refusal with no valid_from is a silent no-op"
+        assert state.value not in detail["valid_from"]
+
+    def test_an_unknown_primitive_is_422_not_400(self, client, session_id):
+        """A different failure: malformed request vs. legal-but-not-here."""
+        _install(session_id)
+        response = client.post(
+            f"/api/session/{session_id}/primitive",
+            json={"primitive": "teach_telepathy"},
+        )
+        assert response.status_code == 422
+
+    def test_the_refusal_names_a_state_that_would_have_worked(self, client, session_id):
+        """valid_from has to be actionable, not decorative."""
+        from studium.orchestration.state_machine import primitive_is_valid
+
+        _install(session_id, State.LAB)
+        detail = client.post(
+            f"/api/session/{session_id}/primitive",
+            json={"primitive": "let_me_try_one"},
+        ).json()["detail"]
+
+        for name in detail["valid_from"]:
+            assert primitive_is_valid("let_me_try_one", State(name))
+
+
+class TestPracticeSubmitEndpoint:
+    """§3.1: LAB and REVIEW share ``answer_submitted``."""
+
+    @pytest.mark.parametrize("state", [State.LAB, State.REVIEW])
+    def test_a_submission_declares_the_answer_intent(self, client, session_id, state):
+        """The learner pressed Submit, so there is nothing left to classify.
+
+        Paying a Haiku call to re-derive a signal the client already sent is
+        the waste §8 avoids for primitives, for the same reason.
+        """
+        captured: dict[str, object] = {}
+        orchestrator = _install(session_id, state)
+
+        async def capture(sid, learner_input):
+            captured["intent"] = learner_input.intent
+            captured["text"] = learner_input.text
+            yield StreamChunk.ended()
+
+        orchestrator.handle_turn = capture  # type: ignore[method-assign]
+
+        response = client.post(
+            f"/api/session/{session_id}/practice/submit",
+            json={"answer": "It reduces to the identity."},
+        )
+
+        assert response.status_code == 200
+        assert captured["intent"] == "answer"
+        assert captured["text"] == "It reduces to the identity."
+
+
+class TestResumeEndpoint:
+    """§5.2: the resumption card's wire path."""
+
+    def test_resuming_a_paused_lecture_returns_the_new_state(self, client, session_id):
+        _install(session_id, State.PAUSED_FOR_QUESTION)
+        response = client.post(f"/api/session/{session_id}/resume", json={})
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["state"] == "LECTURING"
+        assert body["session_id"] == str(session_id)
+
+    def test_it_returns_json_not_a_stream(self, client, session_id):
+        """§5.2: this endpoint's job is the transition; the recap arrives on
+        the next turn's stream. Conflating them would leave the client unable
+        to tell "resume accepted" from "recap still generating"."""
+        _install(session_id, State.PAUSED_FOR_QUESTION)
+        response = client.post(f"/api/session/{session_id}/resume", json={})
+        assert response.headers["content-type"].startswith("application/json")
+
+    @pytest.mark.parametrize("state", [State.LECTURING, State.LAB, State.INTERRUPTED])
+    def test_resuming_from_anywhere_else_is_a_409(self, client, session_id, state):
+        _install(session_id, state)
+        response = client.post(f"/api/session/{session_id}/resume", json={})
+
+        assert response.status_code == 409
+        assert response.json()["detail"]["state"] == state.value
+
+    def test_the_machine_does_not_move_on_a_refused_resume(self, client, session_id):
+        """A 409 that transitioned anyway would be worse than a 200."""
+        orchestrator = _install(session_id, State.LECTURING)
+        client.post(f"/api/session/{session_id}/resume", json={})
+        assert orchestrator.machine.state is State.LECTURING
+
+
+class TestEscalateEndpoint:
+    """§5.2: office hours, and the server-side re-check of the threshold."""
+
+    @pytest.fixture
+    def threshold_met(self, monkeypatch):
+        import studium.api.app as app_module
+        from studium.session.escalation import EscalationStatus
+
+        async def met(session_id, *, now=None):
+            return EscalationStatus(
+                should_offer=True,
+                tutor_turns=4,
+                minutes_since_interrupt=12.0,
+                reason="4 tutor turns over 12.0 minutes",
+            )
+
+        monkeypatch.setattr(app_module, "escalation_status", met)
+
+    @pytest.fixture
+    def threshold_unmet(self, monkeypatch):
+        import studium.api.app as app_module
+        from studium.session.escalation import EscalationStatus
+
+        async def unmet(session_id, *, now=None):
+            return EscalationStatus(
+                should_offer=False,
+                tutor_turns=1,
+                minutes_since_interrupt=2.0,
+                reason="1 tutor turn over 2.0 minutes",
+            )
+
+        monkeypatch.setattr(app_module, "escalation_status", unmet)
+
+    def test_escalating_a_qualified_pause_reaches_office_hours(
+        self, client, session_id, threshold_met, monkeypatch
+    ):
+        import studium.api.app as app_module
+
+        wrote: dict[str, object] = {}
+
+        async def fake_run_db(fn):
+            wrote["called"] = True
+            return None
+
+        monkeypatch.setattr(app_module, "run_db", fake_run_db)
+
+        _install(session_id, State.PAUSED_FOR_QUESTION)
+        response = client.post(f"/api/session/{session_id}/escalate", json={})
+
+        assert response.status_code == 200
+        assert response.json()["state"] == "OFFICE_HOURS"
+        # §5.2: the persisted mode moves too, or a rebuilt Orchestrator (§7)
+        # would restore the session as whatever it was before.
+        assert wrote.get("called") is True
+
+    def test_an_unmet_threshold_is_a_409_that_says_why(
+        self, client, session_id, threshold_unmet
+    ):
+        """The card is time-based: one rendered at nine minutes is still on
+        screen at eleven, so the server decides which side the press landed."""
+        _install(session_id, State.PAUSED_FOR_QUESTION)
+        response = client.post(f"/api/session/{session_id}/escalate", json={})
+
+        assert response.status_code == 409
+        detail = response.json()["detail"]
+        assert detail["tutor_turns"] == 1
+        assert "1 tutor turn" in detail["reason"]
+
+    def test_a_refused_escalation_leaves_the_state_alone(
+        self, client, session_id, threshold_unmet
+    ):
+        orchestrator = _install(session_id, State.PAUSED_FOR_QUESTION)
+        client.post(f"/api/session/{session_id}/escalate", json={})
+        assert orchestrator.machine.state is State.PAUSED_FOR_QUESTION
+
+    @pytest.mark.parametrize("state", [State.LECTURING, State.TUTORIAL, State.LAB])
+    def test_escalating_from_anywhere_else_is_a_409(
+        self, client, session_id, state, threshold_met
+    ):
+        _install(session_id, state)
+        response = client.post(f"/api/session/{session_id}/escalate", json={})
+        assert response.status_code == 409

@@ -22,6 +22,16 @@ class Settings(BaseSettings):
 
     echo_sql: bool = False
 
+    #: Where ingestion keeps source PDFs and their intermediate artefacts
+    #: (ingestion §4 "File storage"). A Fly volume at MVP; the data layer
+    #: treats ``sources.storage_path`` as opaque (§6.3), so moving this to R2
+    #: later changes what the path means to this process and nothing else.
+    #:
+    #: Overridable per-environment because the tests need it pointed at a
+    #: temporary directory -- a default of "/data" would have Tier 2 writing
+    #: into the deployment's volume layout on a developer's machine.
+    source_storage_root: str = "/data/sources"
+
     @property
     def jobs_database_url(self) -> str:
         return self.owner_database_url or self.database_url

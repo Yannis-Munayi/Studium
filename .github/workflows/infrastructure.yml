@@ -1,0 +1,475 @@
+# Infrastructure CI (infrastructure spec v1.0 §16, §10.2).
+#
+#   Tier 1 (offline)  gates every push. No database, no API key, no Fly
+#                     account: the CI workflow YAML parses for every subsystem,
+#                     secret variable names match across production/local/CI,
+#                     the alert configuration is valid and complete, the
+#                     retention worker's algorithm handles its edge cases, and
+#                     the restore documentation exists and names the commands
+#                     it claims to.
+#   Tier 2 (online)   runs on the integration branches and on PRs touching
+#                     ops, deployment or the schema. Needs Postgres: the
+#                     retention worker against seeded data, holds, the audit
+#                     trail, verify-restore, and the cost report.
+#   Tier 3            is not a CI job and cannot be. §16's Tier 3 lines are
+#                     "monthly reconciliation against Anthropic and Voyage
+#                     invoices", "quarterly report of actual uptime" and
+#                     "quarterly review of what alerts fired" -- all of which
+#                     need production data and a human reading it. They are on
+#                     the calendar in docs/ops/README.md, not here.
+#
+# **What this workflow deliberately cannot verify.** It builds both images and
+# it does not deploy either. There is no Fly account in CI (§6.2 scopes the
+# deployment token to a human's workstation), so "the deploy pipeline works" is
+# checked by §16's Tier 2 line against a scratch environment, by hand, and the
+# drill log records when. Saying so here rather than letting a green check imply
+# otherwise.
+#
+# A separate workflow per the dev's standing principle: one green check spanning
+# several subsystems cannot tell you which of them is healthy.
+
+name: infrastructure
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  group: infrastructure-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+
+  # Identical to the other six workflows on purpose. Pushing to main is not
+  # available on this repository, so `yannis` is the trunk in practice.
+  INTEGRATION_BRANCHES: "main yannis"
+
+jobs:
+  offline:
+    name: Tier 1 - offline
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install
+        run: python -m pip install -e ".[dev,evaluation]"
+
+      - name: Ruff
+        run: python -m ruff check studium/ops studium/storage studium/observability tests/ops
+
+      - name: Tier 1
+        # Deselecting both markers must still select a non-empty set. A tier
+        # that silently ran zero tests would report green while checking
+        # nothing.
+        run: |
+          set -euo pipefail
+          collected=$(python -m pytest tests/ops \
+            -m "not postgres and not anthropic" --collect-only -q | tail -1)
+          echo "collected: $collected"
+          case "$collected" in
+            "no tests ran"*|"0 tests"*)
+              echo "::error::Tier 1 selected no tests"; exit 1 ;;
+          esac
+          python -m pytest tests/ops -q -m "not postgres and not anthropic"
+
+      - name: Every subsystem workflow parses
+        # §16 Tier 1, line 1. Checked for all seven rather than for this one:
+        # a workflow that stopped parsing is a workflow GitHub stops running,
+        # and a subsystem whose CI silently stopped running looks exactly like
+        # a subsystem with no failures.
+        working-directory: .
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import sys
+          from pathlib import Path
+          try:
+              import yaml
+          except ImportError:
+              sys.exit("pyyaml is required for this check")
+
+          expected = {
+              "data-layer", "agent-runtime", "retrieval", "frontend",
+              "ingestion", "evaluation", "infrastructure", "prompt-regression",
+          }
+          found = set()
+          for path in sorted(Path(".github/workflows").glob("*.yml")):
+              document = yaml.safe_load(path.read_text(encoding="utf-8"))
+              assert isinstance(document, dict), f"{path} is not a mapping"
+              # `on:` parses as the boolean True in YAML 1.1. Accepting either
+              # spelling rather than pretending the quirk is not there.
+              assert "jobs" in document, f"{path} has no jobs"
+              assert "on" in document or True in document, f"{path} has no triggers"
+              found.add(path.stem)
+              print(f"  {path.name}: {len(document['jobs'])} job(s)")
+
+          missing = expected - found
+          assert not missing, f"§10.1/§10.2 name workflows that do not exist: {sorted(missing)}"
+          print(f"{len(found)} workflow(s) parse")
+          PY
+
+      - name: .env.example is in step with the registry
+        # §16 Tier 1, line 2. The file is generated; a hand-edit or a new
+        # Variable that was not re-rendered shows up as a diff here rather
+        # than as a deployment missing a secret nobody documented.
+        run: |
+          set -euo pipefail
+          python -m studium.ops.cli ops secrets render > /tmp/env.rendered
+          if ! diff -u .env.example /tmp/env.rendered; then
+            echo "::error::.env.example is stale. Run: studium ops secrets render --write"
+            exit 1
+          fi
+          echo ".env.example matches studium/ops/secrets.py"
+
+      - name: No secret is committed in a Fly config
+        # The failure worth automating: a key pasted into a TOML that is in the
+        # git history forever. Checks the registry's own classification rather
+        # than a regex for things that look like keys, so a new secret is
+        # covered the moment it is registered.
+        working-directory: .
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, "backend")
+          from studium.ops.secrets import REGISTRY
+
+          leaked = []
+          for config in (Path("backend/fly.toml"), Path("studium-web/fly.toml")):
+              text = config.read_text(encoding="utf-8")
+              for variable in REGISTRY:
+                  if not variable.secret:
+                      continue
+                  for line in text.splitlines():
+                      stripped = line.strip()
+                      if stripped.startswith("#"):
+                          continue
+                      if stripped.startswith(f"{variable.name} ") or stripped.startswith(
+                          f"{variable.name}="
+                      ):
+                          leaked.append(f"{config}: {variable.name}")
+
+          for entry in leaked:
+              print(f"::error::secret assigned in a committed file: {entry}")
+          assert not leaked, f"{len(leaked)} secret(s) in committed configuration"
+          print("no secrets in fly.toml")
+          PY
+
+      - name: Alert conditions are complete and none is orphaned
+        # §16 Tier 1, line 3, and the failure it exists to catch: a threshold
+        # that is written down, watched by nothing, and reads as coverage.
+        # Same shape as evaluation's coverage_gaps -- a gate whose input is
+        # absent must fail, not pass.
+        run: |
+          set -euo pipefail
+          python -c "
+          from studium.ops import alerts
+
+          orphans = [
+              c.key for c in alerts.CONDITIONS
+              if c.probe is None and not c.configured_in
+          ]
+          for key in orphans:
+              print(f'::error::condition {key} has no probe and names no external home')
+          assert not orphans, f'{len(orphans)} unwatched condition(s)'
+
+          silent = [c.key for c in alerts.CONDITIONS if not c.action]
+          assert not silent, f'conditions with no stated action: {silent}'
+
+          both = {c.key for c in alerts.CONDITIONS} & {k for k, _ in alerts.NOT_ALERTED}
+          assert not both, f'§8.2 says these do not alert, and §8.1 says they do: {both}'
+
+          print(f'{len(alerts.CONDITIONS)} conditions, '
+                f'{sum(1 for c in alerts.CONDITIONS if c.probe)} with probes, '
+                f'{len(alerts.NOT_ALERTED)} deliberately not alerted')
+          "
+
+      - name: Restore documentation exists and names real commands
+        # §16 Tier 1, line 5. Not "a file is present" -- a runbook that names a
+        # command which no longer exists is worse than no runbook, because it
+        # is read during an incident.
+        working-directory: .
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import subprocess, sys
+          from pathlib import Path
+
+          required = [
+              "docs/ops/README.md",
+              "docs/ops/postgres-restore.md",
+              "docs/ops/volume-restore.md",
+              "docs/ops/drill-log.md",
+              "docs/ops/signing-keys.md",
+              "docs/ops/secrets.md",
+              "docs/ops/retention.md",
+              "docs/ops/deploy.md",
+              "docs/ops/runbook.md",
+              "docs/ops/storage-migration.md",
+              "docs/ops/scaling.md",
+          ]
+          missing = [p for p in required if not Path(p).is_file()]
+          assert not missing, f"missing runbooks: {missing}"
+
+          help_text = subprocess.run(
+              [sys.executable, "-m", "studium.ops.cli", "ops", "--help"],
+              cwd="backend", capture_output=True, text=True, check=True,
+          ).stdout
+
+          # Every `studium ops <verb>` a runbook tells someone to type must be
+          # a verb the CLI actually has.
+          import re
+          referenced = set()
+          for path in required:
+              for match in re.finditer(r"studium ops ([a-z-]+)", Path(path).read_text(encoding="utf-8")):
+                  referenced.add(match.group(1))
+
+          unknown = sorted(v for v in referenced if v not in help_text)
+          for verb in unknown:
+              print(f"::error::a runbook says `studium ops {verb}` and the CLI has no such command")
+          assert not unknown, f"{len(unknown)} stale command reference(s)"
+          print(f"{len(required)} runbooks, {len(referenced)} ops commands referenced, all real")
+          PY
+
+      - name: Observability degrades to nothing when its SDKs are absent
+        # The claim §7 rests on: "an observability backend that can fail a
+        # learner's turn is a second outage source attached to the thing that
+        # was supposed to explain the first." Asserted by blocking the imports
+        # and driving configure() to completion, rather than by believing the
+        # try/except blocks.
+        run: |
+          python - <<'PY'
+          import importlib.abc, os, sys
+          BLOCKED = {"sentry_sdk", "opentelemetry", "langfuse"}
+          class Finder(importlib.abc.MetaPathFinder):
+              def find_spec(self, name, path, target=None):
+                  if name.split(".")[0] in BLOCKED:
+                      raise ImportError(f"{name} is not installed (simulated)")
+                  return None
+          sys.meta_path.insert(0, Finder())
+          for mod in list(sys.modules):
+              if mod.split(".")[0] in BLOCKED:
+                  del sys.modules[mod]
+
+          # Configured but uninstallable: the case where an operator set the
+          # DSN and the extra was not installed, which is the one that would
+          # raise if anything here raised.
+          os.environ["SENTRY_DSN"] = "https://key@example.ingest.sentry.io/1"
+          os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "https://example.invalid/otel"
+
+          from studium import observability
+          from studium.api.app import app
+
+          state = observability.configure(app)
+          assert state == {
+              "correlation_ids": True, "sentry": False,
+              "opentelemetry": False, "langfuse": False,
+          }, state
+
+          # The one piece that needs no SDK still works.
+          from studium.observability.correlation import set_correlation_id, correlation_id
+          set_correlation_id("abc123")
+          assert correlation_id() == "abc123"
+          print("observability is inert without its SDKs, and correlation ids still work")
+          PY
+
+      - name: Both images build
+        # Not a deploy -- see the header. It catches the failures that are
+        # cheap to catch here and expensive at `flyctl deploy`: a missing
+        # system package, a stale lockfile, a build-time environment variable
+        # the Next build needs.
+        working-directory: .
+        run: |
+          set -euo pipefail
+          docker build -t studium-backend:ci backend
+          docker build -t studium-web:ci studium-web
+          docker run --rm studium-backend:ci python -c "
+          import studium.api.app, studium.ops.cli, studium.storage, studium.observability
+          print('backend image imports the whole surface')
+          "
+
+  changes:
+    name: Does Tier 2 apply?
+    runs-on: ubuntu-24.04
+    outputs:
+      run_online: ${{ steps.decide.outputs.run_online }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: decide
+        name: Decide
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+
+          echo "event=$EVENT  ref=$REF"
+          echo "integration branches: '${INTEGRATION_BRANCHES:-<UNSET>}'"
+
+          if [ -z "${INTEGRATION_BRANCHES:-}" ]; then
+            echo "::error::INTEGRATION_BRANCHES is empty or unset, so no branch"\
+                 "can ever match and Tier 2 would be skipped everywhere."\
+                 "Failing loudly rather than reporting a green run that tested"\
+                 "half of what it claims."
+            exit 1
+          fi
+
+          if [ "$EVENT" != "pull_request" ]; then
+            branch="${REF#refs/heads/}"
+            for candidate in $INTEGRATION_BRANCHES; do
+              if [ "$branch" = "$candidate" ]; then
+                echo "run_online=true" >> "$GITHUB_OUTPUT"
+                echo "$branch is an integration branch: Tier 2 runs"
+                exit 0
+              fi
+            done
+            echo "run_online=false" >> "$GITHUB_OUTPUT"
+            echo "$branch is not an integration branch: Tier 1 only"
+            exit 0
+          fi
+
+          changed=$(git diff --name-only "$BASE_SHA" HEAD)
+          echo "changed files:"; echo "$changed" | sed 's/^/  /'
+
+          # The retention worker reads every policy table, the cost report
+          # reads the ledger and the roll-up that fills it, verify-restore
+          # reads the whole schema, and the nightly pass calls into privacy and
+          # jobs. A change to any of those can break this subsystem with
+          # nothing under studium/ops touched.
+          if echo "$changed" | grep -qE '^(backend/(studium/(ops|storage|observability)/|studium/jobs/|studium/privacy\.py|studium/models/|studium/api/app\.py|migrations/|tests/ops/|fly\.toml|Dockerfile|\.env\.example)|studium-web/(fly\.toml|Dockerfile|app/health/)|docs/ops/|\.github/workflows/)'; then
+            echo "run_online=true" >> "$GITHUB_OUTPUT"
+            echo "touches infrastructure or what it reads: Tier 2 runs"
+          else
+            echo "run_online=false" >> "$GITHUB_OUTPUT"
+            echo "no infrastructure-adjacent changes: Tier 1 only"
+          fi
+
+  online:
+    name: Tier 2 - online
+    needs: [offline, changes]
+    if: needs.changes.outputs.run_online == 'true'
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      STUDIUM_TEST_DATABASE_URL: postgresql+psycopg://studium:studium@localhost:5433/studium_test
+      STUDIUM_DATABASE_URL: postgresql+psycopg://studium:studium@localhost:5433/studium_test
+      STUDIUM_OWNER_DATABASE_URL: postgresql+psycopg://studium:studium@localhost:5433/studium_test
+      STUDIUM_RUN_PAID_TESTS: "0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install
+        run: python -m pip install -e ".[dev,evaluation]"
+
+      - name: Start Postgres
+        run: docker compose -f docker-compose.test.yml up -d test-db
+
+      - name: Wait for health
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 60); do
+            if docker compose -f docker-compose.test.yml exec -T test-db \
+                 pg_isready -U studium -d studium_test >/dev/null 2>&1; then
+              echo "ready"; exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Postgres did not become ready"
+          docker compose -f docker-compose.test.yml logs test-db
+          exit 1
+
+      - name: Apply schema
+        run: python -m alembic upgrade head
+
+      - name: The 0012 objects are actually present
+        # Every Tier 2 test here assumes them. Failing on the specific missing
+        # object names the cause instead of surfacing it as query errors thirty
+        # seconds later.
+        run: |
+          set -euo pipefail
+          psql() {
+            docker compose -f docker-compose.test.yml exec -T test-db \
+              psql -U studium -d studium_test -v ON_ERROR_STOP=1 -tAc "$1"
+          }
+          for table in retention_actions retention_holds; do
+            test "$(psql "SELECT to_regclass('$table') IS NOT NULL")" = t
+          done
+          test "$(psql "SELECT count(*) FROM information_schema.columns
+                         WHERE table_name='signing_keys'
+                           AND column_name='compromised_at'")" = 1
+          test "$(psql "SELECT count(*) FROM pg_indexes
+                         WHERE indexname='idx_retention_holds_active'")" = 1
+          test "$(psql "SELECT count(*) FROM pg_trigger
+                         WHERE tgname='trg_retention_holds_updated_at'")" = 1
+          echo "migration 0012 objects present"
+
+      - name: retention_actions is append-only to the application role
+        # The property migration 0012 exists to establish, checked against the
+        # database rather than against the migration text. 0003's ALTER DEFAULT
+        # PRIVILEGES grants UPDATE and DELETE on every table created after it,
+        # so this is the assertion that the REVOKE actually landed.
+        run: |
+          set -euo pipefail
+          psql() {
+            docker compose -f docker-compose.test.yml exec -T test-db \
+              psql -U studium -d studium_test -v ON_ERROR_STOP=1 -tAc "$1"
+          }
+          for privilege in UPDATE DELETE; do
+            granted=$(psql "SELECT has_table_privilege('studium_app', 'retention_actions', '$privilege')")
+            if [ "$granted" != "f" ]; then
+              echo "::error::studium_app can $privilege retention_actions; the audited process can rewrite the audit trail"
+              exit 1
+            fi
+          done
+          test "$(psql "SELECT has_table_privilege('studium_app', 'retention_actions', 'INSERT')")" = t
+          echo "retention_actions is append-only to studium_app"
+
+      - name: Tier 2
+        run: python -m pytest tests/ops tests/online/test_ops_db.py -q -m "postgres and not anthropic"
+
+      - name: The ops commands run against a real database
+        # Exercising the CLI itself rather than only the functions under it.
+        # Exit codes are this subsystem's interface (§10.3's "Failure alerts"
+        # reads $?), and an argparse wiring mistake is invisible to a test that
+        # calls the handler directly.
+        run: |
+          set -euo pipefail
+          python -m studium.ops.cli ops verify-restore
+          python -m studium.ops.cli ops check-alerts --all
+          python -m studium.ops.cli ops cost-report
+          python -m studium.ops.cli ops nightly --dry-run
+          python -m studium.ops.cli ops retention log
+          python -m studium.ops.cli ops holds list
+          echo "ops CLI exercised end to end"
+
+      - name: Postgres logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.test.yml logs test-db
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v

@@ -11,12 +11,20 @@ from __future__ import annotations
 
 from ..privacy import erase_user, purge_expired_soft_deletes
 from .cost_rollup import reconcile, refresh_decay, roll_up_day
-from .retention import POLICIES, apply_retention, check_dangling_chunk_refs
+from .retention import (
+    POLICIES,
+    active_policies,
+    apply_retention,
+    check_dangling_chunk_refs,
+    deletion_predicate,
+)
 
 __all__ = [
     "POLICIES",
+    "active_policies",
     "apply_retention",
     "check_dangling_chunk_refs",
+    "deletion_predicate",
     "erase_user",
     "purge_expired_soft_deletes",
     "reconcile",

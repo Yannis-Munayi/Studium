@@ -23,12 +23,28 @@ from .curriculum import (
     Subject,
     SubjectMetadata,
 )
+from .evaluation import (
+    GRADING_KINDS,
+    RUN_STATUSES,
+    TRIGGER_KINDS,
+    EvaluationResult,
+    EvaluationRun,
+    GoldenDataset,
+    GoldenDatasetEntry,
+    SigningKey,
+)
 from .identity import AuthSession, User, UserProfile
-from .ingestion import ContentReviewQueueItem, IngestionJob
+from .ingestion import ContentReviewQueueItem, IngestionJob, IngestionReviewQueueItem
 from .journal import JournalEntry, JournalEvent
 from .learner import ConceptMastery, LearnerSubject, MasteryEvent
 from .memory import RetrievalCheck, SessionSummary
-from .operational import AuditLog, CostLedger, UserBudgetCap
+from .operational import (
+    AuditLog,
+    CostLedger,
+    RetentionAction,
+    RetentionHold,
+    UserBudgetCap,
+)
 from .portfolio import PortfolioItem
 from .review import ReviewCard, ReviewEvent
 from .sessions import AgentTrace, LearningSession, SessionTurn
@@ -37,8 +53,11 @@ __all__ = [
     "ALL_ENUMS",
     "APPEND_ONLY_TABLES",
     "EMBEDDING_DIM",
+    "GRADING_KINDS",
+    "RUN_STATUSES",
     "SOFT_DELETE_TABLES",
     "TRIGGERED_TABLES",
+    "TRIGGER_KINDS",
     "AgentTrace",
     "AssessmentAttempt",
     "AssessmentResponse",
@@ -53,7 +72,12 @@ __all__ = [
     "ContentCitation",
     "ContentReviewQueueItem",
     "CostLedger",
+    "EvaluationResult",
+    "EvaluationRun",
+    "GoldenDataset",
+    "GoldenDatasetEntry",
     "IngestionJob",
+    "IngestionReviewQueueItem",
     "JournalEntry",
     "JournalEvent",
     "LearnerSubject",
@@ -63,9 +87,12 @@ __all__ = [
     "RetrievalCheck",
     "ReviewCard",
     "ReviewEvent",
+    "RetentionAction",
+    "RetentionHold",
     "RubricCriterion",
     "SessionSummary",
     "SessionTurn",
+    "SigningKey",
     "Source",
     "SourceChunk",
     "SourceChunkEmbedding",

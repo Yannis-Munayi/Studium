@@ -7,8 +7,13 @@ import {
   closeResponse,
   degradedPayload,
   endPayload,
+  deskResponse,
   interruptResponse,
+  journalEntry,
+  journalEntryDetail,
+  practiceProblem,
   sessionStateResponse,
+  sessionSummary,
   startSessionResponse,
   streamChunk,
 } from "@/lib/api/schemas";
@@ -122,16 +127,55 @@ describe("stream chunk schemas", () => {
     expect(streamChunk.safeParse({ payload: { text: "orphan" } }).success).toBe(false);
   });
 
-  it("parses the Lecturer's end payload", () => {
+  it("parses the Lecturer's end payload, with the artifact it produced", () => {
     const parsed = endPayload.parse({
       turn_id: SESSION_ID,
       segment_index: 4,
       anchor: "The redex is chosen leftmost-outermost.",
+      artifact_id: ARTIFACT_ID,
     });
     expect(parsed.segment_index).toBe(4);
-    // Not emitted by the runtime today; parsed so the client picks it up the
-    // moment it is. See DIVERGENCES F3.
-    expect(parsed.artifact_id).toBeUndefined();
+    // SD5, closed: this is what `GET /api/artifacts/{id}/citations` needs.
+    expect(parsed.artifact_id).toBe(ARTIFACT_ID);
+  });
+
+  it("still parses an end payload with no artifact id", () => {
+    // A Tutor turn produces none, and a Lecturer turn whose effect batch rolled
+    // back has none to name. Both are ordinary, not errors.
+    expect(endPayload.parse({ turn_id: SESSION_ID }).artifact_id).toBeUndefined();
+  });
+
+  it("parses the four other produced ids and the turn index", () => {
+    // v1.0.1 §4: the effect batch commits before the end chunk is sent, so
+    // every row a turn wrote is nameable by the time the client reads this.
+    const parsed = endPayload.parse({
+      turn_id: SESSION_ID,
+      turn_index: 12,
+      journal_entry_id: ARTIFACT_ID,
+      portfolio_item_id: ARTIFACT_ID,
+      review_card_id: ARTIFACT_ID,
+      queue_item_id: ARTIFACT_ID,
+    });
+    expect(parsed.journal_entry_id).toBe(ARTIFACT_ID);
+    expect(parsed.portfolio_item_id).toBe(ARTIFACT_ID);
+    expect(parsed.review_card_id).toBe(ARTIFACT_ID);
+    expect(parsed.queue_item_id).toBe(ARTIFACT_ID);
+    expect(parsed.turn_index).toBe(12);
+  });
+
+  it("still parses an end payload that produced none of them", () => {
+    // Most turns write nothing. §4 omits absent ids rather than sending nulls,
+    // so the ordinary end chunk carries none of these keys at all.
+    const parsed = endPayload.parse({ turn_id: SESSION_ID });
+    expect(parsed.journal_entry_id).toBeUndefined();
+    expect(parsed.review_card_id).toBeUndefined();
+  });
+
+  it("parses a degraded turn's end payload, which has no turn index", () => {
+    // A degraded turn emits an end chunk having written no turn row. A
+    // required turn_index would make the client reject the one chunk that
+    // tells it the turn failed.
+    expect(endPayload.parse({ turn_id: SESSION_ID }).turn_index).toBeUndefined();
   });
 
   it("parses the primitive end payloads", () => {
@@ -139,12 +183,36 @@ describe("stream chunk schemas", () => {
       "intuitive",
     );
     expect(
-      endPayload.parse({ primitive: "let_me_try_one", next_state: "LAB", problem: { id: 1 } })
-        .next_state,
+      endPayload.parse({
+        primitive: "let_me_try_one",
+        next_state: "LAB",
+        problem: { prompt: "Reduce it.", difficulty: 2, hint: "Outermost first." },
+      }).next_state,
     ).toBe("LAB");
     expect(endPayload.parse({ primitive: "im_lost", refocus_concept_id: null }).primitive).toBe(
       "im_lost",
     );
+  });
+
+  it("keeps the answer key out of the problem the client receives", () => {
+    // §11.2 withholds the model answer until the learner has attempted. The
+    // runtime strips it; this asserts the client's shape has no home for it, so
+    // a runtime that regressed could not quietly hand one to a component.
+    const parsed = practiceProblem.parse({
+      prompt: "Reduce (\\x. x x) (\\y. y).",
+      difficulty: 2,
+      hint: "Outermost first.",
+      model_answer: "\\y. y",
+      expected_key_points: ["substitute"],
+    });
+    expect(parsed).not.toHaveProperty("model_answer");
+    expect(parsed).not.toHaveProperty("expected_key_points");
+  });
+
+  it("degrades an unparseable problem to null without failing the turn", () => {
+    const parsed = endPayload.parse({ next_state: "LAB", problem: { nonsense: true } });
+    expect(parsed.problem).toBeNull();
+    expect(parsed.next_state).toBe("LAB");
   });
 
   it("parses a degraded payload", () => {
@@ -221,5 +289,154 @@ describe("budget error detail", () => {
     expect(
       budgetExceededDetail.safeParse({ message: "Over limit.", scope: "daily" }).success,
     ).toBe(false);
+  });
+});
+
+/**
+ * The read surface (§6.1, §6.4, §6.5).
+ *
+ * Fixtures copied from what `backend/studium/api/reads.py` actually returns,
+ * including the two corrections that only a real response could have revealed:
+ * `journal_event_kind` has eight values and not the six this file's first
+ * version listed, and `concept_mastery` carries the decayed posterior the desk
+ * is supposed to render.
+ */
+describe("desk and journal schemas", () => {
+  const ENTRY_ID = "1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed";
+  const CONCEPT_ID = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
+
+  const entry = {
+    id: ENTRY_ID,
+    learner_subject_id: CONCEPT_ID,
+    concept_id: CONCEPT_ID,
+    concept_name: "Beta-reduction",
+    status: "open",
+    summary: "Treats reduction order as significant for the result.",
+    summary_author: "tutor",
+    hypothesis: null,
+    learner_note: "",
+    first_seen_at: "2026-08-19T10:00:00+00:00",
+    last_touched_at: "2026-08-20T15:00:00+00:00",
+  };
+
+  it("accepts a journal entry with the hypothesis withheld", () => {
+    // Data layer §11 keeps it from the learner; the field stays nullable rather
+    // than absent, so the decision is one constant away from reversing (F16).
+    expect(journalEntry.parse(entry).hypothesis).toBeNull();
+  });
+
+  it("accepts every journal_event_kind the database has", () => {
+    // The six-value version of this enum would have failed the whole detail
+    // view the first time the Tracker revised a hypothesis (F17).
+    const kinds = [
+      "created",
+      "revisited",
+      "partially_addressed",
+      "resolved",
+      "reopened",
+      "archived",
+      "hypothesis_updated",
+      "learner_note_added",
+    ];
+    const parsed = journalEntryDetail.parse({
+      ...entry,
+      history: kinds.map((kind, index) => ({
+        id: `6ba7b810-9dad-11d1-80b4-00c04fd430c${index}`,
+        kind,
+        at: "2026-08-19T10:00:00+00:00",
+        session_id: null,
+      })),
+    });
+    expect(parsed.history.map((event) => event.kind)).toEqual(kinds);
+  });
+
+  it("rejects an event kind the database cannot produce", () => {
+    expect(
+      journalEntryDetail.safeParse({
+        ...entry,
+        history: [
+          {
+            id: "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+            kind: "addressed",
+            at: "2026-08-19T10:00:00+00:00",
+            session_id: null,
+          },
+        ],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("accepts the desk payload, decayed mastery included", () => {
+    const parsed = deskResponse.parse({
+      learner: {
+        id: CONCEPT_ID,
+        display_name: "Test Learner",
+        timezone: "America/Toronto",
+        default_session_minutes: 90,
+        show_cost: false,
+      },
+      open_session: null,
+      recent_sessions: [
+        {
+          id: CONCEPT_ID,
+          mode: "lecture",
+          started_at: "2026-08-20T14:00:00+00:00",
+          ended_at: "2026-08-20T15:00:00+00:00",
+          duration_minutes: 60,
+          concepts_touched: ["Beta-reduction"],
+        },
+      ],
+      syllabus_next: [{ id: CONCEPT_ID, name: "The Church-Rosser theorem" }],
+      open_journal_entries: [entry],
+      mastery: [
+        {
+          concept_id: CONCEPT_ID,
+          concept_name: "Beta-reduction",
+          p_known: 0.82,
+          p_known_decayed: 0.74,
+        },
+      ],
+    });
+    // The decayed value is what the desk renders (F18) -- it is what the
+    // Curator sequenced against.
+    expect(parsed.mastery[0]?.p_known_decayed).toBe(0.74);
+  });
+
+  it("rejects a mastery row with no decayed value", () => {
+    expect(
+      deskResponse.safeParse({
+        learner: { id: CONCEPT_ID, display_name: "x" },
+        mastery: [{ concept_id: CONCEPT_ID, concept_name: "Beta-reduction", p_known: 0.8 }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("accepts the session summary with its mastery deltas", () => {
+    const parsed = sessionSummary.parse({
+      session_id: CONCEPT_ID,
+      summary: "We worked through beta-reduction.",
+      concepts_touched: [
+        { concept_id: CONCEPT_ID, concept_name: "Beta-reduction", before: 0.65, after: 0.82 },
+      ],
+      open_threads: ["Confluence is still not settled."],
+      next_focus_concept_id: CONCEPT_ID,
+      next_focus_concept_name: "The Church-Rosser theorem",
+      duration_minutes: 47.5,
+      cost_usd: 0.42,
+    });
+    expect(parsed.concepts_touched[0]?.after).toBe(0.82);
+  });
+
+  it("accepts a summary whose cost is withheld", () => {
+    const parsed = sessionSummary.parse({
+      session_id: CONCEPT_ID,
+      summary: "Short session.",
+      next_focus_concept_id: null,
+      next_focus_concept_name: null,
+      duration_minutes: 12,
+      cost_usd: null,
+    });
+    expect(parsed.cost_usd).toBeNull();
+    expect(parsed.open_threads).toEqual([]);
   });
 });

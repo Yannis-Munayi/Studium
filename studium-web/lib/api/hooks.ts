@@ -16,11 +16,12 @@ import {
   fetchDesk,
   fetchJournalEntries,
   fetchJournalEntry,
+  fetchSessionSummary,
   resolveJournalEntry,
   updateJournalEntry,
   type JournalFilter,
 } from "./surfaces";
-import type { JournalEntry, JournalStatus, UUID } from "./schemas";
+import type { JournalEntry, JournalEntryDetail, JournalStatus, UUID } from "./schemas";
 import { useToast } from "@/components/ui/toast";
 import { JOURNAL } from "@/lib/copy/surfaces";
 
@@ -46,11 +47,18 @@ export function useSessionState(sessionId: UUID | null) {
   });
 }
 
-/** §6.1. Everything the desk shows, in one round trip. */
+/**
+ * §6.1. Everything the desk shows, in one round trip.
+ *
+ * `userId` is a signed-in flag, not a parameter: the request carries no user
+ * id, because the proxy resolves identity server-side. It stays in the key so
+ * that signing in as someone else does not serve the previous learner's desk
+ * out of the cache.
+ */
 export function useDesk(userId: UUID | null) {
   return useQuery({
     queryKey: ["user", userId, "desk"],
-    queryFn: () => fetchDesk(userId as UUID),
+    queryFn: () => fetchDesk(),
     enabled: userId !== null,
     // The desk mixes 5-minute data (profile, subjects) with 30-second data
     // (mastery, journal). The shorter one governs -- serving a stale journal
@@ -61,12 +69,17 @@ export function useDesk(userId: UUID | null) {
   });
 }
 
-/** §5.3: "Journal entries — 30 seconds." */
-export function useJournalEntries(learnerSubjectId: UUID | null, filter: JournalFilter = {}) {
+/**
+ * §5.3: "Journal entries — 30 seconds."
+ *
+ * No enrollment argument. §6.4's journal is every subject's entries, and the
+ * subject filter is one of the filters — which is also what lets the surface
+ * load before anything has told it which enrollment the learner is in.
+ */
+export function useJournalEntries(filter: JournalFilter = {}) {
   return useQuery({
-    queryKey: ["journal", learnerSubjectId, filter],
-    queryFn: () => fetchJournalEntries(learnerSubjectId as UUID, filter),
-    enabled: learnerSubjectId !== null,
+    queryKey: ["journal", "list", filter],
+    queryFn: () => fetchJournalEntries(filter),
     staleTime: 30_000,
     retry: false,
   });
@@ -88,6 +101,14 @@ export function useJournalEntry(entryId: UUID | null) {
  * `cancelQueries` first is not optional: an in-flight refetch that resolves
  * after the optimistic write would overwrite it with the pre-mutation server
  * state, and the entry would visibly un-resolve itself a second later.
+ *
+ * **The two caches are patched separately, and that is the point.** An earlier
+ * version matched `["journal"]` and mapped over whatever it found, which is
+ * correct for the list queries and wrong for `["journal", "entry", id]` — that
+ * one holds a single object, and calling `.map` on it throws. It never fired
+ * while the endpoints did not exist; the moment they answered, resolving an
+ * entry *from the detail page* — the only place the resolve button is — would
+ * have thrown inside `onMutate`. See DIVERGENCES-FRONTEND.md F19.
  */
 export function useResolveJournalEntry() {
   const queryClient = useQueryClient();
@@ -98,21 +119,77 @@ export function useResolveJournalEntry() {
 
     onMutate: async (entryId) => {
       await queryClient.cancelQueries({ queryKey: ["journal"] });
-      const previous = queryClient.getQueriesData<JournalEntry[]>({ queryKey: ["journal"] });
 
-      queryClient.setQueriesData<JournalEntry[]>({ queryKey: ["journal"] }, (old) =>
+      const lists = queryClient.getQueriesData<JournalEntry[]>({
+        queryKey: ["journal", "list"],
+      });
+      const detailKey = ["journal", "entry", entryId] as const;
+      const detail = queryClient.getQueryData<JournalEntryDetail>(detailKey);
+
+      queryClient.setQueriesData<JournalEntry[]>({ queryKey: ["journal", "list"] }, (old) =>
         old?.map((entry) =>
           entry.id === entryId ? { ...entry, status: "resolved" as JournalStatus } : entry,
         ),
       );
-      return { previous };
+      if (detail) {
+        queryClient.setQueryData<JournalEntryDetail>(detailKey, {
+          ...detail,
+          status: "resolved",
+        });
+      }
+
+      return { lists, detailKey, detail };
     },
 
     onError: (_error, _entryId, context) => {
-      context?.previous.forEach(([key, data]) => queryClient.setQueryData(key, data));
+      context?.lists.forEach(([key, data]) => queryClient.setQueryData(key, data));
+      if (context?.detail) queryClient.setQueryData(context.detailKey, context.detail);
       toast.error(JOURNAL.resolveFailed);
     },
 
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ["journal"] });
+    },
+  });
+}
+
+/**
+ * §6.5's close modal.
+ *
+ * `retry: false` because the expected failure is a 404 meaning "the Curator's
+ * summary did not generate", which the close response already reported. Three
+ * retries would spend six seconds re-asking a question that has been answered,
+ * with the learner watching a dialog that says it is still writing.
+ */
+export function useSessionSummary(sessionId: UUID | null, enabled = true) {
+  return useQuery({
+    queryKey: ["session", sessionId, "summary"],
+    queryFn: () => fetchSessionSummary(sessionId as UUID),
+    enabled: enabled && sessionId !== null,
+    // A closed session's summary does not change again unless it is
+    // regenerated, which is not something this surface can trigger.
+    staleTime: 60 * MINUTE,
+    retry: false,
+  });
+}
+
+/**
+ * §6.4's other entry actions: reopen, archive, mark partial.
+ *
+ * Not optimistic, unlike resolve. §14.1 specifies the optimistic path for the
+ * action a learner takes constantly and expects to feel instant; these three
+ * are deliberate, occasional, and taken from a surface that is already showing
+ * the entry — so a round trip before the pill changes reads as the system
+ * having done the thing, not as lag.
+ */
+export function useSetJournalStatus(entryId: UUID | null) {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  return useMutation({
+    mutationFn: (status: JournalStatus) =>
+      updateJournalEntry(entryId as UUID, { status }),
+    onError: () => toast.error(JOURNAL.statusFailed),
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ["journal"] });
     },

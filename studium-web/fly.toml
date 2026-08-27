@@ -1,0 +1,76 @@
+# Studium frontend on Fly.io (infrastructure §4.3, §4.7).
+#
+# The only app with a public IP. §4.7: "Only the frontend has a public IP; the
+# backend is reachable only via the frontend's proxy or Fly's `flyctl proxy`
+# for admin access." Every learner-facing request arrives here and the ones
+# under /api/* are proxied onward over Fly's private .internal DNS by
+# app/api/backend/[...path]/route.ts.
+#
+# §4.3 explains why this is on Fly rather than Vercel: keeping both apps on one
+# platform simplifies deployment, secrets and network configuration, and avoids
+# Vercel's SSR edge cases with SSE-from-backend patterns -- which is the one
+# pattern this app's central surface is built on (agent runtime §20).
+#
+# Committed, and carries no secrets.
+
+app = "studium-web"
+primary_region = "yyz"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[deploy]
+  strategy = "rolling"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "3000"
+
+  # §4.7's internal DNS. Server-side only, no NEXT_PUBLIC_ prefix: the browser
+  # never learns the FastAPI origin, so there is exactly one place -- the proxy
+  # route -- where a request can pick up auth, and no second path that could
+  # forget to (next.config.ts).
+  STUDIUM_BACKEND_ORIGIN = "http://studium-backend.internal:8000"
+
+  # Frontend §14 / DIVERGENCES-FRONTEND F7: learner identity is a development
+  # placeholder and lib/auth.ts throws in production without this. Set to 1
+  # here deliberately and visibly, because there is no authentication to run
+  # instead -- the MVP is single-tenant and the backend trusts a user_id in a
+  # request body. It is in studium/ops/secrets.py's registry so this is a
+  # written decision rather than a forgotten default, and so the day real auth
+  # lands, removing this line is a diff someone reviews.
+  STUDIUM_ALLOW_UNAUTHENTICATED = "1"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = false
+  # §4.3: "Auto-scaling: Disabled, same reasoning as backend."
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "connections"
+    soft_limit = 60
+    hard_limit = 100
+
+  [[http_service.checks]]
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "20s"
+    method = "get"
+    # §7.4's path, and the same one the external uptime monitor polls. One
+    # endpoint rather than two: a Fly check that passes while the monitored URL
+    # fails is a check measuring the wrong thing.
+    path = "/health"
+
+[[vm]]
+  # §4.3: "shared-cpu-1x with 1GB RAM. Next.js production build is lightweight;
+  # the frontend does no LLM calls itself, no heavy computation, only serves
+  # static assets and streams from the backend."
+  size = "shared-cpu-1x"
+  memory = "1gb"
+
+[[restart]]
+  policy = "on-failure"
+  retries = 10

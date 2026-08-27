@@ -1,0 +1,79 @@
+# Evaluation §11.3's assessment definition.
+#
+# `rubric_criterion_id` values are placeholders here. §11.3 shows a literal
+# "uuid-of-rubric-criterion", and this file keeps that honesty rather than
+# inventing UUIDs that resolve to nothing: `summative.parse_definition` accepts
+# the file, and `summative.start_attempt` refuses to run an attempt whose
+# criteria do not exist, so the failure lands at the moment someone tries to
+# assess a learner rather than silently at grading time.
+#
+# To make this runnable: import the rubric criteria
+# (`studium ingest rubrics`), then paste their ids here. The three criteria
+# below correspond to the three concepts named above.
+
+assessment:
+  slug: lambda_calculus_foundations
+  subject: lambda-calculus
+  title: Lambda Calculus Foundations Assessment
+  concepts:
+    - beta_reduction
+    - alpha_equivalence
+    - church_rosser
+  time_limit_minutes: 60
+  passing_threshold: 0.70
+
+problems:
+  - id: problem_001
+    concept: beta_reduction
+    prompt: >
+      Reduce the following lambda term to normal form, showing each
+      beta-reduction step explicitly: (λx.λy.x)(λz.z)(λw.w w)
+    expected_key_points:
+      - Correctly identifies the outermost redex
+      - Shows the substitution step correctly
+      - Arrives at the normal form (λz.z)
+      - Names the K-combinator behaviour in the second reduction
+    rubric_criterion_id: 00000000-0000-7000-8000-000000000001
+    max_score: 4
+    time_estimate_minutes: 8
+
+  - id: problem_002
+    concept: alpha_equivalence
+    prompt: >
+      Explain why λx.λy.x and λa.λb.a denote the same function, and give an
+      example of two terms that look similar but are NOT alpha-equivalent.
+      State the rule you are applying.
+    expected_key_points:
+      - States that alpha-equivalence renames bound variables only
+      - Shows the renaming is consistent throughout the body
+      - Counter-example differs in a free variable, not a bound one
+      - Notes that renaming must avoid capture
+    rubric_criterion_id: 00000000-0000-7000-8000-000000000002
+    max_score: 4
+    time_estimate_minutes: 10
+
+  - id: problem_003
+    concept: church_rosser
+    prompt: >
+      A term M reduces along two different paths to N₁ and N₂. State what the
+      Church-Rosser theorem guarantees, and explain what would go wrong in the
+      lambda calculus if it were false.
+    expected_key_points:
+      - States confluence: both reduce to a common P
+      - Concludes normal forms are unique up to alpha-equivalence
+      - Explains that without it, "the value of a term" would be ill-defined
+      - Does not claim it guarantees termination
+    rubric_criterion_id: 00000000-0000-7000-8000-000000000003
+    max_score: 4
+    time_estimate_minutes: 12
+
+# Total estimate: 30 minutes against a 60-minute limit. §11.3 gives no rule
+# about the ratio; `parse_definition` refuses a definition whose estimate
+# exceeds its limit, because §11.2 collects unsubmitted responses as-is on
+# expiry and such a definition would guarantee a truncated attempt.
+#
+# NOTE ON THE POOL (§11.5). Three problems is one attempt's worth, so the
+# retake guard in `summative.check_eligibility` will refuse a second attempt
+# until the pool is expanded. That is the intended behaviour: a retake drawing
+# the same three problems is no longer assessment on unseen material, and §3
+# makes unseen material the thing separating a credential from a transcript.

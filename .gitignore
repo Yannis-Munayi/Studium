@@ -1,6 +1,21 @@
+# Infrastructure §6.2: "Local development: `.env.local` file, gitignored. A
+# `.env.example` file (committed) lists variable names with placeholder values
+# so contributors know what to populate."
+#
+# Every spelling of the local env file, and an explicit un-ignore for the
+# example. The example is generated from studium/ops/secrets.py and a Tier 1
+# test fails on a diff, so it has to be tracked.
 .env
+.env.*
+!.env.example
+
 __pycache__/
 *.pyc
 
 # setuptools develop-install metadata, regenerated on every `pip install -e`.
 *.egg-info/
+
+# Fly writes this on `flyctl launch`. It records the last deploy's machine ids
+# and is per-workstation, not per-project.
+.fly/
+fly.toml.bak

@@ -19,7 +19,10 @@ export STUDIUM_MIGRATION_TEST_DATABASE_URL ?= $(MIGRATE_URL)
 .DEFAULT_GOAL := help
 .PHONY: help install db-up db-down db-wait test-db-up test-db-down migrate \
         downgrade revision seed db-reset test test-offline test-db test-paid \
-        lint fmt check migrate-draft
+        lint fmt check migrate-draft eval-validate eval-sync eval-paid eval-gate \
+        ingest-report eval-report \
+        infra-report ops-secrets ops-render ops-alerts ops-cost ops-nightly ops-verify \
+        ops-smoke deploy-backend deploy-web
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -86,10 +89,77 @@ test-db: ## Integrity, query-shape and migration-sequence tests (needs a DB)
 test: ## Everything except the paid tiers
 	$(PY) -m pytest tests -q -m "not anthropic"
 
+measure-extraction: ## Re-measure extractor quality against the fixtures (ingestion 7.4)
+	$(PY) scripts/measure_extraction.py --write
+
+measure-corpus: ## Same, against the real PDFs in material/ (answers 18 q1)
+	$(PY) scripts/measure_extraction.py --corpus ../material
+
+ingest-report: ## Regenerate the subsystem 5 build report
+	$(PY) scripts/build_ingestion_report.py
+
+eval-report: ## Regenerate the subsystem 6 build report
+	$(PY) scripts/build_evaluation_report.py
+
+infra-report: ## Regenerate the subsystem 7 build report
+	$(PY) scripts/build_infrastructure_report.py
+
 test-paid: ## Tier 3: real Voyage calls. Costs money; needs VOYAGE_API_KEY.
 	@test -n "$(VOYAGE_API_KEY)" || (echo "VOYAGE_API_KEY is not set" && exit 1)
 	STUDIUM_RUN_PAID_TESTS=1 $(PY) -m pytest tests/online/test_retrieval_paid.py \
 		-q -m anthropic
+
+eval-validate: ## Parse and check every golden dataset (evaluation §7.3 step 3)
+	$(PY) -m studium.eval.cli eval validate content/evaluation
+
+eval-sync: ## Materialise the datasets into the database (evaluation §7.3 step 5)
+	$(PY) -m studium.eval.cli eval sync content/evaluation
+
+eval-paid: ## Tier 3 evaluation: real agents. Costs money; needs ANTHROPIC_API_KEY.
+	@test -n "$(ANTHROPIC_API_KEY)" || (echo "ANTHROPIC_API_KEY is not set" && exit 1)
+	STUDIUM_RUN_PAID_TESTS=1 $(PY) -m pytest tests/online/test_evaluation_paid.py \
+		-q -m anthropic
+
+eval-gate: ## Run the §13.2 regression gate: make eval-gate d="slug slug"
+	@test -n "$(d)" || (echo 'usage: make eval-gate d="dataset_slug"' && exit 1)
+	@echo "This spends real money (~\$$5-15 for a full suite, evaluation §7.4)."
+	$(PY) -m studium.eval.cli eval gate --datasets $(d)
+
+# --- operations (infrastructure §6, §8, §9, §10, §12, §13) ------------------
+#
+# All of these connect as studium_owner. The read-only ones are safe against
+# production; `ops-nightly` is not, and is the only one that asks.
+
+ops-secrets: ## §6: what is missing in this environment. Prints no values.
+	$(PY) -m studium.ops.cli ops secrets check --environment $(or $(env),local)
+
+ops-render: ## §6.2: regenerate .env.example from the registry
+	$(PY) -m studium.ops.cli ops secrets render --write
+
+ops-alerts: ## §8: evaluate the database-backed conditions
+	$(PY) -m studium.ops.cli ops check-alerts --all
+
+ops-cost: ## §13.1: LLM cost by user and cost line, month to date
+	$(PY) -m studium.ops.cli ops cost-report
+
+ops-verify: ## §9.2: is this database one the backend could serve from
+	$(PY) -m studium.ops.cli ops verify-restore
+
+ops-smoke: ## §10.3: post-deploy verification. `make ops-smoke url=https://...`
+	$(PY) -m studium.ops.cli ops smoke-test $(if $(url),--base-url $(url),)
+
+ops-nightly: ## §12.1: the retention pass and the other scheduled jobs, now
+	@echo "This deletes rows past their retention window and hard-deletes"
+	@echo "accounts past the 30-day dispute window. --dry-run first."
+	$(PY) -m studium.ops.cli ops nightly
+
+deploy-backend: ## §10.3: manual promotion. Verify CI green first.
+	@echo "Migrations run as a release command; a failure aborts the deploy"
+	@echo "and the previous version keeps serving (10.3)."
+	flyctl deploy
+
+deploy-web: ## §10.3, the frontend half
+	cd ../studium-web && flyctl deploy
 
 lint: ## Ruff
 	ruff check studium tests scripts

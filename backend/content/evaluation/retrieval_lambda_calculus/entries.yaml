@@ -1,0 +1,73 @@
+# Evaluation §9's retrieval quality dataset.
+#
+# Each entry is a query plus the reviewer's two-tier judgment: which chunks are
+# relevant, and which are thematically nearby but wrong. Chunks in neither set
+# are the third, unnamed tier -- adjacent material that neither helps nor
+# harms, and which is why §9.2 keeps the misleading rate as its own number
+# rather than folding it into precision.
+#
+# `concept_id` values here are slugs rather than UUIDs. The runner derives a
+# stable UUID from each, so this file stays readable and stays valid across a
+# database reset. A real corpus run against live concept ids substitutes them.
+
+dataset:
+  slug: retrieval_lambda_calculus
+  kind: retrieval_quality
+  version: 1
+  description: >
+    Hand-labelled relevance judgments for the lambda calculus corpus. Answers
+    §9.3's reranker A/B (retrieval §19 open question 3) and gates provider
+    swaps under §9.4.
+  regression_tolerance:
+    # Tighter than the §13.2 default. Retrieval quality moves for reasons
+    # unrelated to any commit -- the corpus grows, a provider reindexes -- so a
+    # wide tolerance here would let genuine degradation hide inside the noise
+    # the wide tolerance was meant to accommodate.
+    aggregate_score_drop_max: 0.03
+    per_entry_failure_max: 1
+
+entries:
+  - id: retrieval_001
+    input:
+      concept_id: concept_beta_reduction
+      stance: formal
+      k: 6
+      query_text: "how does beta-reduction handle variable capture"
+    expected:
+      relevant_chunks: [chunk_beta_001, chunk_alpha_002, chunk_capture_001]
+      misleading_chunks: [chunk_eta_002]
+    notes: >
+      Capture-avoidance sits across beta and alpha, so a retriever that returns
+      only beta chunks has missed the half of the answer that explains why the
+      renaming happens.
+
+  - id: retrieval_002_stance_weighting
+    input:
+      concept_id: concept_church_rosser
+      stance: intuitive
+      k: 6
+      query_text: "why does it not matter which redex I reduce first"
+    expected:
+      relevant_chunks: [chunk_cr_001, chunk_cr_example_002, chunk_confluence_003]
+      misleading_chunks: [chunk_normalization_004]
+      # §9.2's "curated preference": with an intuitive stance the worked
+      # example should outrank the theorem statement. Retrieval §11 re-weights
+      # rather than filters, so this is a question about rank, not membership.
+      stance_appropriate_chunks: [chunk_cr_example_002]
+    notes: >
+      chunk_normalization_004 is about strong normalisation, which is a
+      different theorem that sounds like an answer to this question.
+
+  - id: retrieval_003_thin_corpus
+    input:
+      concept_id: concept_eta_conversion
+      stance: formal
+      k: 6
+      query_text: "eta conversion and extensionality"
+    expected:
+      relevant_chunks: [chunk_eta_002]
+    notes: >
+      Only one chunk in the corpus covers this. Recall of 1.0 with precision
+      well below it is the correct outcome, and is exactly the case where
+      §9.2's precision-divided-by-k would have punished the retriever for the
+      corpus being thin. See DIVERGENCES-EVALUATION (E8).

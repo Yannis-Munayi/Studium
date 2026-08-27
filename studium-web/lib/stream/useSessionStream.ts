@@ -67,7 +67,11 @@ export function useSessionStream(sessionId: string | null) {
       try {
         for await (const chunk of readTurnStream(
           sessionId,
-          { text: options.text ?? "", primitive: options.primitive ?? null },
+          {
+            text: options.text ?? "",
+            primitive: options.primitive ?? null,
+            intent: options.intent ?? null,
+          },
           { signal: controller.signal },
         )) {
           if (store.getState().phase === "connecting") {

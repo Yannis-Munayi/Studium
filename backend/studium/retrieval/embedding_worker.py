@@ -258,20 +258,45 @@ def _write_vectors(
 
 
 async def _flag_failures(chunks: list[PendingChunk], reason: str) -> None:
-    """§8: persistent failures land in ``content_review_queue`` at severity 3.
+    """§8: persistent failures land in front of a reviewer at severity 3.
 
-    Attached to no turn and no artifact -- which the table's ``has_target``
-    CHECK forbids -- so these are logged rather than inserted. See
-    DIVERGENCES-RETRIEVAL (S3): the queue models content review, and an
-    ingestion-time failure has no content to point at yet. Subsystem 5 owns the
-    ingestion-side surface where this belongs.
+    This is where S3 was. The spec sends these to ``content_review_queue``,
+    whose ``has_target`` CHECK requires an artifact or a session turn -- and a
+    chunk that failed to embed at ingestion time has neither, so every insert
+    failed the constraint. The only thing this function could do was log, which
+    meant a chunk with no vector was invisible to vector search with nothing in
+    front of a reviewer to say so.
+
+    Subsystem 5 resolved it with ``ingestion_review_queue`` (ingestion §5
+    addition 1), whose targets include ``source_chunk_id``. The row now goes
+    where it was always meant to.
+
+    Still logged as well as queued: the log line is what an operator watching a
+    large ingestion sees in real time, and the queue row is what survives to be
+    triaged afterwards.
     """
+    from studium.ingestion.queue import flag_async
+
     for chunk in chunks:
         log.error(
             "chunk %s could not be embedded and is invisible to vector search: %s",
             chunk.chunk_id,
             reason,
         )
+        try:
+            await flag_async(
+                flag_source="embedding_failure",
+                source_chunk_id=chunk.chunk_id,
+                reason=reason,
+                severity=FAILED_CHUNK_SEVERITY,
+                payload={"token_count": chunk.token_count},
+            )
+        except Exception as exc:  # noqa: BLE001
+            # A queue write that fails must not fail the batch: the other 127
+            # chunks in it embedded fine, and losing them to a bookkeeping
+            # error would be a worse outcome than the log line this falls back
+            # to. Logged at error so the gap is visible rather than swallowed.
+            log.error("could not queue embedding_failure for %s: %s", chunk.chunk_id, exc)
 
 
 def _embedding_cost(tokens: int) -> float:

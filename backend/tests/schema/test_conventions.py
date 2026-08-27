@@ -182,8 +182,25 @@ def test_timestamps_are_timezone_aware(table) -> None:
 
 
 def test_table_count_matches_spec() -> None:
-    """Guard against a table being added without a spec update."""
-    assert len(TABLES) == 34, (
-        f"{len(TABLES)} tables defined; spec §6 describes 34. "
+    """Guard against a table being added without a spec update.
+
+    42 = the data layer's 34, plus:
+
+    * ``ingestion_review_queue`` -- ingestion §5 addition 1 (migration 0010).
+    * five from evaluation (0011): ``golden_datasets``,
+      ``golden_dataset_entries``, ``evaluation_runs``, ``evaluation_results``
+      from evaluation §5, and ``signing_keys``, which evaluation §12 builds on
+      and no spec ever defined (DIVERGENCES-EVALUATION E1).
+    * two from infrastructure (0012): ``retention_actions`` (§12.2) and
+      ``retention_holds`` (§12.4).
+
+    None of the eight are in the data layer's §6; all eight join the v1.2
+    batch, which infrastructure §18 counts at twenty-two items across all seven
+    specs.
+    """
+    assert len(TABLES) == 42, (
+        f"{len(TABLES)} tables defined; 34 from data layer §6, plus "
+        f"ingestion_review_queue from ingestion §5, five from evaluation §5 "
+        f"and §12, and two from infrastructure §12. "
         f"Update the spec and DIVERGENCES.md together."
     )

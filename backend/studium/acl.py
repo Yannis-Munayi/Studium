@@ -66,10 +66,42 @@ LEARNER_READABLE = LEARNER_WRITABLE | frozenset(
 SYSTEM_INTERNAL = frozenset({"agent_traces", "audit_log", "content_review_queue"})
 
 
+#: Tables a reviewer may read but never write (evaluation §14.1's "The reviewer
+#: role does not").
+#:
+#: * ``signing_keys`` -- "Change signing keys". A reviewer who can rotate the
+#:   issuer key can issue credentials under a key of their choosing, which
+#:   makes the signature attest to nothing. Rotation is subsystem 7's, run by
+#:   an operator with secret-store access.
+#: * ``portfolio_items`` -- "issue portfolio items directly (portfolio items
+#:   only issue via the summative assessment flow)". A hand-written credential
+#:   is a credential for work nobody did, and it would verify.
+#: * ``concept_mastery`` / ``mastery_events`` -- "Modify learner mastery
+#:   estimates directly". Mastery is BKT-derived from evidence; setting it
+#:   by hand unlinks the number from the thing it claims to measure, and
+#:   §12.1 lets a subject-level credential turn on mastery thresholds.
+REVIEWER_READ_ONLY = frozenset(
+    {
+        "signing_keys",
+        "portfolio_items",
+        "concept_mastery",
+        "mastery_events",
+    }
+)
+
+
 def assert_can_read(role: Role, table: str, *, owns_row: bool) -> None:
     if role is Role.ADMIN:
         return
-    if role is Role.REVIEWER and table != "audit_log":
+    if role is Role.REVIEWER:
+        # Evaluation §14.1: a reviewer may "read every table in the schema",
+        # audit_log included. The data layer excluded it, which was defensible
+        # when the role was undefined and is not now: §14.2 hands the reviewer
+        # direct database access on purpose ("locking them out of raw access
+        # would prevent them from responding to unforeseen situations"), so
+        # denying one table through the ACL while handing over psql is theatre.
+        # Subsystem 6 owns the role definition; this follows it.
+        # See DIVERGENCES-EVALUATION (E11).
         return
     if table in SYSTEM_INTERNAL:
         raise AccessDenied(f"{role} may not read {table}")
@@ -88,8 +120,40 @@ def assert_can_write(role: Role, table: str, *, owns_row: bool) -> None:
             return
         raise AccessDenied(f"learner may not write {table}")
     if role is Role.REVIEWER:
+        if table in REVIEWER_READ_ONLY:
+            raise AccessDenied(
+                f"reviewer may not write {table} (evaluation §14.1). "
+                f"Portfolio items issue only via the summative assessment "
+                f"flow, mastery is derived from evidence, and signing keys "
+                f"are the infrastructure spec's."
+            )
         return
     raise AccessDenied(f"{role} may not write {table}")
+
+
+def assert_can_delete(role: Role, table: str, *, owns_row: bool) -> None:
+    """Evaluation §14.1: the reviewer role does not "delete rows from any table".
+
+    Deletion is a third verb, not a special case of writing, and the ACL had no
+    notion of it -- so ``assert_can_write`` returning for a reviewer was
+    implicitly granting deletes on every table in the schema. §14.1 is explicit
+    that data retention is "per data layer §10, not per-reviewer discretion":
+    the retention and erasure jobs run as ``studium_owner``, on a schedule,
+    against a written policy. A reviewer who can delete can quietly undo that
+    policy for one row and leave no trace but a gap.
+
+    Admins may delete. Learners may not -- their erasure path is §10's
+    right-to-erasure, which de-identifies rather than deleting and is a
+    different operation with different guarantees.
+    """
+    if role is Role.ADMIN:
+        return
+    raise AccessDenied(
+        f"{role} may not delete from {table}. Data retention is data layer "
+        f"§10's, not per-reviewer discretion (evaluation §14.1); a learner's "
+        f"erasure runs through the right-to-erasure job, which de-identifies "
+        f"rather than deletes."
+    )
 
 
 # --- column-level projections ---------------------------------------------

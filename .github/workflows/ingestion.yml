@@ -1,0 +1,320 @@
+# Ingestion CI (ingestion spec v1.0 §16 "Testing strategy").
+#
+#   Tier 1 (offline)  gates every push. No database, no API key: normalisation
+#                     determinism and correctness, ligature coverage, YAML
+#                     parsing and graph validation, the license refusals, the
+#                     §13 provenance invariant, and the §7.4 measurement
+#                     freshness gate. Real PDFs, built by reportlab at test
+#                     time.
+#   Tier 2 (online)   runs on the integration branches and on pull requests
+#                     touching ingestion or the schema it writes. Needs
+#                     Postgres: the pipeline end to end, the review queue's
+#                     constraints, the authoring imports, and the publish gate.
+#   Tier 3 (paid)     never runs here. See the note at the bottom.
+#
+# A separate workflow per the dev's standing principle: one green check
+# spanning several subsystems cannot tell you which of them is healthy.
+
+name: ingestion
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  group: ingestion-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: backend
+
+env:
+  PYTHON_VERSION: "3.12"
+
+  # Identical to the other four workflows on purpose. Pushing to main is not
+  # available on this repository, so `yannis` is the trunk in practice.
+  INTEGRATION_BRANCHES: "main yannis"
+
+  RUFF_PATHS: >-
+    studium/ingestion
+    tests/ingestion
+    tests/fixtures/pdfs.py
+    tests/online/test_ingestion_db.py
+    tests/online/test_ingestion_paid.py
+    scripts/measure_extraction.py
+
+  TEST_PATHS: >-
+    tests/ingestion
+    tests/online/test_ingestion_db.py
+
+jobs:
+  offline:
+    name: Tier 1 - offline
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install
+        # With the 'ingestion' extra, unlike retrieval's Tier 1. The difference
+        # is deliberate: §16 asks for real PDF fixtures *from Tier 1*, so the
+        # PDF toolchain is not optional for this tier the way a provider SDK is
+        # for retrieval's. The import-surface step below is what keeps the
+        # dependency honest anyway.
+        run: python -m pip install -e ".[dev,ingestion]"
+
+      - name: Ruff
+        run: python -m ruff check ${{ env.RUFF_PATHS }}
+
+      - name: Tier 1
+        # Deselecting both markers must still select a non-empty set. A tier
+        # that silently ran zero tests would report green while checking
+        # nothing.
+        run: |
+          set -euo pipefail
+          collected=$(python -m pytest ${{ env.TEST_PATHS }} \
+            -m "not postgres and not anthropic" --collect-only -q \
+            | tail -1)
+          echo "collected: $collected"
+          case "$collected" in
+            "no tests ran"*|"0 tests"*)
+              echo "::error::Tier 1 selected no tests"; exit 1 ;;
+          esac
+          python -m pytest ${{ env.TEST_PATHS }} -q \
+            -m "not postgres and not anthropic"
+
+      - name: The provenance invariant is not vacuous
+        # §16 asks for a coverage guard on this specific test, and §13.4's
+        # whole mechanism is a registry populated by import side effects. If
+        # the decorators stop running, every parametrised check collects zero
+        # cases and reports green having verified nothing. This asserts the
+        # registry is populated before trusting the tests that read it.
+        run: |
+          set -euo pipefail
+          python -c "
+          import studium.ingestion
+          from studium.ingestion import writers
+          found = writers()
+          assert found, 'no ingestion writers registered; the §13 test is vacuous'
+          print(f'{len(found)} writers registered')
+          "
+          python -m pytest tests/ingestion/test_provenance.py -q
+
+      - name: Import surface
+        # studium.ingestion must import with no PDF toolchain present: it is
+        # imported by studium.api.app, so a hard dependency here breaks the
+        # whole API rather than just ingestion. get_extractor must raise
+        # ExtractorUnavailable at *use*, not at import.
+        run: |
+          python - <<'PY'
+          import importlib.abc, sys
+          BLOCKED = {"pdfplumber", "reportlab", "yaml", "pypdf"}
+          class Finder(importlib.abc.MetaPathFinder):
+              def find_spec(self, name, path, target=None):
+                  if name.split(".")[0] in BLOCKED:
+                      raise ImportError(f"{name} is not installed (simulated)")
+                  return None
+          sys.meta_path.insert(0, Finder())
+
+          import studium.ingestion
+          from studium.ingestion import get_extractor, normalize_page
+          from studium.api.app import app
+          assert normalize_page("deﬁnition") == "definition"
+          assert get_extractor().name == "pdfplumber"
+          print("import surface OK without the PDF toolchain")
+          PY
+
+      - name: Measurement freshness
+        # §7.4: "an extractor change without a measurement update fails a CI
+        # check that reads the measurement fixture and asserts freshness."
+        # Called out as its own step so the log says which discipline failed
+        # rather than burying it among the Tier 1 assertions.
+        run: python -m pytest tests/ingestion/test_measurement.py -q
+
+  changes:
+    name: Does Tier 2 apply?
+    runs-on: ubuntu-24.04
+    outputs:
+      run_online: ${{ steps.decide.outputs.run_online }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: decide
+        name: Decide
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          # Not re-mapped here: it is inherited from the workflow-level env
+          # block, and re-mapping could shadow it with an empty string and skip
+          # Tier 2 everywhere while still reporting success.
+        run: |
+          set -euo pipefail
+
+          echo "event=$EVENT  ref=$REF"
+          echo "integration branches: '${INTEGRATION_BRANCHES:-<UNSET>}'"
+
+          if [ -z "${INTEGRATION_BRANCHES:-}" ]; then
+            echo "::error::INTEGRATION_BRANCHES is empty or unset, so no branch"\
+                 "can ever match and Tier 2 would be skipped everywhere."\
+                 "Failing loudly rather than reporting a green run that tested"\
+                 "half of what it claims."
+            exit 1
+          fi
+
+          if [ "$EVENT" != "pull_request" ]; then
+            branch="${REF#refs/heads/}"
+            for candidate in $INTEGRATION_BRANCHES; do
+              if [ "$branch" = "$candidate" ]; then
+                echo "run_online=true" >> "$GITHUB_OUTPUT"
+                echo "$branch is an integration branch: Tier 2 runs"
+                exit 0
+              fi
+            done
+            echo "run_online=false" >> "$GITHUB_OUTPUT"
+            echo "$branch is not an integration branch: Tier 1 only"
+            exit 0
+          fi
+
+          changed=$(git diff --name-only "$BASE_SHA" HEAD)
+          echo "changed files:"; echo "$changed" | sed 's/^/  /'
+
+          # Ingestion writes sources, source_chunks, concept_sources, concepts
+          # and the review queue, and invokes retrieval's chunker and embedding
+          # worker. A change to any of those can break it with nothing under
+          # studium/ingestion touched -- the chunker especially, since the
+          # measurement baseline is a function of its output.
+          if echo "$changed" | grep -qE '^backend/(studium/ingestion/|studium/models/|studium/retrieval/chunking\.py|studium/retrieval/embedding_worker\.py|studium/jobs/retention\.py|migrations/|tests/fixtures/)'; then
+            echo "run_online=true" >> "$GITHUB_OUTPUT"
+            echo "touches ingestion or what it reads and writes: Tier 2 runs"
+          else
+            echo "run_online=false" >> "$GITHUB_OUTPUT"
+            echo "no ingestion-adjacent changes: Tier 1 only"
+          fi
+
+  online:
+    name: Tier 2 - online
+    needs: [offline, changes]
+    if: needs.changes.outputs.run_online == 'true'
+    runs-on: ubuntu-24.04
+    env:
+      STUDIUM_TEST_DATABASE_URL: postgresql+psycopg://studium:studium@localhost:5433/studium_test
+      STUDIUM_DATABASE_URL: postgresql+psycopg://studium:studium@localhost:5433/studium_test
+      # Belt and braces: the paid tier is marker-deselected below as well.
+      STUDIUM_RUN_PAID_TESTS: "0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install
+        run: python -m pip install -e ".[dev,ingestion]"
+
+      - name: Start Postgres
+        run: docker compose -f docker-compose.test.yml up -d test-db
+
+      - name: Wait for health
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 60); do
+            if docker compose -f docker-compose.test.yml exec -T test-db \
+                 pg_isready -U studium -d studium_test >/dev/null 2>&1; then
+              echo "ready"; exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Postgres did not become ready"
+          docker compose -f docker-compose.test.yml logs test-db
+          exit 1
+
+      - name: Apply schema
+        run: python -m alembic upgrade head
+
+      - name: The 0010 objects are actually present
+        # Every Tier 2 test here assumes them. Failing on the specific missing
+        # object names the cause instead of surfacing it as a dozen confusing
+        # query errors thirty seconds later.
+        run: |
+          set -euo pipefail
+          psql() {
+            docker compose -f docker-compose.test.yml exec -T test-db \
+              psql -U studium -d studium_test -v ON_ERROR_STOP=1 -tAc "$1"
+          }
+          test "$(psql "SELECT to_regclass('ingestion_review_queue') IS NOT NULL")" = t
+          test "$(psql "SELECT count(*) FROM pg_type WHERE typname='ingestion_flag_source'")" = 1
+          test "$(psql "SELECT 'normalize' = ANY(enum_range(NULL::ingestion_job_kind)::text[])")" = t
+          test "$(psql "SELECT count(*) FROM information_schema.columns
+                         WHERE table_name='source_chunks'
+                           AND column_name IN ('extraction_confidence','superseded_at')")" = 2
+          test "$(psql "SELECT count(*) FROM information_schema.columns
+                         WHERE table_name='sources'
+                           AND column_name IN ('extractor_version','normalizer_version')")" = 2
+          echo "migration 0010 objects present"
+
+      - name: The S3 resolution holds
+        # The defect this subsystem exists to close, asserted against a real
+        # constraint. content_review_queue must still reject a targetless row
+        # (the CHECK is correct for the rows it governs) and
+        # ingestion_review_queue must accept a chunk-targeted one.
+        run: |
+          set -euo pipefail
+          psql() {
+            docker compose -f docker-compose.test.yml exec -T test-db \
+              psql -U studium -d studium_test -tAc "$1"
+          }
+          if psql "INSERT INTO content_review_queue (source, reason)
+                   VALUES ('system_confidence','no target')" 2>/dev/null; then
+            echo "::error::content_review_queue accepted a targetless row;"\
+                 "its has_target CHECK has been relaxed, which is the fix S3"\
+                 "was deliberately not given"
+            exit 1
+          fi
+          echo "content_review_queue still rejects a targetless row"
+
+      - name: Tier 2
+        # postgres-marked only. The paid tests are excluded here rather than
+        # left to skip, so the log distinguishes "not applicable" from
+        # "quietly did nothing".
+        run: python -m pytest ${{ env.TEST_PATHS }} -q -m "postgres and not anthropic"
+
+      - name: Postgres logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.test.yml logs test-db
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v
+
+# Tier 3 -- the anthropic-marked tests in tests/online/test_ingestion_paid.py --
+# is deliberately not a job here.
+#
+# Those checks embed a real PDF through Voyage and then ask retrieval to find
+# the chunks again. They cost money per run, and the question they answer --
+# does the text ingestion produces match what retrieval can retrieve -- is a
+# property of the two subsystems' agreement, not of any one commit. Wiring them
+# to every push would spend money on every branch and block merges for reasons
+# unrelated to the diff.
+#
+# Run them deliberately instead:
+#
+#   pip install -e ".[dev,retrieval,ingestion]"
+#   VOYAGE_API_KEY=... STUDIUM_RUN_PAID_TESTS=1 \
+#     python -m pytest tests/online/test_ingestion_paid.py -m anthropic
+#
+# The retrieval smoke test is the one to re-run after any change to chunking,
+# to the superseded_at filter, or to the embedding model. Each can leave both
+# subsystems passing their own tests while ingestion writes chunks retrieval
+# cannot find -- which looks, from either side, like the other one's bug.

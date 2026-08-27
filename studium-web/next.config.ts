@@ -13,9 +13,20 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
 
   // Spec §4 "no server-side rendering fallback needed since the app requires
-  // authentication". Output is a standard server build; Fly.io deployment is
-  // subsystem 7's (§19).
+  // authentication".
   poweredByHeader: false,
+
+  /**
+   * Infrastructure §4.3. `standalone` emits `.next/standalone` with a minimal
+   * `server.js` and only the `node_modules` actually reached at runtime, which
+   * is what the Dockerfile's runtime stage copies.
+   *
+   * The alternative — shipping the whole `node_modules` and running
+   * `next start` — costs about 600MB against §4.3's 1GB VM, and the memory it
+   * takes is memory the SSE proxy does not have. This is the only change this
+   * subsystem made to the frontend build.
+   */
+  output: "standalone",
 
   eslint: {
     dirs: ["app", "components", "lib"],

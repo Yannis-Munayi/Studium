@@ -115,6 +115,10 @@ SNAPSHOT: dict[str, tuple[str, ...]] = {
         "scheduled",
         "unit_gate",
     ),
+    # The last two are added by migration 0011. Evaluation §12.1 credentials a
+    # passed assessment and a completed subject; the first six values are
+    # learner *work* and none of them could carry a credential.
+    # DIVERGENCES-EVALUATION (E1).
     "portfolio_item_kind": (
         "proof",
         "code",
@@ -122,9 +126,14 @@ SNAPSHOT: dict[str, tuple[str, ...]] = {
         "derivation",
         "diagram",
         "notebook",
+        "assessment_pass",
+        "subject_completion",
     ),
+    # 'normalize' added by migration 0010: ingestion §6.4 runs normalisation as
+    # its own job, and the enum it writes to had no value for it.
     "ingestion_job_kind": (
         "extract_text",
+        "normalize",
         "chunk",
         "embed",
         "suggest_concept_mapping",
@@ -138,6 +147,30 @@ SNAPSHOT: dict[str, tuple[str, ...]] = {
         "random_sample",
     ),
     "review_status": ("pending", "in_review", "resolved", "dismissed"),
+    # Added by migration 0010 for the ingestion subsystem (ingestion §5
+    # addition 1). Separate from review_flag_source: that enum says why
+    # generated content was flagged, this one why an ingestion-side row was,
+    # and the two share no value.
+    "ingestion_flag_source": (
+        "extractor_failure",
+        "normalizer_warning",
+        "embedding_failure",
+        "chunk_ambiguous_type",
+        "license_pending",
+        "license_conflict",
+        "concept_source_conflict",
+        "graph_validation_error",
+        "rubric_validation_error",
+    ),
+    # Added by migration 0011 for the evaluation subsystem (evaluation §5
+    # addition 1). What question one golden dataset answers, which decides
+    # which runner executes it.
+    "golden_dataset_kind": (
+        "agent_output",
+        "retrieval_quality",
+        "grading_calibration",
+        "content_quality",
+    ),
 }
 
 

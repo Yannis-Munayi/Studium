@@ -21,6 +21,12 @@ from typing import Any
 from pydantic import BaseModel
 
 from studium.agents.base import Agent, AgentInput, AgentOutput, StreamChunk, ToolEffect
+from studium.orchestration.state_machine import (
+    Event,
+    GuardContext,
+    SessionStateMachine,
+    State,
+)
 from studium.session.context import Passage, SessionContext
 
 # Stable ids so a failure message names the same row twice in a row.
@@ -407,3 +413,97 @@ class FakeSDK:
 
 def effect(kind: str, **payload: Any) -> ToolEffect:
     return ToolEffect(kind=kind, payload=payload)
+
+
+# --- reaching a state the way production does -------------------------------
+#
+# v1.0.1 §7.1: "No test may set `machine.state` directly. Every state
+# transition in a test comes from a real event emission via its emission path."
+#
+# The rule exists because of R14. A test that assigns `machine.state =
+# LECTURING` is asserting against a session that production could not have
+# produced -- and R14 was precisely a session production could not produce,
+# sitting in OPENING forever while every test that mattered had already skipped
+# past it. Walking the real transitions means a broken path breaks the tests
+# that depend on it, which is the whole point.
+
+#: How each state is reached from IDLE, as (event, guard-overrides) pairs.
+#: Guards are spelled out rather than defaulted so the walk reads as the
+#: sequence a session actually performs.
+_ROUTE_TO: dict[State, list[tuple[Event, dict[str, Any]]]] = {
+    State.IDLE: [],
+    State.OPENING: [(Event.START_SESSION, {})],
+    State.LECTURING: [
+        (Event.START_SESSION, {}),
+        (Event.CONTEXT_READY, {"session_mode": "lecture"}),
+    ],
+    State.TUTORIAL: [
+        (Event.START_SESSION, {}),
+        (Event.CONTEXT_READY, {"session_mode": "tutorial"}),
+    ],
+    State.LAB: [
+        (Event.START_SESSION, {}),
+        (Event.CONTEXT_READY, {"session_mode": "lab"}),
+    ],
+    State.REVIEW: [
+        (Event.START_SESSION, {}),
+        (Event.CONTEXT_READY, {"session_mode": "review"}),
+    ],
+    State.OFFICE_HOURS: [
+        (Event.START_SESSION, {}),
+        (Event.CONTEXT_READY, {"session_mode": "office_hours"}),
+    ],
+    State.SUMMATIVE_ASSESSMENT: [
+        (Event.START_SESSION, {}),
+        (Event.CONTEXT_READY, {"session_mode": "summative_assessment"}),
+    ],
+    State.INTERRUPTED: [
+        (Event.START_SESSION, {}),
+        (Event.CONTEXT_READY, {"session_mode": "lecture"}),
+        (Event.LEARNER_INTERRUPT, {"stream_in_progress": True}),
+    ],
+    State.PAUSED_FOR_QUESTION: [
+        (Event.START_SESSION, {}),
+        (Event.CONTEXT_READY, {"session_mode": "lecture"}),
+        (Event.LEARNER_INTERRUPT, {"stream_in_progress": True}),
+        (Event.SENTENCE_BOUNDARY_REACHED, {}),
+    ],
+    State.CLOSING: [
+        (Event.START_SESSION, {}),
+        (Event.CONTEXT_READY, {"session_mode": "tutorial"}),
+        (Event.END_SESSION, {}),
+    ],
+}
+
+
+def drive_to(machine: SessionStateMachine, target: State) -> SessionStateMachine:
+    """Walk ``machine`` from IDLE to ``target`` by firing real transitions.
+
+    Raises rather than shortcutting if the walk does not arrive: a state that
+    can no longer be reached through the table is exactly the defect §7.1 is
+    written against, and a helper that quietly assigned the state instead would
+    hide it again.
+    """
+    route = _ROUTE_TO.get(target)
+    if route is None:
+        raise AssertionError(
+            f"no documented route to {target.value}; add one to _ROUTE_TO "
+            f"rather than assigning machine.state directly (v1.0.1 §7.1)"
+        )
+
+    machine.state = State.IDLE
+    for event, overrides in route:
+        machine.fire(Event(event), GuardContext(**overrides))
+
+    if machine.state is not target:
+        raise AssertionError(
+            f"the route to {target.value} arrived at {machine.state.value} -- "
+            f"the transition table changed under this helper"
+        )
+    return machine
+
+
+def orchestrator_in(orchestrator: Any, target: State) -> Any:
+    """Put an Orchestrator's machine in ``target`` via real transitions."""
+    drive_to(orchestrator.machine, target)
+    return orchestrator

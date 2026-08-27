@@ -14,6 +14,21 @@ a guard hidden inside a lambda over live session state cannot be swept.
 would create a synchronisation bug surface. It lives on the in-memory
 Orchestrator and, if the process restarts, is rebuilt from the ``session_turns``
 tail by :func:`reconstruct_state`.
+
+**Every transition names three things: source, destination, and the emission
+path of its triggering event** (v1.0.1 §2). A table that names only source and
+destination is a diagram, not a specification -- in code every event is emitted
+by *something*, and a spec that omits the emitter produces a machine that looks
+complete while several of its transitions are unreachable. That is not a
+hypothetical: R14 was exactly this defect, and it left every real session
+sitting in ``OPENING`` for its entire life while four separate test tiers
+agreed the machine was fine.
+
+So :class:`Transition` carries an :class:`Emission`, and it is not
+documentation. ``tests/orchestration/test_emission_paths.py`` walks this table
+and fails if a client emission names an endpoint the FastAPI router does not
+serve, or an internal emission names a function that does not exist. Adding a
+row without wiring its emitter fails at commit time.
 """
 
 from __future__ import annotations
@@ -21,7 +36,7 @@ from __future__ import annotations
 import datetime as dt
 from collections import deque
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Any
 
@@ -122,6 +137,166 @@ class GuardContext:
     session_mode: str = "lecture"
     #: State to resume after an interruption is resolved.
     resume_state: State = State.LECTURING
+    #: Where the machine is as the guard runs. Set by :meth:`peek`, never by a
+    #: caller -- the primitive matrix guard needs the source state, and asking
+    #: every call site to pass it correctly is how it comes to be passed wrong.
+    source_state: State | None = None
+    #: Rubric criteria still unanswered in a summative attempt (evaluation
+    #: §11.2). Distinct from ``segments_remaining``: a lecture's segments are
+    #: generated as it goes, while an attempt's criteria are fixed when it
+    #: starts, and the difference is what makes a summative attempt finite.
+    criteria_remaining: int = 0
+
+
+class EmissionKind(StrEnum):
+    """How a transition's triggering event reaches the machine (v1.0.1 §3)."""
+
+    #: An HTTP request from the frontend. ``path`` names the endpoint.
+    CLIENT = "client"
+    #: An Orchestrator or agent function completing. ``path`` names it.
+    INTERNAL = "internal"
+    #: A background signal -- timer, stream boundary, budget cap. ``path``
+    #: names the signal's origin and its trigger condition.
+    AMBIENT = "ambient"
+
+
+@dataclass(frozen=True, slots=True)
+class Emission:
+    """Who fires this transition's event, and from where.
+
+    ``path`` is checked by the emission-path test, so it must be literal
+    enough to resolve: ``"POST /api/session/{session_id}/resume"`` for a client
+    emission, a dotted ``module.function`` for an internal one. Prose is only
+    acceptable on :attr:`EmissionKind.AMBIENT`, where the trigger is a
+    condition rather than a call site -- and even there the handler is named.
+    """
+
+    kind: EmissionKind
+    path: str
+
+    def __str__(self) -> str:
+        return f"{self.kind.value}: {self.path}"
+
+
+def client(path: str) -> Emission:
+    return Emission(EmissionKind.CLIENT, path)
+
+
+def internal(path: str) -> Emission:
+    return Emission(EmissionKind.INTERNAL, path)
+
+
+def ambient(path: str) -> Emission:
+    return Emission(EmissionKind.AMBIENT, path)
+
+
+@dataclass(frozen=True, slots=True)
+class PrimitiveRule:
+    """One row of v1.0.1 §3.2's primitive validity matrix."""
+
+    valid_from: frozenset[State]
+    #: Where the session lands. ``None`` means it stays in the source state.
+    destination: State | None = None
+    note: str = ""
+
+
+#: The states a primitive palette is offered from. v1.0.1 §3.2 lists
+#: LECTURING, TUTORIAL, LAB and OFFICE_HOURS.
+#:
+#: PAUSED_FOR_QUESTION is added to every row that already contains TUTORIAL,
+#: and is *not* in the patch's matrix. R13 established it deliberately --
+#: raising a hand and then asking for a different explanation is one gesture,
+#: not a state that forbids it -- and dropping it here would silently re-break
+#: what R13 fixed. Recorded as R17.
+_PAUSED = State.PAUSED_FOR_QUESTION
+
+PRIMITIVE_MATRIX: dict[str, PrimitiveRule] = {
+    "explain_differently": PrimitiveRule(
+        frozenset({State.LECTURING, State.TUTORIAL, State.OFFICE_HOURS, _PAUSED}),
+        None,
+        "Tutor diagnoses, Lecturer regenerates in a new stance; the session "
+        "does not leave the state it was explaining from.",
+    ),
+    "prove_it_to_me": PrimitiveRule(
+        frozenset({State.LECTURING, State.TUTORIAL, State.OFFICE_HOURS, _PAUSED}),
+        State.TUTORIAL,
+        "The one hold-state primitive that moves: eliciting a derivation is a "
+        "tutorial exchange, so a lecture becomes one. Returning to the lecture "
+        "goes through question_resolved, per the interrupt flow.",
+    ),
+    "where_does_this_fit": PrimitiveRule(
+        frozenset(
+            {State.LECTURING, State.TUTORIAL, State.LAB, State.OFFICE_HOURS, _PAUSED}
+        )
+    ),
+    "vocabulary_check": PrimitiveRule(
+        frozenset(
+            {State.LECTURING, State.TUTORIAL, State.LAB, State.OFFICE_HOURS, _PAUSED}
+        )
+    ),
+    "show_worked_example": PrimitiveRule(
+        frozenset({State.LECTURING, State.TUTORIAL, State.LAB, _PAUSED}),
+        None,
+        "Not offered in OFFICE_HOURS per §3.2.",
+    ),
+    "let_me_try_one": PrimitiveRule(
+        frozenset({State.LECTURING, State.TUTORIAL, _PAUSED}),
+        State.LAB,
+        "Invalid from LAB: the learner already has a problem in front of them.",
+    ),
+    "why_does_this_matter": PrimitiveRule(
+        frozenset(
+            {State.LECTURING, State.TUTORIAL, State.LAB, State.OFFICE_HOURS, _PAUSED}
+        )
+    ),
+    "im_lost": PrimitiveRule(
+        frozenset(
+            {State.LECTURING, State.TUTORIAL, State.LAB, State.OFFICE_HOURS, _PAUSED}
+        ),
+        None,
+        "Holds state here. The Curator may reset the focus concept afterwards, "
+        "which is a context change rather than a transition.",
+    ),
+}
+
+#: Every state some primitive can be invoked from -- the set needing a
+#: PRIMITIVE_INVOKED row in the table.
+PRIMITIVE_SOURCE_STATES: frozenset[State] = frozenset(
+    state for rule in PRIMITIVE_MATRIX.values() for state in rule.valid_from
+)
+
+
+class InvalidPrimitive(ValueError):
+    """A primitive invoked from a state §3.2 does not allow.
+
+    §3.2: "Silent no-op is not acceptable -- the failure must be surfaced to
+    the client so the UI can present a clear message." The API layer turns this
+    into a 400 naming the combination.
+    """
+
+    def __init__(self, primitive: str, state: State) -> None:
+        self.primitive = primitive
+        self.state = state
+        known = primitive in PRIMITIVE_MATRIX
+        if known:
+            allowed = ", ".join(sorted(s.value for s in PRIMITIVE_MATRIX[primitive].valid_from))
+            detail = f"it is available from: {allowed}"
+        else:
+            detail = f"no such primitive; expected one of {sorted(PRIMITIVE_MATRIX)}"
+        super().__init__(f"{primitive!r} cannot be invoked from {state.value} -- {detail}")
+
+
+def primitive_is_valid(primitive: str | None, state: State | None) -> bool:
+    rule = PRIMITIVE_MATRIX.get(primitive or "")
+    return bool(rule and state in rule.valid_from)
+
+
+def primitive_destination(primitive: str | None, source: State) -> State:
+    """Where ``primitive`` leaves the session, given where it started."""
+    rule = PRIMITIVE_MATRIX.get(primitive or "")
+    if rule is None:
+        raise InvalidPrimitive(primitive or "<none>", source)
+    return rule.destination or source
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,6 +309,15 @@ class Transition:
     guard: str = "always"
     effect: str = ""
     note: str = ""
+    #: Who fires the event (v1.0.1 §3). A tuple because some events have
+    #: genuinely several emitters -- ``end_session`` arrives from the close
+    #: endpoint, the idle timer, or a budget cap, and naming only the first
+    #: would leave the other two exactly as unexamined as R14's missing one.
+    #:
+    #: Defaulted empty so a row under construction fails the emission-path
+    #: test, which says what is wrong, rather than a TypeError here, which
+    #: says only where.
+    emissions: tuple[Emission, ...] = ()
 
 
 def _resolve_dynamic(transition: Transition, guards: GuardContext) -> State:
@@ -150,6 +334,12 @@ def _resolve_dynamic(transition: Transition, guards: GuardContext) -> State:
         return guards.curator_next_state
     if transition.effect == "resume_prior_state":
         return guards.resume_state
+    if transition.effect == "primitive_destination":
+        # v1.0.1 §3.2: destination is per-primitive, not per-source-state. Six
+        # of the eight hold the state they were invoked from; let_me_try_one
+        # goes to LAB and prove_it_to_me to TUTORIAL.
+        source = transition.source or guards.source_state or State.TUTORIAL
+        return primitive_destination(guards.primitive, source)
     raise IllegalTransition(transition.source or State.IDLE, transition.event)
 
 
@@ -163,8 +353,11 @@ GUARDS = {
     "segments_exhausted": lambda g: g.segments_remaining <= 0,
     "stream_in_progress": lambda g: g.stream_in_progress,
     "learner_satisfied": lambda g: g.learner_satisfied,
-    "primitive_is_let_me_try_one": lambda g: g.primitive == "let_me_try_one",
-    "primitive_stays_in_tutorial": lambda g: g.primitive != "let_me_try_one",
+    # v1.0.1 §3.2 replaces the old let_me_try_one/everything-else split with a
+    # per-primitive matrix, so there is one guard and it asks the matrix. The
+    # destination is resolved separately by _resolve_dynamic; this only decides
+    # whether the combination is legal at all.
+    "primitive_valid_here": lambda g: primitive_is_valid(g.primitive, g.source_state),
     "answer_correct": lambda g: g.evaluator_correct is True,
     "answer_incorrect_within_attempts": lambda g: (
         g.evaluator_correct is False and g.failed_attempts < g.max_attempts
@@ -172,62 +365,100 @@ GUARDS = {
     "answer_incorrect_attempts_exhausted": lambda g: (
         g.evaluator_correct is False and g.failed_attempts >= g.max_attempts
     ),
+    # Evaluation §11.2. Deliberately *not* keyed on the verdict: a summative
+    # attempt is single-submission, so right and wrong go the same way. A
+    # correct/incorrect split here would be the retry loop the closed-book rule
+    # exists to remove.
+    "criteria_remain": lambda g: g.criteria_remaining > 0,
+    "criteria_exhausted": lambda g: g.criteria_remaining <= 0,
 }
 
 #: §7's transition table, in evaluation order. First match wins, so more
 #: specific guards precede more permissive ones on the same (state, event).
 TRANSITIONS: tuple[Transition, ...] = (
-    Transition(State.IDLE, Event.START_SESSION, State.OPENING, "budget_ok", "create_session"),
+    Transition(
+        State.IDLE, Event.START_SESSION, State.OPENING, "budget_ok", "create_session",
+        emissions=(client("POST /api/session"),),
+    ),
     # OPENING splits on whether there is prior context to check retention against.
+    # v1.0.1 §3.1 pins the emitter: start_session, once the context is assembled
+    # and the retrieval check has either run or been skipped. Before the patch
+    # nothing fired this at all and every session stayed here (R14).
     Transition(
         State.OPENING, Event.CONTEXT_READY, None, "has_prior_summary",
         "run_retrieval_check", "retrieval-check subroutine, then the mode's state",
+        emissions=(internal("studium.agents.orchestrator.Orchestrator.start_session"),),
     ),
     Transition(
-        State.OPENING, Event.CONTEXT_READY, None, "no_prior_summary", "enter_mode_state"
+        State.OPENING, Event.CONTEXT_READY, None, "no_prior_summary", "enter_mode_state",
+        emissions=(internal("studium.agents.orchestrator.Orchestrator.start_session"),),
     ),
     Transition(
         State.LECTURING, Event.SEGMENT_COMPLETE, State.LECTURING,
         "segments_remain", "next_segment",
+        emissions=(internal("studium.agents.orchestrator.Orchestrator._handle_conversational"),),
     ),
     Transition(
         State.LECTURING, Event.SEGMENT_COMPLETE, None,
         "segments_exhausted", "curator_chooses_next",
+        emissions=(internal("studium.agents.orchestrator.Orchestrator._handle_conversational"),),
     ),
     Transition(
         State.LECTURING, Event.LEARNER_INTERRUPT, State.INTERRUPTED,
         "stream_in_progress", "signal_finish_sentence",
+        emissions=(client("POST /api/session/{session_id}/interrupt"),),
     ),
     Transition(
         State.INTERRUPTED, Event.SENTENCE_BOUNDARY_REACHED, State.PAUSED_FOR_QUESTION,
         "always", "cancel_remaining_tokens",
+        emissions=(internal("studium.orchestration.streaming.sentence_boundary_iter"),),
     ),
     Transition(
         State.PAUSED_FOR_QUESTION, Event.QUESTION_RESOLVED, None,
         "learner_satisfied", "resume_prior_state",
-    ),
-    Transition(State.PAUSED_FOR_QUESTION, Event.ESCALATE, State.OFFICE_HOURS),
-    Transition(
-        State.TUTORIAL, Event.PRIMITIVE_INVOKED, State.LAB, "primitive_is_let_me_try_one"
+        emissions=(client("POST /api/session/{session_id}/resume"),),
     ),
     Transition(
-        State.TUTORIAL, Event.PRIMITIVE_INVOKED, State.TUTORIAL,
-        "primitive_stays_in_tutorial",
-        note="Seven of the eight primitives resolve inside the tutorial; only "
-        "let_me_try_one changes state.",
+        State.PAUSED_FOR_QUESTION, Event.ESCALATE, State.OFFICE_HOURS,
+        emissions=(client("POST /api/session/{session_id}/escalate"),),
+    ),
+    # One PRIMITIVE_INVOKED row per source state the matrix allows. Both the
+    # guard and the destination consult PRIMITIVE_MATRIX, so §3.2 is the single
+    # source of truth and this table does not restate it -- adding a primitive
+    # or widening its valid_from needs no change here.
+    *(
+        Transition(
+            state, Event.PRIMITIVE_INVOKED, None,
+            "primitive_valid_here", "primitive_destination",
+            emissions=(client("POST /api/session/{session_id}/primitive"),),
+        )
+        for state in sorted(PRIMITIVE_SOURCE_STATES, key=lambda s: s.value)
     ),
     Transition(
         State.LAB, Event.ANSWER_SUBMITTED, None, "answer_correct",
         "curator_chooses_after_correct",
+        emissions=(client("POST /api/session/{session_id}/practice/submit"),),
     ),
     Transition(
         State.LAB, Event.ANSWER_SUBMITTED, State.LAB,
         "answer_incorrect_within_attempts", "record_incorrect_attempt",
         note="Wrong but attempts remain: stay in LAB and let them try again.",
+        emissions=(client("POST /api/session/{session_id}/practice/submit"),),
     ),
     Transition(
         State.LAB, Event.ANSWER_SUBMITTED, State.TUTORIAL,
         "answer_incorrect_attempts_exhausted", "tutor_takes_over",
+        emissions=(client("POST /api/session/{session_id}/practice/submit"),),
+    ),
+    # v1.0.1 §3.1 gives REVIEW the same submit endpoint as LAB: a due card is
+    # answered the same way a practice problem is, and the Evaluator's
+    # check_partial grades both.
+    Transition(
+        State.REVIEW, Event.ANSWER_SUBMITTED, State.REVIEW,
+        "always", "grade_review_card",
+        note="Stays in REVIEW while cards remain; the deck emptying is what "
+        "ends the session, not this transition.",
+        emissions=(client("POST /api/session/{session_id}/practice/submit"),),
     ),
     # An interrupt during a tutorial exchange pauses it the same way a lecture
     # interrupt does. §7 draws the arrow into PAUSED_FOR_QUESTION from TUTORIAL
@@ -235,9 +466,55 @@ TRANSITIONS: tuple[Transition, ...] = (
     Transition(
         State.TUTORIAL, Event.LEARNER_INTERRUPT, State.PAUSED_FOR_QUESTION,
         "stream_in_progress", "signal_finish_sentence",
+        emissions=(client("POST /api/session/{session_id}/interrupt"),),
     ),
-    Transition(None, Event.END_SESSION, State.CLOSING, "always", "begin_close"),
-    Transition(State.CLOSING, Event.CLOSE_COMPLETE, State.IDLE, "always", "finish_close"),
+    # Evaluation §11.2's summative flow. Before these two rows the state was
+    # reachable and inescapable: MODE_ENTRY_STATE puts a session in
+    # SUMMATIVE_ASSESSMENT and no transition led out of it except the wildcard
+    # END_SESSION below, so a learner who submitted an answer got
+    # IllegalTransition. Nothing caught it because no test opened a session in
+    # that mode. See DIVERGENCES-EVALUATION (E10).
+    #
+    # One row per exhaustion branch and *no verdict branch*: §11.2 is
+    # single-submission, so a correct answer and a wrong one both advance. The
+    # three-row shape LAB uses (correct / retry / exhausted) is precisely the
+    # multi-attempt cycle closed-book assessment replaces.
+    Transition(
+        State.SUMMATIVE_ASSESSMENT, Event.ANSWER_SUBMITTED, State.SUMMATIVE_ASSESSMENT,
+        "criteria_remain", "record_assessment_response",
+        note="Answer recorded, no verdict shown, no revision. The next "
+        "criterion is presented; §11.4 releases scores only after all "
+        "criteria are submitted.",
+        emissions=(client("POST /api/session/{session_id}/practice/submit"),),
+    ),
+    Transition(
+        State.SUMMATIVE_ASSESSMENT, Event.ANSWER_SUBMITTED, State.CLOSING,
+        "criteria_exhausted", "grade_assessment_attempt",
+        note="Last criterion submitted: the Evaluator grades the whole attempt "
+        "(§11.4) and the session closes. Grading is not a state -- there is no "
+        "event that would leave one, so the session would strand there.",
+        emissions=(client("POST /api/session/{session_id}/practice/submit"),),
+    ),
+    # §3.3's two ambient signals converge on this same event, so the row names
+    # all three emitters rather than only the one a reader would think of.
+    Transition(
+        None, Event.END_SESSION, State.CLOSING, "always", "begin_close",
+        emissions=(
+            client("POST /api/session/{session_id}/close"),
+            ambient(
+                "studium.orchestration.state_machine.timed_out -- no turn for "
+                "target_duration_minutes + 15"
+            ),
+            ambient(
+                "studium.session.budget_gate.pre_flight_check -- raises "
+                "BudgetExceededError when a hard cap would be crossed"
+            ),
+        ),
+    ),
+    Transition(
+        State.CLOSING, Event.CLOSE_COMPLETE, State.IDLE, "always", "finish_close",
+        emissions=(internal("studium.session.lifecycle.close_session"),),
+    ),
 )
 
 
@@ -278,6 +555,11 @@ class SessionStateMachine:
     def peek(self, event: Event, guards: GuardContext | None = None) -> tuple[State, str]:
         """Resolve the target without applying it."""
         g = guards or GuardContext(resume_state=self.resume_state)
+        # The primitive matrix guard needs to know where the machine is, and
+        # the machine is the only thing that reliably does. Stamped here rather
+        # than asked of every caller: a source state a caller passes is a
+        # source state a caller can pass wrongly.
+        g = replace(g, source_state=self.state)
         for transition in TRANSITIONS:
             if transition.event is not event:
                 continue

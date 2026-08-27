@@ -4,6 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useEffect } from "react";
 import Link from "next/link";
 import { closeSession } from "@/lib/api/client";
+import { useSessionSummary } from "@/lib/api/hooks";
 import { SESSION_CLOSE, CLASSROOM } from "@/lib/copy/surfaces";
 import { useUIStore } from "@/lib/state/ui";
 import { Button } from "@/components/ui/button";
@@ -43,7 +44,16 @@ export function SessionCloseDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const summary = summaryFrom(close.data);
+  /**
+   * Fetched only once the close has reported `summarised: true`.
+   *
+   * The row does not exist until the Curator's call lands, so asking earlier is
+   * a guaranteed 404 -- and asking at all when close said it did not summarise
+   * is asking a question that has already been answered. §6.5's contents come
+   * from `session_summaries`; the close response says whether there are any.
+   */
+  const summarised = close.data?.summarised === true;
+  const { data: summary = null } = useSessionSummary(sessionId, summarised);
 
   return (
     <Dialog
@@ -99,12 +109,13 @@ function SummaryBody({
       {summary?.summary ? (
         <p className="prose-reading max-w-none">{summary.summary}</p>
       ) : (
-        // §6.5's contents come from `session_summaries`, which no endpoint
-        // serves (F4). The close call reports whether the summary was written;
-        // saying so plainly beats an empty panel that looks like a bug.
+        // The Curator's call failed, or the summary has not landed yet. §3
+        // forbids a silent gap, and this is the honest sentence: the session
+        // closed and the record is intact; the write-up is what is missing.
         <p className="text-sm text-muted">
-          Your summary was written to your record. Reading it back here needs the session-summary
-          endpoint, which isn&apos;t built yet.
+          Your session is closed and your progress is saved. The written summary isn&apos;t
+          available — nothing you did is lost, the summary is a convenience rather than the
+          record.
         </p>
       )}
 
@@ -136,6 +147,18 @@ function SummaryBody({
         </section>
       ) : null}
 
+      {/* §6.5's "What's next". The concept is named rather than linked: the
+          primary action below already starts the next session, and a second
+          route to the same place invites the guess that they differ. */}
+      {summary?.next_focus_concept_name ? (
+        <section>
+          <h3 className="font-sans text-sm font-semibold text-ink">{SESSION_CLOSE.whatsNext}</h3>
+          <p className="mt-tight font-serif text-base text-ink">
+            {summary.next_focus_concept_name}
+          </p>
+        </section>
+      ) : null}
+
       {summary?.duration_minutes || (showCost && summary?.cost_usd) ? (
         <p className="font-sans text-xs text-muted">
           {SESSION_CLOSE.duration}: {Math.round(summary?.duration_minutes ?? 0)}m
@@ -148,19 +171,10 @@ function SummaryBody({
       {errors.length > 0 ? (
         // The close endpoint returns partial failures rather than throwing.
         // Reporting them is the difference between "saved" and "mostly saved".
-        <p className="font-sans text-xs text-[var(--color-attention)]">
+        <p className="font-sans text-xs text-[var(--color-attention-strong)]">
           Some parts of the close didn&apos;t finish: {errors.join("; ")}
         </p>
       ) : null}
     </div>
   );
-}
-
-/**
- * The close endpoint returns `{ended, summarised, errors}` and not the summary
- * text itself, so there is nothing to map yet. Kept as a seam so wiring the
- * summary endpoint (F4) is one function body rather than a component rewrite.
- */
-function summaryFrom(_data: unknown): SessionSummary | null {
-  return null;
 }

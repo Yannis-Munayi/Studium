@@ -1,0 +1,72 @@
+{
+  "extractor_version": "pdfplumber/0.11.10",
+  "normalizer_version": "studium.normalize/1.0",
+  "sources": [
+    {
+      "chunk_token_median": 420.0,
+      "chunk_token_q1": 420.0,
+      "chunk_token_q3": 420.0,
+      "chunks": 1,
+      "extracted_tokens": 420,
+      "name": "hyphenated",
+      "pages": 1,
+      "reference_tokens": 421,
+      "sectioned_chunk_ratio": 1.0
+    },
+    {
+      "chunk_token_median": 479.0,
+      "chunk_token_q1": 479.0,
+      "chunk_token_q3": 551.0,
+      "chunks": 2,
+      "extracted_tokens": 958,
+      "name": "ligature_heavy",
+      "pages": 2,
+      "reference_tokens": 958,
+      "sectioned_chunk_ratio": 1.0
+    },
+    {
+      "chunk_token_median": 600.0,
+      "chunk_token_q1": 600.0,
+      "chunk_token_q3": 600.0,
+      "chunks": 8,
+      "extracted_tokens": 4592,
+      "name": "running_heads",
+      "pages": 8,
+      "reference_tokens": 4720,
+      "sectioned_chunk_ratio": 0.0
+    },
+    {
+      "chunk_token_median": 600.0,
+      "chunk_token_q1": 577.0,
+      "chunk_token_q3": 600.0,
+      "chunks": 3,
+      "extracted_tokens": 1731,
+      "name": "simple",
+      "pages": 3,
+      "reference_tokens": 1731,
+      "sectioned_chunk_ratio": 1.0
+    },
+    {
+      "chunk_token_median": 482.0,
+      "chunk_token_q1": 482.0,
+      "chunk_token_q3": 482.0,
+      "chunks": 1,
+      "extracted_tokens": 482,
+      "name": "single_page",
+      "pages": 1,
+      "reference_tokens": 482,
+      "sectioned_chunk_ratio": 1.0
+    },
+    {
+      "chunk_token_median": 463.0,
+      "chunk_token_q1": 463.0,
+      "chunk_token_q3": 532.0,
+      "chunks": 2,
+      "extracted_tokens": 926,
+      "name": "two_column",
+      "pages": 2,
+      "reference_tokens": 926,
+      "sectioned_chunk_ratio": 1.0
+    }
+  ]
+}

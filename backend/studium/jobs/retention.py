@@ -84,6 +84,18 @@ POLICIES: tuple[Policy, ...] = (
         YEAR,
         "resolved_at IS NOT NULL AND resolved_at < NOW() - INTERVAL '1 year'",
     ),
+    Policy(
+        "ingestion_review_queue",
+        YEAR,
+        # Ingestion §12.3: "the row persists for audit; a retention job deletes
+        # resolved rows after 1 year." Keyed on resolved_at, so a *pending*
+        # item is never aged out however long it has been waiting -- an
+        # unresolved license question does not become resolved by being
+        # ignored, and a queue that quietly drops its oldest items is worse
+        # than one that grows.
+        "resolved_at IS NOT NULL AND resolved_at < NOW() - INTERVAL '1 year'",
+        "mirrors content_review_queue; pending items are never aged out",
+    ),
     # --- not in the spec's table, added for completeness -------------------
     Policy(
         "retrieval_checks",
@@ -105,21 +117,121 @@ POLICIES: tuple[Policy, ...] = (
     Policy("review_cards", None, note="added: current schedule, never aged out"),
     Policy("learner_subjects", None, note="added: deleted on erasure only"),
     Policy("users", None, note="soft delete on close; hard delete after 30 days"),
+    # --- evaluation harness (evaluation spec §5, §7.3, §12.3) --------------
+    #
+    # All five are kept indefinitely, and each for its own reason rather than
+    # by default.
+    Policy(
+        "golden_datasets",
+        None,
+        note="evaluation §7.3: retired via active=FALSE, never deleted, so "
+        "old results stay comparable",
+    ),
+    Policy(
+        "golden_dataset_entries",
+        None,
+        note="evaluation §7.3: 'entries are versioned but not deleted'; "
+        "evaluation_results.entry_id is ON DELETE RESTRICT besides",
+    ),
+    Policy(
+        "evaluation_runs",
+        None,
+        # A window here would delete the baseline §13.1 step 4 compares
+        # against. The suite is ~250 entries run weekly: a few thousand rows a
+        # year, against a gate that stops silently passing if they expire.
+        note="the regression baseline; ageing it out disarms the §13.2 gate",
+    ),
+    Policy(
+        "evaluation_results",
+        None,
+        note="per-entry history behind the baseline; §7.3 keeps retired "
+        "datasets' results 'queryable for historical comparison'",
+    ),
+    Policy(
+        "signing_keys",
+        None,
+        # §12.3: "Old public keys remain published so historical portfolio
+        # items stay verifiable." Deleting a retired key invalidates every
+        # credential it ever signed -- a verifier could no longer tell a
+        # rotated key from a forged one.
+        note="evaluation §12.3: retired keys stay published forever",
+    ),
+    # --- infrastructure §12 (migration 0012) --------------------------------
+    #
+    # Both kept indefinitely, and the first one is the interesting case: it is
+    # the retention worker's own audit trail, and giving it a window would mean
+    # the worker deleting the evidence of its own deletions on a schedule.
+    Policy(
+        "retention_actions",
+        None,
+        # §12.2: "Audit trail for any question of 'why did that data go away'."
+        # A window here would answer that question only for the recent past,
+        # and the questions that reach an audit trail are rarely recent. One
+        # row per policy per night is ~4,000 a year -- kilobytes.
+        note="infrastructure §12.2: the audit trail the worker writes; a "
+        "window would have the worker prune its own evidence",
+    ),
+    Policy(
+        "retention_holds",
+        None,
+        # A hold is released, never deleted, precisely so the record that data
+        # was deliberately kept survives. Ageing the row out would destroy
+        # that record -- and would do it for exactly the holds that are old
+        # enough for the dispute to have reached a court.
+        note="infrastructure §12.4: released holds stay as the record that "
+        "the data was kept, which is what a dispute later asks about",
+    ),
 )
+
+
+#: Policies the worker actually executes: a window and a predicate. The rest of
+#: POLICIES documents tables that are deliberately never aged out, and a
+#: reviewer reading "kept indefinitely" is the point of their being there.
+def active_policies() -> tuple[Policy, ...]:
+    return tuple(p for p in POLICIES if p.window is not None and p.predicate is not None)
+
+
+#: Excludes rows under an unreleased retention hold (infrastructure §12.4).
+#:
+#: Applied inside :func:`deletion_predicate` rather than left to each caller,
+#: so ``apply_retention`` and the scheduled worker in ``studium.ops.retention``
+#: cannot disagree about what is protected. A hold the weekly job honours and
+#: the nightly job does not is worse than no hold at all -- the data goes, and
+#: the row saying it was being kept is still there.
+HOLD_EXCLUSION = """
+    NOT EXISTS (
+        SELECT 1 FROM retention_holds h
+         WHERE h.table_name = '{table}'
+           AND h.row_id = {table}.id
+           AND h.released_at IS NULL
+    )
+"""
+
+
+def deletion_predicate(policy: Policy) -> str:
+    """The policy's own predicate, ANDed with the retention-hold exclusion."""
+    assert policy.predicate is not None
+    return (
+        f"({policy.predicate.strip()})"
+        f" AND {HOLD_EXCLUSION.format(table=policy.table).strip()}"
+    )
 
 
 def apply_retention(session: Session, *, dry_run: bool = False) -> dict[str, int]:
     """Delete rows past their window. Returns per-table counts.
 
-    Weekly job. Ordered so that cascading parents run before the children they
-    would have cascaded into, which keeps the counts meaningful.
+    One statement per policy, ordered so that cascading parents run before the
+    children they would have cascaded into, which keeps the counts meaningful.
+
+    The scheduled path is :func:`studium.ops.retention.run_retention`, which
+    adds batching, a per-policy transaction and the §12.2 audit row. This
+    remains the direct form: it is what the integrity tests drive, and what an
+    operator runs when they want one pass with nothing else attached.
     """
     counts: dict[str, int] = {}
-    for policy in POLICIES:
-        if policy.window is None or policy.predicate is None:
-            continue
+    for policy in active_policies():
         verb = "SELECT count(*) FROM" if dry_run else "DELETE FROM"
-        sql = text(f"{verb} {policy.table} WHERE {policy.predicate}")
+        sql = text(f"{verb} {policy.table} WHERE {deletion_predicate(policy)}")
         result = session.execute(sql)
         counts[policy.table] = (
             int(result.scalar_one()) if dry_run else int(result.rowcount or 0)

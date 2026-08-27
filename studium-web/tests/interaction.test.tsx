@@ -9,6 +9,8 @@ import { CommandPalette } from "@/components/session/command-palette";
 import { ComprehensionCheck, MAX_ATTEMPTS } from "@/components/session/comprehension-check";
 import { shouldOfferEscalation } from "@/components/session/resumption-card";
 import { Disclosure } from "@/components/ui/disclosure";
+import { Bench } from "@/components/surfaces/bench";
+import { feedbackFor, toBenchProblem } from "@/components/surfaces/classroom";
 import { useSessionStore } from "@/lib/state/session";
 import { useCommandPaletteStore, filterPrimitives } from "@/lib/state/palette";
 import { PRIMITIVES, buttonsFor, PRIMITIVE_BY_NAME } from "@/lib/copy/primitives";
@@ -491,5 +493,139 @@ describe("announcements (§8.3, §13.4)", () => {
     // Identical consecutive text is not a DOM change, so without the nonce the
     // second one is silent.
     expect(useAnnouncements.getState().nonce).toBe(before + 2);
+  });
+});
+
+describe("the bench (§6.3, §9.3)", () => {
+  const PROBLEM = {
+    statement: "Reduce the self-application term to normal form, showing each step.",
+    hints: ["Start with the outermost redex."],
+  };
+
+  it("renders the Curator's problem and submits the learner's work", async () => {
+    const onSubmit = vi.fn();
+    renderWithProviders(<Bench problem={PROBLEM} feedback={null} onSubmit={onSubmit} />);
+
+    expect(screen.getByText(/reduce the self-application term/i)).toBeInTheDocument();
+    // §6.3: nothing to show in the feedback column until there is an attempt.
+    expect(screen.getByText(/feedback appears here once you submit/i)).toBeInTheDocument();
+
+    await userEvent.type(
+      screen.getByLabelText(/your work on this problem/i),
+      "It reduces to the identity.",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Submit" }));
+
+    expect(onSubmit).toHaveBeenCalledWith("It reduces to the identity.");
+  });
+
+  it("will not submit an empty workspace", async () => {
+    const onSubmit = vi.fn();
+    renderWithProviders(<Bench problem={PROBLEM} feedback={null} onSubmit={onSubmit} />);
+
+    expect(screen.getByRole("button", { name: "Submit" })).toBeDisabled();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("shows the verdict in words, not only in colour", () => {
+    // §13.1 (WCAG 1.4.1), repeated in §6.3.
+    renderWithProviders(
+      <Bench
+        problem={PROBLEM}
+        feedback={{ verdict: "incorrect", feedback: "Look at which redex is outermost." }}
+        onSubmit={noop}
+      />,
+    );
+
+    // The word is what a screen reader gets and what a learner who cannot see
+    // the colour reads; `Not quite.` is the visible lead beside it.
+    expect(screen.getByText(/^Not yet\.?\s*$/)).toBeInTheDocument();
+    expect(screen.getByText("Not quite.")).toBeInTheDocument();
+    expect(screen.getByText(/which redex is outermost/i)).toBeInTheDocument();
+  });
+
+  it("never draws a model answer it was not given", () => {
+    // The runtime strips `model_answer` from the chunk (§11.2), so the bench
+    // has nothing to leak -- but the workspace must not invent a placeholder
+    // for it either.
+    renderWithProviders(
+      <Bench
+        problem={PROBLEM}
+        feedback={{ verdict: "correct", feedback: "That is the normal form." }}
+        onSubmit={noop}
+      />,
+    );
+
+    expect(screen.queryByText(/a full answer looks like/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("the bench's problem mapping (§9.3)", () => {
+  it("carries the prompt and the hint across, and invents nothing else", () => {
+    const problem = toBenchProblem({
+      prompt: "Reduce the self-application term.",
+      difficulty: 2,
+      hint: "Start with the outermost redex.",
+    });
+
+    expect(problem.statement).toBe("Reduce the self-application term.");
+    expect(problem.hints).toEqual(["Start with the outermost redex."]);
+    // §6.3 anticipates these; `PracticeProblem` does not carry them, and a
+    // fabricated "about 10 minutes" would be a claim about the learner's work.
+    expect(problem.setup).toBeUndefined();
+    expect(problem.constraints).toBeUndefined();
+    expect(problem.expectedMinutes).toBeUndefined();
+  });
+
+  it("omits the hint list when the Curator supplied no hint", () => {
+    const problem = toBenchProblem({ prompt: "Reduce it.", difficulty: 3, hint: "" });
+    expect(problem.hints).toBeUndefined();
+  });
+});
+
+describe("lab feedback selection (§6.3, §12)", () => {
+  const turn = (overrides: Record<string, unknown>) =>
+    ({
+      id: "t",
+      speaker: "evaluator",
+      text: "",
+      complete: true,
+      artifactId: null,
+      interruptedAt: null,
+      end: null,
+      ...overrides,
+    }) as never;
+
+  it("shows nothing for a problem that has not been attempted", () => {
+    const turns = [
+      turn({ id: "a", speaker: "evaluator", text: "Old feedback.", end: { verdict: "correct" } }),
+      turn({ id: "b", speaker: "tutor", text: "Try this.", end: { primitive: "let_me_try_one" } }),
+    ];
+
+    // Crossing the selection turn would show the previous problem's verdict
+    // beside a question the learner has not answered yet.
+    expect(feedbackFor(turns)).toBeNull();
+  });
+
+  it("maps the runtime's verdict vocabulary to the bench's", () => {
+    const turns = [
+      turn({ id: "b", speaker: "tutor", end: { primitive: "let_me_try_one" } }),
+      turn({ id: "c", text: "Close — you missed the second step.", end: { verdict: "partially_correct" } }),
+    ];
+
+    expect(feedbackFor(turns)).toEqual({
+      verdict: "partial",
+      feedback: "Close — you missed the second step.",
+    });
+  });
+
+  it("reads the most recent attempt when a problem was tried twice", () => {
+    const turns = [
+      turn({ id: "b", speaker: "tutor", end: { primitive: "let_me_try_one" } }),
+      turn({ id: "c", text: "Not quite.", end: { verdict: "incorrect" } }),
+      turn({ id: "d", text: "That's it.", end: { verdict: "correct" } }),
+    ];
+
+    expect(feedbackFor(turns)?.verdict).toBe("correct");
   });
 });

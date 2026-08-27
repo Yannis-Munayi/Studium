@@ -32,9 +32,29 @@ dev = [
     # TestClient for the API tier.
     "httpx>=0.27",
 ]
-# Langfuse is optional at runtime (§22): absent or unconfigured, every tracing
-# hook is a no-op. Observability must not be able to fail a learner's turn.
-observability = ["langfuse>=2.0"]
+# Observability (infrastructure §7). Every one of these is optional at runtime
+# and every hook that uses them is a no-op when they are absent -- asserted by
+# a Tier 1 test that blocks the imports and drives
+# studium.observability.configure to completion. An observability backend that
+# can fail a learner's turn is a second outage source attached to the thing
+# that was supposed to explain the first.
+#
+# Langfuse carries agent runtime §22's LLM tracing; sentry-sdk carries §7.2;
+# the three opentelemetry packages carry §7.3, exporting over OTLP to Langfuse
+# rather than to a tracing backend of their own (§7.3: "No separate tracing
+# backend").
+observability = [
+    "langfuse>=2.0",
+    "sentry-sdk>=2.0",
+    "opentelemetry-sdk>=1.25",
+    "opentelemetry-instrumentation-fastapi>=0.46b0",
+    "opentelemetry-exporter-otlp-proto-http>=1.25",
+]
+# Cloudflare R2 via its S3-compatible API (infrastructure §4.5). Deliberately
+# not installed by default: §4.5 provisions R2 and does not use it until
+# §14.3's 30GB trigger fires, and studium.storage.R2Storage raises
+# StorageUnavailable naming this extra rather than failing at import.
+r2 = ["boto3>=1.34"]
 serve = ["uvicorn[standard]>=0.29"]
 # Retrieval (subsystem 3 §4). Optional at runtime: without it, chunking falls
 # back to a character-ratio token estimate and the retriever runs on stub
@@ -42,9 +62,40 @@ serve = ["uvicorn[standard]>=0.29"]
 # studium.retrieval.default_retriever warns when it takes that path.
 retrieval = ["voyageai>=0.2"]
 # scripts/chunk_diagnostics.py only. PDF-to-text is subsystem 5's, and nothing
-# in studium/ imports pypdf -- keeping it out of the retrieval extra is what
-# keeps that boundary honest.
+# in studium/retrieval imports pypdf -- keeping it out of the retrieval extra
+# is what keeps that boundary honest.
 diagnostics = ["pypdf>=4.0"]
+# Ingestion (subsystem 5 §4). Optional at runtime for the same reason
+# 'retrieval' is: studium.ingestion must import without these so Tier 1 runs on
+# a machine with no PDF toolchain, and studium.api.app imports the package.
+# get_extractor raises ExtractorUnavailable rather than failing at import.
+#
+# reportlab is here rather than in 'dev' because the PDF fixtures are built
+# from it at test time -- §16 asks for real PDF fixtures from Tier 1, and
+# generating them beats committing binaries.
+ingestion = [
+    "pdfplumber>=0.11",
+    "pypdf>=5.0",
+    "pyyaml>=6.0",
+    "reportlab>=4.0",
+]
+# Evaluation harness (evaluation §4). Optional at runtime for the reason the
+# others are: studium.api.app imports studium.eval for §12.4's verify endpoint,
+# so a hard dependency here would take the whole API down on a machine with
+# neither installed.
+#
+# pyyaml is listed again rather than relied on through 'ingestion': golden
+# dataset authoring has nothing to do with PDF extraction, and installing a PDF
+# toolchain to parse a dataset file would be a dependency nobody could explain.
+# pip de-duplicates when both extras are installed.
+#
+# pynacl carries §12.3's Ed25519. Absent, credentials.load_identity raises
+# SigningKeyUnavailable at *use* -- which §16 already has a learner-facing
+# response for -- rather than failing at import.
+evaluation = [
+    "pynacl>=1.5",
+    "pyyaml>=6.0",
+]
 
 # Flat layout: without this, setuptools sees studium/, tests/, scripts/ and
 # migrations/ as candidate packages and refuses to guess. Only studium ships.

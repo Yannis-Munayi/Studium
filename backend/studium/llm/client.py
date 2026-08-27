@@ -48,6 +48,14 @@ ROUTING: dict[str, dict[str | None, str]] = {
     "evaluator": {
         None: HAIKU.id,
         "grade_assessment": OPUS.id,
+        # Evaluation §7.2's meta-grading. Opus, not Haiku: it judges qualities
+        # the deterministic checks could not express -- Socratic discipline,
+        # stance adherence, whether feedback names an actionable gap -- and a
+        # cheap judge of those produces §19 open question 2's failure directly,
+        # where the same output scores differently run to run and the
+        # regression signal is noise. It runs ~20 times per dataset, off a
+        # cached prefix, and not on a learner's turn.
+        "meta_grade": OPUS.id,
     },
     "confusion_tracker": {None: HAIKU.id},
     "reviewer": {
@@ -71,6 +79,8 @@ MAX_TOKENS: dict[str, int] = {
     "grade_check": 2048,
     "grade_practice": 2048,
     "grade_assessment": 8192,
+    # A score, a verdict sentence, and a few evidence quotes.
+    "meta_grade": 2048,
     "next_topic": 2048,
     "select_stance": 1024,
     "open_session": 4096,
@@ -94,6 +104,7 @@ EFFORT: dict[str, str] = {
     "office_hours_response": "high",
     "remediation": "high",
     "grade_assessment": "high",
+    "meta_grade": "high",
     "next_topic": "medium",
     "open_session": "medium",
     "generate_check": "medium",

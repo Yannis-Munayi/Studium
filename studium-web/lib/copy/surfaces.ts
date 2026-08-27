@@ -113,6 +113,9 @@ export const JOURNAL = {
   reopen: "Reopen",
   archive: "Archive",
   resolveFailed: "Could not mark resolved. Please try again.",
+  statusFailed: "Could not update this entry. Please try again.",
+  notFound: "That entry isn't here. It may have been archived or deleted.",
+  loadFailed: "Couldn't load your journal just now.",
 } as const;
 
 export const SESSION_CLOSE = {

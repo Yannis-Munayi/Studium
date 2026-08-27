@@ -153,9 +153,33 @@ def test_initial_migration_creates_the_uuid_function_correctly() -> None:
 
 
 def test_grants_migration_revokes_writes_on_append_only_tables() -> None:
+    """Every append-only table has its write privileges revoked somewhere.
+
+    Scans the whole history rather than 0003 alone, and the reason is a real
+    hazard rather than tidiness. 0003 ends with an ``ALTER DEFAULT PRIVILEGES
+    ... GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO studium_app``, so a
+    table created by a *later* migration is writable by the application role
+    the moment it exists. ``retention_actions`` (0012) is the first such table
+    that belongs here, and it carries its own REVOKE.
+
+    Asserting against 0003 alone would therefore have two failure modes and
+    both are wrong: it fails for a correctly-revoked later table, and it would
+    pass for one that was added to the tuple and revoked nowhere at all.
+    """
     from studium.models import APPEND_ONLY_TABLES
 
-    source = (VERSIONS / "0003_grants.py").read_text(encoding="utf-8")
+    history = {p.name: p.read_text(encoding="utf-8") for p in MIGRATIONS}
+    assert "REVOKE UPDATE, DELETE" in history["0003_grants.py"]
+
     for table in APPEND_ONLY_TABLES:
-        assert table in source, f"0003 does not mention append-only table {table}"
-    assert "REVOKE UPDATE, DELETE" in source
+        revoked = [
+            name
+            for name, source in history.items()
+            if f"REVOKE UPDATE, DELETE ON {table}" in source
+            or (name == "0003_grants.py" and table in source)
+        ]
+        assert revoked, (
+            f"append-only table {table!r} has no REVOKE UPDATE, DELETE in any "
+            f"migration. 0003's ALTER DEFAULT PRIVILEGES grants both on every "
+            f"table created after it, so a later table must revoke for itself."
+        )

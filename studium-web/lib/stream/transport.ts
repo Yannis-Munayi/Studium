@@ -19,10 +19,24 @@ import { ApiError, errorFromResponse } from "@/lib/api/errors";
 import { backendUrl } from "@/lib/api/client";
 import { SseParser, isTerminator } from "./parse";
 
+/**
+ * Intents a surface may declare rather than let the runtime infer (§8).
+ *
+ * The runtime's classifier is a model call over the learner's words, and it is
+ * right most of the time. It cannot be right about the bench, because the words
+ * are not the signal there — "It reduces to the identity." is a comment, a
+ * claim, or an answer depending entirely on which control sent it, and only the
+ * client knows which. A misclassified submission routes to the Tutor and is
+ * never graded.
+ */
+export type DeclaredIntent = "question" | "answer" | "comment" | "next" | "back";
+
 export interface TurnRequest {
   text?: string;
   /** An explicit primitive button press; skips intent classification (§9.2). */
   primitive?: string | null;
+  /** An intent this surface knows; skips classification the same way. */
+  intent?: DeclaredIntent | null;
 }
 
 export interface TurnStreamOptions {
@@ -68,7 +82,11 @@ export async function* readTurnStream(
     response = await doFetch(backendUrl(`/api/session/${sessionId}/turn`), {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-      body: JSON.stringify({ text: body.text ?? "", primitive: body.primitive ?? null }),
+      body: JSON.stringify({
+        text: body.text ?? "",
+        primitive: body.primitive ?? null,
+        intent: body.intent ?? null,
+      }),
       ...(options.signal ? { signal: options.signal } : {}),
     });
   } catch (cause) {

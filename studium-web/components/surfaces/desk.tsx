@@ -197,6 +197,11 @@ function JournalRow({ entry }: { entry: JournalEntry }) {
  * the chart". Here the bars *are* a table -- a `<table>` with a width-scaled
  * cell per row -- so there is no toggle to get wrong and nothing to keep in
  * sync. A screen reader reads the numbers; everyone else sees the bars.
+ *
+ * Renders `p_known_decayed`, not `p_known`. The decayed value is what the
+ * Curator sequences against and what the unlock gate reads (data layer C1), so
+ * it is what "where you stand" means -- the raw posterior would show 0.9 on a
+ * concept the system had already decided to revisit. See F18.
  */
 function MasterySummary({ mastery }: { mastery: ConceptMastery[] }) {
   if (mastery.length === 0) {
@@ -223,11 +228,11 @@ function MasterySummary({ mastery }: { mastery: ConceptMastery[] }) {
                 <span aria-hidden className="h-2 flex-1 rounded-full bg-[var(--color-border)]">
                   <span
                     className="block h-full rounded-full bg-[var(--color-accent)]"
-                    style={{ width: `${Math.round(concept.p_known * 100)}%` }}
+                    style={{ width: `${Math.round(concept.p_known_decayed * 100)}%` }}
                   />
                 </span>
                 <span className="w-10 text-right text-xs text-muted">
-                  {concept.p_known.toFixed(2)}
+                  {concept.p_known_decayed.toFixed(2)}
                 </span>
               </span>
             </td>

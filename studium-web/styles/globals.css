@@ -82,6 +82,29 @@
    */
   --color-accent-strong: hsl(200 45% 30%);
 
+  /*
+   * The same disagreement, two tokens further along — and found the same way.
+   *
+   * §16.2's status colours are specified as *signals*: a dot, an icon, a bar.
+   * §13.1 requires 4.5:1 of anything carrying text. Measured on the light
+   * background, `--color-correct` is 4.08:1 and `--color-attention` is 3.60:1,
+   * and both are used as small text -- the §6.4 status pill and §11.1's verdict
+   * lead ("Nice." / "Close.") are words, not dots. `--color-concern` measures
+   * 5.80:1 and needs no strong variant, which is why there isn't one.
+   *
+   * The strong variants are the same hue and saturation, darkened until they
+   * clear 4.5:1 against `--color-surface` -- the harder of the two grounds they
+   * land on, so clearing it clears the background too. Dark mode needs no
+   * equivalent: its status colours measure 8.9:1, 8.1:1 and 5.9:1 against the
+   * dark background, so the strong tokens simply alias them there.
+   *
+   * This is F8's rule applied twice more, and it went unnoticed until the desk
+   * and journal had real rows to render (F4) -- there was no pill on screen to
+   * measure. Recorded as F20.
+   */
+  --color-correct-strong: hsl(150 40% 34%);
+  --color-attention-strong: hsl(30 60% 37%);
+
   color-scheme: light;
 }
 
@@ -105,6 +128,10 @@
     --color-concern: hsl(4 65% 66%);
     --color-on-accent: hsl(220 16% 11%);
     --color-accent-strong: hsl(200 55% 65%);
+    /* Dark mode clears 4.5:1 on the plain tokens (8.9:1, 8.1:1), so the
+       strong variants alias them -- see the light block for why they exist. */
+    --color-correct-strong: hsl(150 40% 60%);
+    --color-attention-strong: hsl(38 75% 62%);
 
     color-scheme: dark;
   }
@@ -122,6 +149,8 @@
   --color-concern: hsl(4 65% 66%);
   --color-on-accent: hsl(220 16% 11%);
   --color-accent-strong: hsl(200 55% 65%);
+  --color-correct-strong: hsl(150 40% 60%);
+  --color-attention-strong: hsl(38 75% 62%);
 
   color-scheme: dark;
 }
@@ -136,7 +165,9 @@
   --color-accent: var(--color-accent);
   --color-accent-strong: var(--color-accent-strong);
   --color-correct: var(--color-correct);
+  --color-correct-strong: var(--color-correct-strong);
   --color-attention: var(--color-attention);
+  --color-attention-strong: var(--color-attention-strong);
   --color-concern: var(--color-concern);
   --color-on-accent: var(--color-on-accent);
 }

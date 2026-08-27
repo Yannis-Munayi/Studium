@@ -1,0 +1,252 @@
+# The prompt regression gate (infrastructure §10.2, evaluation §13.1-§13.4).
+#
+# §10.2: ".github/workflows/prompt-regression.yml -- runs the evaluation
+# harness (subsystem 6 §13) against affected datasets when prompts change.
+# Blocks merge if regression exceeds tolerance and reviewer hasn't approved."
+#
+# **This is the first job in the project that spends real money with no human
+# present.** Everything about its shape follows from that.
+#
+#   * It runs only when a prompt actually changed. `studium eval affected`
+#     decides which datasets a diff selects (§13.4), and a diff that selects
+#     none exits without an API key ever being read.
+#   * It refuses to guess. §13.4 makes the reviewer the fallback for cases the
+#     mapping cannot resolve, and `eval affected` exits non-zero on an
+#     unresolved path. This job fails there rather than running a guessed
+#     subset, because a gate that silently evaluated the wrong datasets reports
+#     green having measured the wrong thing.
+#   * It is budget-gated. `eval gate` calls `runner.budget_preflight` before
+#     spending, against the system account's caps. That check is what closed
+#     SPEC_DEBT SD9 -- see that entry, and note that the collision SD9
+#     described was not the one that was actually there.
+#   * It never runs on a fork PR. `pull_request_target` is deliberately not
+#     used and forks do not receive secrets, so an outside contributor cannot
+#     spend the project's Anthropic budget by opening a PR.
+#
+# The weekly full-suite run §13.3 also asks for is NOT here. GitHub's `schedule`
+# trigger would run it against whatever is on the default branch at 03:00 with
+# no operator awake to read the result or stop it, and evaluation §7.4 puts a
+# full suite at $5-15 a time. It belongs on the operational calendar in
+# docs/ops/README.md, run deliberately, until there is someone to page.
+
+name: prompt-regression
+
+on:
+  pull_request:
+    paths:
+      - "backend/studium/llm/prompts.py"
+      - "backend/studium/agents/**"
+      - "backend/content/evaluation/**"
+      - "backend/studium/eval/**"
+  # Manual, for a reviewer who wants the gate on a branch without a PR, or who
+  # wants to re-run it after approving a regression.
+  workflow_dispatch:
+    inputs:
+      datasets:
+        description: "Dataset slugs, space-separated. Empty selects from the diff."
+        required: false
+        default: ""
+
+concurrency:
+  # Not cancel-in-progress. Cancelling a run that has already made model calls
+  # spends the money and records nothing, which is the one outcome with no
+  # upside.
+  group: prompt-regression-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  select:
+    name: Which datasets does this diff select?
+    runs-on: ubuntu-24.04
+    outputs:
+      datasets: ${{ steps.affected.outputs.datasets }}
+      any: ${{ steps.affected.outputs.any }}
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install
+        # No API key is needed to decide *which* datasets are affected, and
+        # nothing in this job constructs a client.
+        run: python -m pip install -e ".[dev,evaluation]"
+
+      - name: Datasets validate
+        # Before anything else. A dataset broken by an edit would otherwise be
+        # discovered by the gate, after it had spent money getting there.
+        run: python -m studium.eval.cli eval validate content/evaluation
+
+      - id: affected
+        name: Affected datasets (§13.4)
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          MANUAL: ${{ github.event.inputs.datasets }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "${MANUAL:-}" ]; then
+            echo "datasets=$MANUAL" >> "$GITHUB_OUTPUT"
+            echo "any=true" >> "$GITHUB_OUTPUT"
+            echo "reviewer named: $MANUAL"
+            exit 0
+          fi
+
+          changed=$(git diff --name-only "$BASE_SHA" HEAD | sed 's|^backend/||')
+          echo "changed:"; echo "$changed" | sed 's/^/  /'
+
+          # Non-zero means §13.4 could not resolve a path. Failing here is the
+          # point: the alternative is running a guessed subset and reporting a
+          # green gate that measured the wrong thing.
+          if ! output=$(python -m studium.eval.cli eval affected --changed $changed 2>&1); then
+            echo "$output"
+            echo "::error::§13.4 could not map every changed path to a dataset."\
+                 "Decide by hand and re-run with workflow_dispatch, naming the"\
+                 "datasets. A guessed subset would report green having measured"\
+                 "the wrong thing."
+            exit 1
+          fi
+          echo "$output"
+
+          slugs=$(echo "$output" | sed -n 's/^  \([a-z0-9_]*\)  .*/\1/p' | tr '\n' ' ')
+          if [ -z "$(echo "$slugs" | tr -d ' ')" ]; then
+            echo "any=false" >> "$GITHUB_OUTPUT"
+            echo "no datasets affected; the gate does not run and nothing is spent"
+          else
+            echo "datasets=$slugs" >> "$GITHUB_OUTPUT"
+            echo "any=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  gate:
+    name: Regression gate (spends money)
+    needs: select
+    if: needs.select.outputs.any == 'true' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
+      STUDIUM_DATABASE_URL: postgresql+psycopg://studium:studium@localhost:5433/studium_test
+      STUDIUM_OWNER_DATABASE_URL: postgresql+psycopg://studium:studium@localhost:5433/studium_test
+      STUDIUM_TEST_DATABASE_URL: postgresql+psycopg://studium:studium@localhost:5433/studium_test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install
+        run: python -m pip install -e ".[dev,evaluation,retrieval]"
+
+      - name: The API key is present
+        # Failing here rather than at the first call. Without this the job
+        # reaches `eval gate`, the run starts, every entry fails on
+        # authentication, and the gate reports a regression that is really a
+        # missing secret -- which reads as "the prompt change broke everything".
+        run: |
+          set -euo pipefail
+          if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+            echo "::error::ANTHROPIC_API_KEY is not available to this workflow."\
+                 "Fork PRs do not receive secrets, by design (§6.2). A reviewer"\
+                 "runs the gate locally for those."
+            exit 1
+          fi
+          echo "API key present"
+
+      - name: Start Postgres
+        run: docker compose -f docker-compose.test.yml up -d test-db
+
+      - name: Wait for health
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 60); do
+            if docker compose -f docker-compose.test.yml exec -T test-db \
+                 pg_isready -U studium -d studium_test >/dev/null 2>&1; then
+              echo "ready"; exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Postgres did not become ready"
+          exit 1
+
+      - name: Apply schema and sync datasets
+        # The gate compares against the last passing run for the same dataset
+        # (§13.1 step 4). On a throwaway database there is none, so the first
+        # run establishes a baseline and blocks only on §8's absolute
+        # thresholds. That is a real limitation of running this against a
+        # scratch instance and is called out in the summary step below.
+        run: |
+          set -euo pipefail
+          python -m alembic upgrade head
+          python -m studium.eval.cli eval sync content/evaluation --yes
+
+      - name: Budget check before anything is spent
+        # `eval gate` runs this itself; running it here first means a blocked
+        # budget is a clearly-named step rather than a non-zero exit from a
+        # command that also does five other things.
+        run: |
+          set -euo pipefail
+          python -c "
+          from studium.db import SessionLocal
+          from studium.eval.runner import budget_preflight
+          from studium.eval.datasets import parse_directory
+          from pathlib import Path
+
+          wanted = set('${{ needs.select.outputs.datasets }}'.split())
+          entries = sum(
+              len(d.runnable_entries)
+              for d in parse_directory(Path('content/evaluation'))
+              if d.slug in wanted
+          )
+          estimate = entries * 0.06
+          print(f'{entries} entries, estimated \${estimate:.2f}')
+          with SessionLocal() as session:
+              budget_preflight(session, estimated_usd=estimate)
+          print('within the harness account cap')
+          "
+
+      - name: Run the gate (§13.1 steps 3-7)
+        id: gate
+        run: |
+          python -m studium.eval.cli eval gate \
+            --datasets ${{ needs.select.outputs.datasets }} --yes
+
+      - name: What the gate did and did not establish
+        if: always()
+        run: |
+          cat <<'NOTE'
+          This gate ran the affected datasets against the current prompts and
+          compared them to the last passing run for the same dataset in THIS
+          database, which is a throwaway instance created for this job.
+
+          So on a first run for a dataset there is no baseline, and §13.2's
+          tolerance comparison has nothing to compare against -- only §8's
+          absolute per-agent thresholds block. That is a real gap between what
+          the job checks and what §13.1 describes, and closing it needs runs
+          persisted somewhere durable rather than a scratch database. See
+          DIVERGENCES-INFRASTRUCTURE (N8).
+
+          A failure here is evaluation §13.1 step 7's decision, not a bug: a
+          reviewer approves the regression with a documented reason, requests
+          changes, or rejects the change.
+          NOTE
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v

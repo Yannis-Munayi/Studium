@@ -11,7 +11,12 @@
  * network, no timers, and no DOM.
  */
 import { create } from "zustand";
-import type { SessionMode, SessionState, StreamChunk } from "@/lib/api/schemas";
+import type {
+  PracticeProblem,
+  SessionMode,
+  SessionState,
+  StreamChunk,
+} from "@/lib/api/schemas";
 import { degradedPayload, endPayload, sessionState } from "@/lib/api/schemas";
 import type { DegradationNotice, RenderedTurn, StreamPhase } from "@/lib/stream/types";
 
@@ -45,6 +50,19 @@ interface SessionSlice {
   turns: RenderedTurn[];
   degradation: DegradationNotice | null;
   reconnectAttempts: number;
+
+  /**
+   * The problem the bench is showing (§6.3, §9.3).
+   *
+   * Client state rather than server state, and it belongs here for the reason
+   * §3 draws the line where it does: it arrives on a stream chunk, not from a
+   * query, and there is no endpoint that would answer "what problem is this
+   * session on" if it were dropped. Its lifetime is the session's LAB state --
+   * set by the `end` chunk that carries it, cleared the moment the runtime
+   * leaves LAB, because a problem outliving its state is a bench rendering a
+   * question nothing will grade.
+   */
+  labProblem: PracticeProblem | null;
 
   /**
    * Set the moment the learner gestures, before the server has answered.
@@ -88,6 +106,7 @@ const initial = {
   turns: [] as RenderedTurn[],
   degradation: null,
   reconnectAttempts: 0,
+  labProblem: null as PracticeProblem | null,
   interruptRequested: false,
   pausedAfterTurnId: null,
 };
@@ -196,8 +215,20 @@ export const useSessionStore = create<SessionSlice>((set, get) => ({
           }
           const next = end?.next_state;
           const runtime = next ? sessionState.safeParse(next) : null;
+          const runtimeState = runtime?.success ? runtime.data : s.runtimeState;
+
+          // Three cases in one line, and the order matters. A chunk carrying a
+          // problem sets it (that is `let_me_try_one` arriving). A chunk that
+          // moves the session out of LAB clears it -- a correct answer, or the
+          // Tutor taking over after N attempts. Anything else leaves it alone,
+          // which is what keeps the problem on screen through a wrong answer
+          // that still has attempts left.
+          const labProblem =
+            end?.problem ?? (runtimeState === "LAB" ? s.labProblem : null);
+
           return {
             turns,
+            labProblem,
             ...(runtime?.success ? { runtimeState: runtime.data } : {}),
           };
         });
@@ -228,7 +259,15 @@ export const useSessionStore = create<SessionSlice>((set, get) => ({
 
   setPhase: (phase) => set({ phase }),
 
-  setRuntimeState: (runtimeState) => set({ runtimeState }),
+  // Reconciled from `GET /state` after every turn (F9), so this is also where a
+  // problem gets dropped if the runtime turns out not to be in LAB after all --
+  // which is exactly what used to happen on every `let_me_try_one` invoked from
+  // a lecture, before the runtime learned to make that transition (R13).
+  setRuntimeState: (runtimeState) =>
+    set((s) => ({
+      runtimeState,
+      labProblem: runtimeState === "LAB" ? s.labProblem : null,
+    })),
 
   noteReconnect: () =>
     set((s) => ({ phase: "reconnecting", reconnectAttempts: s.reconnectAttempts + 1 })),

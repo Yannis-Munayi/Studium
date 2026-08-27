@@ -9,6 +9,8 @@ import { JOURNAL } from "@/lib/copy/surfaces";
 import type { JournalEntry, JournalStatus } from "@/lib/api/schemas";
 import { StatusPill } from "@/components/ui/verdict";
 import { SurfaceUnavailable } from "@/components/shared/unavailable";
+import { ApiFailureNotice } from "@/components/session/degradation-notice";
+import { ApiError } from "@/lib/api/errors";
 
 const ALL_STATUSES: JournalStatus[] = ["open", "partial", "resolved", "archived"];
 /** §6.4: "Default: Open + Partial." */
@@ -22,14 +24,14 @@ const DEFAULT_STATUSES: JournalStatus[] = ["open", "partial"];
  * filter history. The alternative -- filters in a store -- gives you a back
  * button that leaves the journal entirely.
  */
-export function Journal({ learnerSubjectId }: { learnerSubjectId: string | null }) {
+export function Journal() {
   const router = useRouter();
   const params = useSearchParams();
 
   const selected = parseStatuses(params.get("status"));
   const search = params.get("q") ?? "";
 
-  const { data, isLoading, error } = useJournalEntries(learnerSubjectId, {
+  const { data, isLoading, error } = useJournalEntries({
     status: selected,
     ...(search ? { search } : {}),
   });
@@ -98,6 +100,8 @@ export function Journal({ learnerSubjectId }: { learnerSubjectId: string | null 
 
           {isSurfaceUnavailable(error) ? (
             <SurfaceUnavailable endpoint="journalList" what="Your confusion journal" />
+          ) : error ? (
+            <ApiFailureNotice kind={error instanceof ApiError ? error.kind : "server_error"} />
           ) : isLoading ? (
             <p className="font-sans text-sm text-muted">Loading…</p>
           ) : (data?.length ?? 0) === 0 ? (

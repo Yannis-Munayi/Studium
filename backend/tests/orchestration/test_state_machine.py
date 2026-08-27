@@ -20,6 +20,7 @@ from studium.orchestration.state_machine import (
     GUARDS,
     MODE_ENTRY_STATE,
     PERSISTED_MODE,
+    PRIMITIVE_MATRIX,
     TRANSITIONS,
     Event,
     GuardContext,
@@ -90,8 +91,7 @@ def _guards_satisfying(guard: str) -> GuardContext:
         "segments_exhausted": GuardContext(segments_remaining=0),
         "stream_in_progress": GuardContext(stream_in_progress=True),
         "learner_satisfied": GuardContext(learner_satisfied=True),
-        "primitive_is_let_me_try_one": GuardContext(primitive="let_me_try_one"),
-        "primitive_stays_in_tutorial": GuardContext(primitive="im_lost"),
+        "primitive_valid_here": GuardContext(primitive="where_does_this_fit"),
         "answer_correct": GuardContext(evaluator_correct=True),
         "answer_incorrect_within_attempts": GuardContext(
             evaluator_correct=False, failed_attempts=0, max_attempts=2
@@ -99,6 +99,11 @@ def _guards_satisfying(guard: str) -> GuardContext:
         "answer_incorrect_attempts_exhausted": GuardContext(
             evaluator_correct=False, failed_attempts=2, max_attempts=2
         ),
+        # Evaluation §11.2's summative flow. Neither sets evaluator_correct: a
+        # summative submission advances regardless of verdict, and setting one
+        # here would assert the opposite of what the guards are for.
+        "criteria_remain": GuardContext(criteria_remaining=3),
+        "criteria_exhausted": GuardContext(criteria_remaining=0),
     }[guard]
 
 
@@ -189,6 +194,89 @@ class TestSpecifiedTransitions:
         for other in ("im_lost", "prove_it_to_me", "vocabulary_check"):
             m = SessionStateMachine(State.TUTORIAL)
             assert m.fire(Event.PRIMITIVE_INVOKED, GuardContext(primitive=other))[0] is State.TUTORIAL
+
+    @pytest.mark.parametrize(
+        "source", [State.TUTORIAL, State.LECTURING, State.PAUSED_FOR_QUESTION]
+    )
+    def test_let_me_try_one_reaches_the_lab_from_every_state_that_offers_it(self, source):
+        """The palette is on the classroom, not only on the tutorial (R13).
+
+        §7's table has PRIMITIVE_INVOKED rows for TUTORIAL alone. A lecture
+        session sits in LECTURING, so gating there meant the primitive ran, the
+        `end` chunk announced LAB, and the machine stayed put -- after which the
+        learner's answer routed to the Tutor rather than the Evaluator.
+        """
+        machine = SessionStateMachine(source)
+        assert machine.fire(
+            Event.PRIMITIVE_INVOKED, GuardContext(primitive="let_me_try_one")
+        )[0] is State.LAB
+
+    @pytest.mark.parametrize(
+        "source", [State.TUTORIAL, State.LECTURING, State.PAUSED_FOR_QUESTION]
+    )
+    def test_hold_state_primitives_leave_the_state_alone(self, source):
+        """v1.0.1 §3.2 splits the eight rather than treating seven alike.
+
+        The old shape here was "let_me_try_one moves, the other seven do not".
+        The matrix makes it two that move: `prove_it_to_me` becomes a tutorial
+        exchange even when raised mid-lecture, because eliciting a derivation
+        is not something a lecture does.
+        """
+        for other in ("im_lost", "show_worked_example", "why_does_this_matter"):
+            machine = SessionStateMachine(source)
+            assert machine.fire(
+                Event.PRIMITIVE_INVOKED, GuardContext(primitive=other)
+            )[0] is source
+
+    @pytest.mark.parametrize("source", [State.LECTURING, State.OFFICE_HOURS])
+    def test_prove_it_to_me_converts_the_session_to_a_tutorial(self, source):
+        """§3.2's second moving primitive."""
+        machine = SessionStateMachine(source)
+        assert machine.fire(
+            Event.PRIMITIVE_INVOKED, GuardContext(primitive="prove_it_to_me")
+        )[0] is State.TUTORIAL
+
+    @pytest.mark.parametrize(
+        ("primitive", "source"),
+        [
+            ("let_me_try_one", State.LAB),        # already has a problem
+            ("show_worked_example", State.OFFICE_HOURS),
+            ("explain_differently", State.LAB),
+            ("where_does_this_fit", State.REVIEW),  # no palette during review
+            ("let_me_try_one", State.SUMMATIVE_ASSESSMENT),
+        ],
+    )
+    def test_invalid_combinations_are_refused_not_silently_ignored(
+        self, primitive, source
+    ):
+        """§3.2: "Silent no-op is not acceptable."
+
+        A refused transition is what lets the API return a 400 naming the
+        combination, instead of the client believing a primitive ran.
+        """
+        machine = SessionStateMachine(source)
+        with pytest.raises(IllegalTransition):
+            machine.fire(Event.PRIMITIVE_INVOKED, GuardContext(primitive=primitive))
+
+    def test_an_unknown_primitive_never_transitions(self):
+        machine = SessionStateMachine(State.TUTORIAL)
+        with pytest.raises(IllegalTransition):
+            machine.fire(Event.PRIMITIVE_INVOKED, GuardContext(primitive="teleport"))
+
+    def test_the_matrix_is_the_only_source_of_truth(self):
+        """Every table row's validity comes from PRIMITIVE_MATRIX, not the row.
+
+        If a row hard-coded its own destination the two could disagree, and the
+        disagreement would show up as a client and a runtime believing
+        different states -- which is R13 all over again.
+        """
+        for primitive, rule in PRIMITIVE_MATRIX.items():
+            for state in rule.valid_from:
+                machine = SessionStateMachine(state)
+                target, _ = machine.fire(
+                    Event.PRIMITIVE_INVOKED, GuardContext(primitive=primitive)
+                )
+                assert target is (rule.destination or state), (primitive, state)
 
     def test_lab_answer_routes_on_the_verdict(self):
         correct = SessionStateMachine(State.LAB)

@@ -6,9 +6,17 @@ This file records where it differs, and why. It is the counterpart to
 two sets distinguishable in code comments.
 
 Each entry says what the spec asks for, what the code does, and what would have
-gone wrong the other way. Three of them (R1, R2, R4) are cases where following
-the spec literally would produce a system that runs and is quietly wrong — those
-are marked **load-bearing**.
+gone wrong the other way. Five of them (R1, R2, R4, R13, R14) are cases where
+following the spec literally — or, for the last two, failing to follow it at all
+— produces a system that runs and is quietly wrong. Those are marked
+**load-bearing**.
+
+R13–R16 were added on 22 August 2026 while closing the subsystem 4 gaps, and
+they share a provenance worth naming: **every one of them was invisible to the
+tiers below Tier 3, because each of those tiers supplies the thing the runtime
+was failing to produce.** The Tier 1 tests set the session state by hand; the
+frontend's Tier 2 mock answers with the state the runtime was not reaching. Two
+components can each be correct against a fixture and wrong against each other.
 
 ---
 
@@ -201,6 +209,199 @@ whether a learner is over their cap. The implementation lives in
 "(retrieval-check subroutine)". No event leaves that target, so modelling it as
 a state would strand the session. It runs as the transition's effect and the
 destination is the mode's entry state, which is what the diagram's arrows show.
+
+---
+
+## Added closing the subsystem 4 gaps (22 August 2026)
+
+The four below came out of closing SD5 and frontend F4/F15. Two are load-bearing
+and are marked so; all four were found by running a real session in a real
+browser, which is the first time anything had.
+
+### R13 — `PRIMITIVE_INVOKED` has rows beyond `TUTORIAL` — **load-bearing**
+
+**Spec.** §7's transition table gives `primitive_invoked` two rows, both from
+`TUTORIAL`: one to `LAB` under `let_me_try_one`, one back to `TUTORIAL` for the
+other seven.
+
+**Reality.** The primitive palette lives on the classroom (frontend §9.3), and a
+lecture session sits in `LECTURING`. The Orchestrator gated the event on
+`state is State.TUTORIAL`, so from anywhere else the primitive ran and the
+machine did not move — while `_handle_let_me_try_one` still emitted an `end`
+chunk saying `next_state: "LAB"`.
+
+**What went wrong.** The client believed the session was in LAB and the runtime
+knew it was not. The learner's next message was then classified in `LECTURING`
+and routed to `_handle_conversational` — the Tutor — instead of to
+`_handle_lab_answer`. The problem was never graded, and nothing anywhere
+reported an error: two components each behaving correctly on their own reading
+of the state.
+
+**Code.** `state_machine.py` gains four rows — `LECTURING` and
+`PAUSED_FOR_QUESTION`, each splitting on the same guard the `TUTORIAL` rows use
+— and `orchestrator._handle_primitive` fires the event wherever the table has a
+row (`machine.can(...)`) rather than from one named state. The guard
+`primitive_stays_in_tutorial` is renamed `primitive_holds_state`, because it now
+holds three states and the old name described only the first.
+
+**Why the table rather than the Orchestrator.** Special-casing "also allow it
+from LECTURING" in the dispatcher would put a transition rule somewhere §7 says
+transitions do not live, and the Tier 1 sweep — which enumerates the table —
+would not have seen it.
+
+### R14 — nothing fired `context_ready`, so no session left `OPENING` — **load-bearing**
+
+**Spec.** §7's table: `OPENING --context_ready--> ` the mode's entry state, split
+on whether there is a prior summary. §16's opening sequence is what performs it.
+
+**Reality.** `Event.CONTEXT_READY` existed, both rows existed, and **no
+production code path fired it**. `start_session` put the machine in `OPENING`
+and nothing ever took it out. Every real session spent its entire life there.
+
+**What went wrong, in three ways at once.**
+
+- `OPENING` is not in `is_interruptible`, so every interrupt was refused for the
+  whole session — `signal_interrupt` returned `accepted: false` every time.
+- `OPENING` had no `PRIMITIVE_INVOKED` row, so no primitive could move the
+  session (R13's fix alone would not have helped a real session).
+- `_handle_conversational` routes by state and falls through to the Tutor's
+  generic `answer` for any state it does not name. **A lecture session therefore
+  never called the Lecturer** — no segment, no `content_artifacts` row, and
+  nothing for §10's citations to resolve against.
+
+**Why it survived every tier below Tier 3.** Each one supplied the state the
+runtime was failing to reach. The Tier 1 tests and the paid integration tests
+both set `orchestrator.machine.state` by hand before the turn; the frontend's
+Tier 2 mock answers `GET /state` with `LECTURING`. The only observer that could
+have caught it is a real session against the real runtime, and this build is the
+first time one ran.
+
+**Code.** `orchestrator._leave_opening`, called from `handle_turn` immediately
+after the context is assembled — which is exactly when §16 says the session has
+what it needs to leave. The guard is passed honestly (`has_prior_summary` from
+the context) rather than hard-coded to the simple branch, so the transition log
+records which path a session took even though both targets are the same (R12).
+
+### R15 — a resumed session reports the mode it has, not the one requested
+
+**Spec.** §20's `POST /api/session` returns `{session_id, state}`.
+
+**Reality.** §20 also allows at most one active session per learner, and
+`open_session` enforces it by returning the existing session when there is one.
+That session may have been started in a different mode — and the response said
+nothing about it, so the client navigated with the mode it had asked for.
+
+Found the plain way: a Tier 3 run kept resuming an abandoned *tutorial* session
+while the URL said `mode=lecture`. The classroom asked for lecture segments, the
+runtime routed every turn to the Tutor, and both were behaving correctly.
+
+**Code.** `open_session` returns an `OpenedSession(session_id, mode, resumed)`,
+the Orchestrator holds it, and `StartSessionResponse` carries `mode` and
+`resumed`. A resume whose mode differs from the request logs a warning rather
+than a debug line: the learner asked for one thing and is getting another, and
+every routing decision downstream follows the resumed mode.
+
+**Not fixed here.** Whether resuming is the right behaviour at all — as against
+refusing with a 409 and letting the learner close the old session — is a product
+question §20 answers only implicitly. Reporting the mode makes the current
+behaviour honest; it does not settle that.
+
+### R16 — a client may declare an intent it already knows
+
+**Spec.** §8 classifies every turn's intent with a Haiku call, with a rule-based
+floor below 0.7 confidence.
+
+**Reality.** That is right for typed prose and wrong for a control. The bench's
+Submit is an *answer* whatever words are in the box — and "It reduces to the
+identity." classifies as a `comment`, which in `LAB` falls through to the Tutor
+and is never graded. The runtime already had the seam: `LearnerInput.intent` is
+honoured by `_classify` ahead of the model call. What was missing was any way
+for a client to reach it — `TurnRequest` carried `text` and `primitive` only.
+
+**Code.** `TurnRequest.intent`, validated against `DECLARABLE_INTENTS` —
+`question`, `answer`, `comment`, `next`, `back`. The eight `primitive:*` members
+of `Intent` are excluded because they have their own field, and `interrupt` and
+`end_session` because they have their own endpoints; accepting either here would
+give one signal two spellings that could disagree.
+
+This is the same trade §8 already makes for the primitive buttons — "a button
+press skips classification entirely; paying a model call to re-derive a signal
+the client already sent would be waste" — applied to the two other controls whose
+meaning is not in the words.
+
+---
+
+## Added implementing the v1.0.1 transition-emission patch (23 August 2026)
+
+### R17 — `PAUSED_FOR_QUESTION` is in every primitive row the patch gives to `TUTORIAL`
+
+**Spec.** v1.0.1 §3.2's validity matrix names, per primitive, the source states
+it is legal from. No row lists `PAUSED_FOR_QUESTION`.
+
+**Reality.** R13 — ratified into the machine three weeks earlier and documented
+above — put `PAUSED_FOR_QUESTION` on the `primitive_invoked` rows precisely
+because the palette is on screen during a paused lecture. §3.2's matrix is a
+tightening of the *primitive* dimension, which the machine did not previously
+constrain at all; it does not appear to be a re-litigation of the *state*
+dimension R13 settled. Read as written, it would silently revoke R13.
+
+**Code.** `PRIMITIVE_MATRIX` in `state_machine.py` carries
+`State.PAUSED_FOR_QUESTION` in all eight rows — every row that contains
+`TUTORIAL` also contains it, with no other change to §3.2's contents.
+
+**What the alternative costs.** The palette does not disappear when a learner
+raises their hand; §5.1's resumption card sits alongside it. Following §3.2
+literally would make every primitive button on a paused lecture return the
+400 the patch introduced — the "clear message" of §3.2 would be shown for the
+most ordinary interaction in the surface. The failure would be visible rather
+than silent, which is an improvement over R13's original defect, but it is
+still a working control that stops working.
+
+**Wanted from v1.1.** Confirmation, or an explicit revocation. This is the one
+place where the patch and the code disagree about what the matrix contains, and
+it is a single line in `state_machine.py` either way. If §3.2 was intended to
+narrow R13, the frontend's primitive palette needs to hide during a pause, and
+that is a subsystem 4 change rather than a runtime one.
+
+### R18 — an unknown primitive is 422; a known one in the wrong state is 400
+
+**Spec.** §3.2 requires that an invalid primitive/state combination "must be
+surfaced to the client so the UI can present a clear message." It does not name
+a status code.
+
+**Reality.** Two failures are being distinguished. A primitive name the runtime
+has never heard of is a malformed request — the client sent a field value
+outside the enum, which is what 422 means and what `POST /turn` already returned
+for the same mistake. A real primitive invoked from a state that does not
+permit it is a well-formed request the runtime is refusing, which is 400.
+
+**Code.** `POST /api/session/{id}/primitive` returns 422 with the accepted
+names, or 400 with `{primitive, state, valid_from}`. `valid_from` is the
+matrix's own answer, so a client rendering "you can do this from a lecture or a
+tutorial" is reading the same source the refusal came from rather than a copy
+that can drift.
+
+**Why it matters.** A single code for both would leave the client unable to
+tell "you have a bug" from "not right now", and those want different copy: the
+first is not the learner's problem and should never reach them, the second is
+a normal thing to say out loud.
+
+### R19 — the session-open endpoint is `POST /api/session`, not `POST /api/session/new`
+
+**Spec.** §7.1's prose describes the end-to-end test as asserting "after
+`POST /api/session/new` returns, the session reaches LECTURING."
+
+**Reality.** The route has been `POST /api/session` since the original build,
+and §7's emission table names it correctly; only §7.1's prose uses the other
+spelling. No route was added or renamed — a `/new` suffix on a POST is
+redundant with the method, and adding an alias would give one action two names
+that could later diverge.
+
+**Why this is recorded at all.** The emission-path test resolves `Client:`
+emissions against the live router, so a table that named `/api/session/new`
+would now fail at commit time rather than pass and mislead. That is the check
+working. It is noted here so the v1.1 author corrects the prose rather than the
+code.
 
 ---
 

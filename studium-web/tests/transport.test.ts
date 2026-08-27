@@ -69,7 +69,27 @@ describe("readTurnStream", () => {
     const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe(`/api/backend/api/session/${SESSION}/turn`);
     expect(init.method).toBe("POST");
-    expect(JSON.parse(String(init.body))).toEqual({ text: "why?", primitive: "prove_it_to_me" });
+    // All three fields go every time, explicitly null when unset, so the body
+    // has one shape rather than four. The runtime treats a missing key and a
+    // null the same way; a client that omitted keys would still work and would
+    // make "what did we send" a per-call question.
+    expect(JSON.parse(String(init.body))).toEqual({
+      text: "why?",
+      primitive: "prove_it_to_me",
+      intent: null,
+    });
+  });
+
+  it("sends a declared intent when the surface knows one", () => {
+    // §8's classifier reads words; the bench's Submit is an answer whatever the
+    // words are. See DIVERGENCES-FRONTEND.md F21.
+    const fetchImpl = vi.fn(async () => sseResponse([DONE]));
+    return collect(
+      readTurnStream(SESSION, { text: "It reduces to the identity.", intent: "answer" }, { fetchImpl }),
+    ).then(() => {
+      const [, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+      expect(JSON.parse(String(init.body))).toMatchObject({ intent: "answer" });
+    });
   });
 
   it("reassembles a chunk split across network reads", async () => {

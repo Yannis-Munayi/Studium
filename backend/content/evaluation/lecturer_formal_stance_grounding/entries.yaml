@@ -1,0 +1,169 @@
+# Evaluation §7.2's worked example, as an actually-runnable dataset.
+#
+# Two differences from the spec's listing, both deliberate:
+#
+#   1. The property names are the ones §8.1's metrics are keyed on
+#      (`cites_provided_passages`, `citations_resolve`, `within_word_limit`,
+#      `uses_requested_stance`). §8 names metrics and §7.2 names properties and
+#      nothing joins them, so `studium.eval.metrics` pins the join -- and
+#      `studium eval validate` warns when a dataset would leave a blocking
+#      threshold unmeasured. A Lecturer dataset without `citations_resolve`
+#      never measures citation validity, and §8.1 blocks that below 100%.
+#
+#   2. `grading_kind` is omitted rather than declared `hybrid`. It is derived
+#      from the properties and cross-checked when declared; leaving it out is
+#      the honest default, since the properties are what actually get graded.
+#      See DIVERGENCES-EVALUATION (E2).
+
+dataset:
+  slug: lecturer_formal_stance_grounding
+  kind: agent_output
+  agent: lecturer
+  version: 1
+  description: >
+    Tests that the Lecturer, when invoked with formal stance, produces segments
+    that cite from provided passages and avoid ungrounded claims. Covers the
+    common case of lambda calculus foundational concepts, plus the two
+    adversarial cases §8.1 asks for: thin retrieval, and passages that are
+    thematically nearby but wrong for the concept.
+  regression_tolerance:
+    aggregate_score_drop_max: 0.05
+    per_entry_failure_max: 2
+
+entries:
+  - id: entry_001
+    input:
+      concept:
+        title: Beta-reduction
+        long_description: >
+          The fundamental reduction rule of the lambda calculus, replacing
+          a bound variable in a body with an argument value.
+      stance: formal
+      retrieved_passages:
+        - id: chunk_beta_001
+          text: >
+            The reduction of a beta-redex (λx.M)N proceeds by substituting N
+            for every free occurrence of x in M, written M[x := N]. The
+            substitution is capture-avoiding: bound variables in M are renamed
+            where necessary so that free variables of N are not captured.
+          section_path: ["Chapter 3", "3.2 Beta Reduction"]
+        - id: chunk_beta_002
+          text: >
+            Consider the following example: (λx.x+1)3 reduces to 3+1, and
+            thence to 4. Each step rewrites exactly one redex; a term with no
+            redex remaining is in normal form.
+          section_path: ["Chapter 3", "3.2 Beta Reduction"]
+
+    expected:
+      properties:
+        - name: cites_provided_passages
+          check: at_least_n_citations
+          n: 2
+          from: [chunk_beta_001, chunk_beta_002]
+        - name: citations_resolve
+          check: citation_targets_valid
+        - name: within_word_limit
+          check: word_count_between
+          min: 200
+          max: 400
+        - name: uses_requested_stance
+          check: meta_graded
+          rubric: >
+            The response should use precise definitional language, present the
+            reduction rule formally (with symbols where appropriate), and
+            motivate briefly before formalizing. A response that opens with an
+            analogy and never states the rule symbolically has not adopted the
+            formal stance, however good the analogy.
+
+    notes: >
+      The core case. The two adversarial variants below were added after
+      §8.1's "entries cover ... adversarial cases (thin retrieval, misleading
+      passages)".
+
+  - id: entry_002_thin_retrieval
+    input:
+      concept:
+        title: Church-Rosser theorem
+        long_description: >
+          If a term reduces to two different terms, both of those reduce to a
+          common term. Confluence of beta-reduction.
+      stance: formal
+      retrieved_passages:
+        - id: chunk_cr_001
+          text: >
+            Theorem (Church-Rosser). If M ↠ N₁ and M ↠ N₂ then there exists P
+            such that N₁ ↠ P and N₂ ↠ P.
+          section_path: ["Chapter 4", "4.1 Confluence"]
+
+    expected:
+      properties:
+        # One passage, so the ceiling is one citation. The point of this entry
+        # is not that the Lecturer cites more -- it cannot -- but that it does
+        # not invent a second source to reach for.
+        - name: cites_provided_passages
+          check: at_least_n_citations
+          n: 1
+          from: [chunk_cr_001]
+        - name: citations_resolve
+          check: citation_targets_valid
+        - name: within_word_limit
+          check: word_count_between
+          min: 120
+          max: 400
+        - name: uses_requested_stance
+          check: meta_graded
+          rubric: >
+            With one passage available, the response should say less rather
+            than padding. It should state the theorem and what confluence
+            buys, and should not introduce the diamond property, standardisation,
+            or normalisation results that the single passage does not support.
+
+    notes: >
+      Thin retrieval (retrieval §13 flags this at under three passages). The
+      failure this entry catches is the Lecturer filling a 400-word target with
+      ungrounded material because the target is 400 words.
+
+  - id: entry_003_misleading_passages
+    input:
+      concept:
+        title: Alpha-equivalence
+        long_description: >
+          Two terms are alpha-equivalent when they differ only in the names of
+          bound variables.
+      stance: formal
+      retrieved_passages:
+        - id: chunk_alpha_001
+          text: >
+            Terms differing only in bound variable names are identified:
+            λx.x and λy.y denote the same function. This identification is
+            called alpha-equivalence.
+          section_path: ["Chapter 2", "2.4 Variables"]
+        - id: chunk_eta_002
+          text: >
+            Eta-conversion relates λx.(M x) to M when x is not free in M.
+            It expresses extensionality: two functions agreeing on all inputs
+            are the same function.
+          section_path: ["Chapter 3", "3.5 Eta"]
+
+    expected:
+      properties:
+        - name: cites_provided_passages
+          check: at_least_n_citations
+          n: 1
+          from: [chunk_alpha_001]
+        - name: citations_resolve
+          check: citation_targets_valid
+        - name: no_conflation
+          check: contains_none_of
+          strings: ["extensionality", "eta-conversion", "eta conversion"]
+        - name: within_word_limit
+          check: word_count_between
+          min: 150
+          max: 400
+
+    notes: >
+      chunk_eta_002 is thematically nearby and wrong for this concept. A
+      Lecturer that folds eta into an explanation of alpha has produced
+      something plausible and false, which is the failure mode a reader is
+      least able to catch. `no_conflation` is deterministic on purpose: this is
+      the one property here that does not need judgment.

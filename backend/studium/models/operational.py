@@ -1,8 +1,13 @@
-"""§6.12 Operational: cost and audit.
+"""§6.12 Operational: cost and audit, plus infrastructure §12's retention log.
 
 Uncontrolled LLM cost is the failure mode most likely to end the project, so
 cost tracking is first-class: every call writes a trace, and a daily roll-up
 supports budget enforcement without scanning traces at query time.
+
+The two retention tables at the bottom belong to the infrastructure spec
+(§12.2, §12.4) rather than to the data layer, and are here because they are
+operational in exactly the sense the rest of this module is: nobody learns
+anything from them, and the reviewer reads them when a number looks wrong.
 """
 
 from __future__ import annotations
@@ -13,6 +18,7 @@ from typing import Any
 
 from sqlalchemy import (
     BigInteger,
+    CheckConstraint,
     Computed,
     Date,
     ForeignKey,
@@ -27,7 +33,7 @@ from sqlalchemy.dialects.postgresql import INET, JSONB
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from .base import Base, created_at, updated_at, uuid_pk
+from .base import Base, created_at, nullable_ts, updated_at, uuid_pk
 
 
 class CostLedger(Base):
@@ -185,4 +191,119 @@ class AuditLog(Base):
         Index(
             "idx_audit_log_target", "target_type", "target_id", text("created_at DESC")
         ),
+    )
+
+
+class RetentionAction(Base):
+    """What the nightly retention worker deleted (infrastructure §12.2).
+
+    "Audit trail for any question of 'why did that data go away' -- the answer
+    is either 'retention policy X, on date Y, deleted N rows' or 'something
+    else happened, investigate.'" The second half is the useful one: an empty
+    result for a window is itself evidence, which is only true if the worker
+    writes a row *per policy per pass* rather than only when it deleted
+    something. It does -- ``rows_deleted = 0`` is a recorded observation, not a
+    skipped one.
+
+    **Append-only, and revoked from the application role in migration 0012.**
+    An audit trail the process under audit can rewrite answers nothing. The
+    worker connects as ``studium_owner`` like the deletes it is recording.
+
+    **``metadata`` carries the run's structure.** Infrastructure §18 counts a
+    "``metadata`` field with structured provenance" as its own item in the data
+    layer v1.2 batch, and it is what keeps the column list identical to §12.2's
+    DDL while still answering "did last night's pass complete": every row from
+    one pass shares a ``run_id``, and each carries the policy window and
+    predicate that produced it. A column for each would have been a wider
+    divergence from a DDL the spec wrote out in full. See
+    DIVERGENCES-INFRASTRUCTURE (N2).
+    """
+
+    __tablename__ = "retention_actions"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    #: §12.2's own name for the timestamp. Serves as the creation time; there
+    #: is no separate created_at, because a retention action is an instant.
+    ran_at: Mapped[dt.datetime] = created_at()
+    table_name: Mapped[str] = mapped_column(Text, nullable=False)
+    rows_deleted: Mapped[int] = mapped_column(Integer, nullable=False)
+    duration_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    action_metadata: Mapped[dict[str, Any]] = mapped_column(
+        "metadata", JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+
+    __table_args__ = (
+        # Negative counts would mean the worker mis-read a rowcount, which is
+        # worth failing on rather than storing: the whole value of this table
+        # is that its numbers can be trusted without re-deriving them.
+        CheckConstraint("rows_deleted >= 0", name="rows_deleted_non_negative"),
+        CheckConstraint("duration_ms >= 0", name="duration_non_negative"),
+        Index("idx_retention_actions_recent", text("ran_at DESC")),
+        # §12.2's index serves "what happened last night"; this one serves
+        # "what has ever been deleted from this table", which is the question a
+        # reviewer chasing one missing row actually asks.
+        Index("idx_retention_actions_table", "table_name", text("ran_at DESC")),
+    )
+
+
+class RetentionHold(Base):
+    """A row the retention worker must not delete (infrastructure §12.4).
+
+    "Occasionally a specific dataset needs to be retained beyond policy for
+    legitimate reasons (evidence in a rights dispute, research study,
+    longitudinal analysis)."
+
+    **Released, never deleted.** A hold that vanishes when lifted destroys the
+    only record that the data was deliberately kept -- which is the thing a
+    rights dispute would later ask about. ``released_at`` retires it; the row
+    stays.
+
+    **Holds apply only to tables the worker deletes from directly.** Several
+    policies delete a parent and let Postgres cascade
+    (``learning_sessions`` reaches turns, traces, summaries and retrieval
+    checks that way), and a cascade runs with the referencing table's owner
+    privileges and consults nothing. A hold placed on a cascade-reached row
+    would read as protection and provide none, so
+    ``studium.ops.retention.place_hold`` refuses those tables by name and says
+    to hold the parent instead. See DIVERGENCES-INFRASTRUCTURE (N3).
+    """
+
+    __tablename__ = "retention_holds"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    table_name: Mapped[str] = mapped_column(Text, nullable=False)
+    row_id: Mapped[uuid.UUID] = mapped_column(PgUUID(as_uuid=True), nullable=False)
+    #: Required and free-text. §12.4's examples are all reasons a human has to
+    #: write down; a hold with no stated reason is indistinguishable from one
+    #: placed by accident, and the whole point is that someone can later decide
+    #: it has expired.
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    placed_by: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    placed_at: Mapped[dt.datetime] = created_at()
+    released_at: Mapped[dt.datetime | None] = nullable_ts()
+    released_reason: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[dt.datetime] = created_at()
+    updated_at: Mapped[dt.datetime] = updated_at()
+
+    __table_args__ = (
+        CheckConstraint("length(reason) > 0", name="reason_not_empty"),
+        CheckConstraint(
+            "released_at IS NULL OR released_at >= placed_at",
+            name="released_after_placed",
+        ),
+        # The lookup the worker does once per policy per pass. Partial on the
+        # live holds because a released one must not slow down the query whose
+        # answer is "is this row protected right now".
+        Index(
+            "idx_retention_holds_active",
+            "table_name",
+            "row_id",
+            unique=True,
+            postgresql_where=text("released_at IS NULL"),
+        ),
+        # Leading index for the FK, per §7. Also the "what am I still holding"
+        # query when an operator's access is reviewed.
+        Index("idx_retention_holds_placed_by", "placed_by"),
     )

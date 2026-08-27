@@ -9,14 +9,14 @@ import { currentUserId } from "@/lib/auth";
  * it, or the whole route opts out of static rendering with a build warning.
  */
 export default async function JournalPage() {
-  // The learner-subject the journal is scoped to comes from the desk payload
-  // in the finished shape; until that endpoint exists (F4) the surface renders
-  // its unavailable state, which needs no id to do.
+  // Called for its effect, not its value: `cookies()` inside it is what marks
+  // this route as request-dependent, and the journal itself needs no id —
+  // §6.4's list is every subject's entries and the endpoint reads "me".
   await currentUserId();
 
   return (
     <Suspense fallback={<p className="p-normal font-sans text-sm text-muted">Loading…</p>}>
-      <Journal learnerSubjectId={null} />
+      <Journal />
     </Suspense>
   );
 }

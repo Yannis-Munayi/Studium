@@ -1,0 +1,445 @@
+# Evaluation CI (evaluation spec v1.0 §17 "Testing strategy", §13.3).
+#
+#   Tier 1 (offline)  gates every push. No database, no API key: the check
+#                     registry and its coverage guard, dataset parsing and
+#                     validation, the §13.2 tolerance arithmetic and its
+#                     boundary cases, §8's per-agent thresholds, §9's retrieval
+#                     metrics, portfolio signing and canonicalisation, and the
+#                     closed-book conditions of §11.2.
+#   Tier 2 (online)   runs on the integration branches and on pull requests
+#                     touching evaluation or the schema it writes. Needs
+#                     Postgres: dataset sync, run persistence, the review
+#                     queue, and credential issue-and-verify.
+#   Tier 3 (paid)     never runs here. See the note at the bottom.
+#
+# **The regression gate itself is not wired here.** §13.3 puts affected
+# regressions on pushes to `yannis` and `main`, and a weekly full-suite run.
+# Both spend real money per run ($5-15, §7.4) and both need an API key in CI.
+# What this workflow does instead is verify that the machinery those runs
+# depend on is correct, and fail loudly on the one thing that would make a
+# future gate lie: a dataset that leaves a blocking threshold unmeasured. See
+# the "Blocking metrics are measured" step and DIVERGENCES-EVALUATION (E12).
+#
+# A separate workflow per the dev's standing principle: one green check
+# spanning several subsystems cannot tell you which of them is healthy.
+
+name: evaluation
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  group: evaluation-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: backend
+
+env:
+  PYTHON_VERSION: "3.12"
+
+  # Identical to the other five workflows on purpose. Pushing to main is not
+  # available on this repository, so `yannis` is the trunk in practice.
+  INTEGRATION_BRANCHES: "main yannis"
+
+  RUFF_PATHS: >-
+    studium/eval
+    tests/eval
+    tests/online/test_evaluation_db.py
+    tests/online/test_evaluation_paid.py
+
+  TEST_PATHS: >-
+    tests/eval
+    tests/online/test_evaluation_db.py
+
+jobs:
+  offline:
+    name: Tier 1 - offline
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install
+        # With the 'evaluation' extra: §17 puts portfolio signing and
+        # canonicalisation in Tier 1, so pynacl is not optional for this tier
+        # the way a provider SDK is. The import-surface step below is what
+        # keeps the dependency honest anyway.
+        run: python -m pip install -e ".[dev,evaluation]"
+
+      - name: Ruff
+        run: python -m ruff check ${{ env.RUFF_PATHS }}
+
+      - name: Tier 1
+        # Deselecting both markers must still select a non-empty set. A tier
+        # that silently ran zero tests would report green while checking
+        # nothing.
+        run: |
+          set -euo pipefail
+          collected=$(python -m pytest ${{ env.TEST_PATHS }} \
+            -m "not postgres and not anthropic" --collect-only -q \
+            | tail -1)
+          echo "collected: $collected"
+          case "$collected" in
+            "no tests ran"*|"0 tests"*)
+              echo "::error::Tier 1 selected no tests"; exit 1 ;;
+          esac
+          python -m pytest ${{ env.TEST_PATHS }} -q \
+            -m "not postgres and not anthropic"
+
+      - name: The check registry is not vacuous
+        # §17 asks for a coverage guard on this specific test. The registry is
+        # populated by import side effects, so a refactor that stopped
+        # importing studium.eval.checks would leave every parametrised check
+        # test collecting zero cases and reporting green having verified
+        # nothing -- the same shape as ingestion's provenance guard.
+        run: |
+          set -euo pipefail
+          python -c "
+          from studium.eval.checks import REGISTRY
+          from tests.eval.test_checks import MINIMUM_CHECK_KINDS
+          assert len(REGISTRY) >= MINIMUM_CHECK_KINDS, (
+              f'{len(REGISTRY)} check kinds registered, expected at least '
+              f'{MINIMUM_CHECK_KINDS}; the §7.2 checks are not being imported'
+          )
+          print(f'{len(REGISTRY)} check kinds registered')
+          "
+          python -m pytest tests/eval/test_checks.py -q
+
+      - name: Datasets validate
+        # §7.3 step 3, run against the real content tree rather than fixtures.
+        # A dataset broken by an edit would otherwise be discovered by a
+        # regression run, after it had spent money getting there.
+        run: python -m studium.eval.cli eval validate content/evaluation
+
+      - name: Blocking metrics are measured
+        # The failure this exists to catch: §8 states a blocking threshold,
+        # the dataset has no property that produces it, `metrics.compute`
+        # skips the metric, `metrics.violations` finds nothing to violate, and
+        # the gate reports green having measured nothing. That is worse than
+        # having no threshold, because the green is read as evidence.
+        #
+        # A warning at `eval validate` and an error here: a dataset is built
+        # up incrementally, and this is where it has to bite.
+        run: |
+          set -euo pipefail
+          python -c "
+          from pathlib import Path
+          from studium.eval.datasets import parse_directory
+          from studium.eval.metrics import coverage_gaps
+
+          failures = []
+          for dataset in parse_directory(Path('content/evaluation')):
+              if not dataset.agent or not dataset.active:
+                  continue
+              names = [
+                  str(p.get('name', ''))
+                  for entry in dataset.entries
+                  for p in entry.properties
+              ]
+              for gap in coverage_gaps(dataset.agent, names):
+                  failures.append(f'{dataset.slug}: {gap}')
+
+          for failure in failures:
+              print(f'::error::{failure}')
+          assert not failures, f'{len(failures)} unmeasured blocking metric(s)'
+          print('every blocking threshold has a property that measures it')
+          "
+
+      - name: Assessment definitions parse
+        # §11.3. A definition broken by an edit must not be discovered by a
+        # learner halfway through an examination.
+        run: |
+          python -c "
+          from pathlib import Path
+          from studium.eval.summative import parse_definitions
+
+          root = Path('content/subjects')
+          found = 0
+          for directory in sorted(root.glob('*/assessments')):
+              for definition in parse_definitions(directory):
+                  found += 1
+                  print(f'  {definition.slug}: {len(definition.problems)} problems')
+          print(f'{found} assessment definition(s) parsed')
+          "
+
+      - name: Import surface
+        # studium.eval must import with no pynacl and no yaml present: it is
+        # imported by studium.api.app for §12.4's verify endpoint, so a hard
+        # dependency here breaks the whole API rather than just evaluation.
+        # load_identity must raise SigningKeyUnavailable at *use*, not at
+        # import -- §16 already has a learner-facing response for that.
+        run: |
+          python - <<'PY'
+          import base64, importlib.abc, os, sys
+          BLOCKED = {"nacl", "yaml"}
+          class Finder(importlib.abc.MetaPathFinder):
+              def find_spec(self, name, path, target=None):
+                  if name.split(".")[0] in BLOCKED:
+                      raise ImportError(f"{name} is not installed (simulated)")
+                  return None
+          sys.meta_path.insert(0, Finder())
+          for mod in list(sys.modules):
+              if mod.split(".")[0] in BLOCKED:
+                  del sys.modules[mod]
+
+          import studium.eval
+          from studium.api.app import app
+          from studium.eval.credentials import SigningKeyUnavailable, load_identity
+
+          # A *well-formed* key, so the failure below is the missing library
+          # rather than the missing configuration. Without this the assertion
+          # passes for the wrong reason: load_identity raises the same
+          # exception type when STUDIUM_SIGNING_KEY is simply unset, so the
+          # step would report the import surface healthy on a machine where
+          # nothing had been checked.
+          os.environ["STUDIUM_SIGNING_KEY"] = base64.b64encode(b"\0" * 32).decode()
+          os.environ["STUDIUM_SIGNING_KEY_ID"] = "ci-probe"
+
+          try:
+              load_identity().public_key_b64()
+          except SigningKeyUnavailable as exc:
+              assert "pynacl" in str(exc), f"raised for the wrong reason: {exc}"
+              print(f"pynacl absence surfaces at use, as intended: {exc}")
+          else:
+              raise AssertionError("signing succeeded with no pynacl installed")
+
+          assert any(
+              getattr(r, "path", "") == "/api/portfolio/verify/{item_id}"
+              for r in app.routes
+          ), "the §12.4 verify endpoint is not served"
+          print("import surface OK without pynacl or pyyaml")
+          PY
+
+      - name: The closed-book conditions hold
+        # §3: "Any softening of the closed-book rule turns assessment into
+        # practice-with-different-branding and loses the credentialing value."
+        # Two of §11.2's six conditions are enforced by the state machine's
+        # shape rather than by any code in studium/eval, so a widening of the
+        # primitive matrix in another subsystem would silently hand a learner
+        # the command palette mid-examination. Called out as its own step so
+        # the log says which discipline failed.
+        run: python -m pytest tests/eval/test_summative.py -q
+
+  changes:
+    name: Does Tier 2 apply?
+    runs-on: ubuntu-24.04
+    outputs:
+      run_online: ${{ steps.decide.outputs.run_online }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: decide
+        name: Decide
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          # Not re-mapped here: it is inherited from the workflow-level env
+          # block, and re-mapping could shadow it with an empty string and skip
+          # Tier 2 everywhere while still reporting success.
+        run: |
+          set -euo pipefail
+
+          echo "event=$EVENT  ref=$REF"
+          echo "integration branches: '${INTEGRATION_BRANCHES:-<UNSET>}'"
+
+          if [ -z "${INTEGRATION_BRANCHES:-}" ]; then
+            echo "::error::INTEGRATION_BRANCHES is empty or unset, so no branch"\
+                 "can ever match and Tier 2 would be skipped everywhere."\
+                 "Failing loudly rather than reporting a green run that tested"\
+                 "half of what it claims."
+            exit 1
+          fi
+
+          if [ "$EVENT" != "pull_request" ]; then
+            branch="${REF#refs/heads/}"
+            for candidate in $INTEGRATION_BRANCHES; do
+              if [ "$branch" = "$candidate" ]; then
+                echo "run_online=true" >> "$GITHUB_OUTPUT"
+                echo "$branch is an integration branch: Tier 2 runs"
+                exit 0
+              fi
+            done
+            echo "run_online=false" >> "$GITHUB_OUTPUT"
+            echo "$branch is not an integration branch: Tier 1 only"
+            exit 0
+          fi
+
+          changed=$(git diff --name-only "$BASE_SHA" HEAD)
+          echo "changed files:"; echo "$changed" | sed 's/^/  /'
+
+          # Evaluation writes golden_datasets, evaluation_runs/results,
+          # signing_keys and portfolio_items, reads content_review_queue and
+          # agent_traces, and calls into the agents, the state machine and the
+          # effect handlers. A change to any of those can break it with nothing
+          # under studium/eval touched -- the effect handler especially, since
+          # the portfolio signature manifest is built there.
+          if echo "$changed" | grep -qE '^backend/(studium/eval/|studium/agents/|studium/models/|studium/orchestration/|studium/acl\.py|studium/assessment\.py|studium/jobs/retention\.py|migrations/|content/evaluation/|content/subjects/|tests/fixtures/)'; then
+            echo "run_online=true" >> "$GITHUB_OUTPUT"
+            echo "touches evaluation or what it reads and writes: Tier 2 runs"
+          else
+            echo "run_online=false" >> "$GITHUB_OUTPUT"
+            echo "no evaluation-adjacent changes: Tier 1 only"
+          fi
+
+  online:
+    name: Tier 2 - online
+    needs: [offline, changes]
+    if: needs.changes.outputs.run_online == 'true'
+    runs-on: ubuntu-24.04
+    env:
+      STUDIUM_TEST_DATABASE_URL: postgresql+psycopg://studium:studium@localhost:5433/studium_test
+      STUDIUM_DATABASE_URL: postgresql+psycopg://studium:studium@localhost:5433/studium_test
+      # Belt and braces: the paid tier is marker-deselected below as well.
+      STUDIUM_RUN_PAID_TESTS: "0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install
+        run: python -m pip install -e ".[dev,evaluation]"
+
+      - name: Start Postgres
+        run: docker compose -f docker-compose.test.yml up -d test-db
+
+      - name: Wait for health
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 60); do
+            if docker compose -f docker-compose.test.yml exec -T test-db \
+                 pg_isready -U studium -d studium_test >/dev/null 2>&1; then
+              echo "ready"; exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Postgres did not become ready"
+          docker compose -f docker-compose.test.yml logs test-db
+          exit 1
+
+      - name: Apply schema
+        run: python -m alembic upgrade head
+
+      - name: The 0011 objects are actually present
+        # Every Tier 2 test here assumes them. Failing on the specific missing
+        # object names the cause instead of surfacing it as a dozen confusing
+        # query errors thirty seconds later.
+        run: |
+          set -euo pipefail
+          psql() {
+            docker compose -f docker-compose.test.yml exec -T test-db \
+              psql -U studium -d studium_test -v ON_ERROR_STOP=1 -tAc "$1"
+          }
+          for table in golden_datasets golden_dataset_entries \
+                       evaluation_runs evaluation_results signing_keys; do
+            test "$(psql "SELECT to_regclass('$table') IS NOT NULL")" = t
+          done
+          test "$(psql "SELECT count(*) FROM pg_type WHERE typname='golden_dataset_kind'")" = 1
+          test "$(psql "SELECT 'assessment_pass' = ANY(enum_range(NULL::portfolio_item_kind)::text[])")" = t
+          test "$(psql "SELECT 'subject_completion' = ANY(enum_range(NULL::portfolio_item_kind)::text[])")" = t
+          test "$(psql "SELECT count(*) FROM information_schema.columns
+                         WHERE table_name='golden_datasets'
+                           AND column_name='regression_tolerance'")" = 1
+          echo "migration 0011 objects present"
+
+      - name: Constraint names are not double-prefixed
+        # env.py applies the metadata naming convention on top of whatever the
+        # migration passes, so an already-prefixed name is prefixed twice and
+        # then truncated to 63 characters with a hash --
+        # ck_golden_dataset_entries_ck_golden_dataset_entries_met_e1a9. The
+        # tests that assert on constraint names by regex then match nothing,
+        # and the diagnostics a reviewer reads name a hash.
+        run: |
+          set -euo pipefail
+          doubled=$(docker compose -f docker-compose.test.yml exec -T test-db \
+            psql -U studium -d studium_test -tAc \
+            "SELECT conname FROM pg_constraint
+              WHERE conname LIKE 'ck\_%\_ck\_%' ORDER BY 1")
+          if [ -n "$doubled" ]; then
+            echo "::error::double-prefixed constraint names: $doubled"
+            exit 1
+          fi
+          echo "constraint names are clean"
+
+      - name: The public verifier serves credentials only
+        # §12.4's endpoint is unauthenticated. portfolio_items also holds the
+        # learner's proofs and essays (DIVERGENCES-EVALUATION E1), so a lookup
+        # that served them would publish coursework to anyone who could guess a
+        # UUID. Asserted against the real query rather than the ORM.
+        run: |
+          set -euo pipefail
+          python -c "
+          import inspect
+          from studium.eval import credentials
+          source = inspect.getsource(credentials.verify_item)
+          assert \"'assessment_pass', 'subject_completion'\" in source, (
+              'verify_item no longer filters by credential kind; the public '
+              'endpoint would serve learner coursework'
+          )
+          print('verify_item filters by credential kind')
+          "
+
+      - name: Tier 2
+        # postgres-marked only. The paid tests are excluded here rather than
+        # left to skip, so the log distinguishes "not applicable" from
+        # "quietly did nothing".
+        run: python -m pytest ${{ env.TEST_PATHS }} -q -m "postgres and not anthropic"
+
+      - name: Datasets sync cleanly
+        # §7.3 step 5 runs on every merge. A dataset that parses and cannot be
+        # materialised would be discovered there, on the branch everyone else
+        # is building on.
+        run: |
+          set -euo pipefail
+          python -m studium.eval.cli eval sync content/evaluation --yes
+          python -m studium.eval.cli eval list
+
+      - name: Postgres logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.test.yml logs test-db
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v
+
+# Tier 3 -- the anthropic-marked tests in tests/online/test_evaluation_paid.py --
+# is deliberately not a job here, and so is the §13.3 regression gate itself.
+#
+# Those checks run real agents against real datasets. §7.4 puts a full
+# regression at $5-15 and §13.3 is explicit that "full-suite regression on
+# every push is prohibitively expensive". Wiring either to a push would spend
+# money on every branch and block merges for reasons unrelated to the diff --
+# and worse, would make a model provider's bad afternoon look like a failing
+# build.
+#
+# Run them deliberately instead:
+#
+#   pip install -e ".[dev,evaluation]"
+#   ANTHROPIC_API_KEY=... STUDIUM_RUN_PAID_TESTS=1 \
+#     python -m pytest tests/online/test_evaluation_paid.py -m anthropic
+#
+# And the gate itself, before merging a prompt change (§13.1):
+#
+#   python -m studium.eval.cli eval affected --changed $(git diff --name-only main)
+#   python -m studium.eval.cli eval gate --datasets <slug> --yes
+#
+# `eval gate` exits non-zero when §13.2's tolerance or §8's thresholds are
+# violated, which is what a future CI job would read. What is missing before
+# that job can exist is a budget: §15.3's revert left evaluation runs sharing
+# the reviewer's ordinary daily cap ($5 soft / $8 hard), and one full-suite run
+# can exhaust it. See DIVERGENCES-EVALUATION (E13) and SPEC_DEBT (SD9).

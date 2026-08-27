@@ -1,0 +1,31 @@
+# Everything the image does not need, and two things it must never receive.
+#
+# `.env` and `.env.local` are the two: they hold real API keys, and a build
+# context that carries them bakes them into a layer that anyone who can pull
+# the image can read. Fly secrets are injected at runtime (§6.2); nothing in
+# the image should ever contain a value.
+
+.env
+.env.*
+!.env.example
+
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# Tests and fixtures. The image runs the app; CI runs the tests, against a
+# checkout, with a database. Shipping them costs size and widens what a
+# compromised container can read.
+tests/
+docker-compose*.yml
+
+.git/
+.github/
+*.md
+!README.md

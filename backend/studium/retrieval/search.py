@@ -252,6 +252,13 @@ def curated_candidates(
                AND s.deleted_at IS NULL
                AND s.status <> 'retired'
                AND sc.chunk_type <> ALL(:excluded)
+               -- Ingestion §7.3. A re-extraction supersedes a source's chunks
+               -- rather than deleting them, so the old rows are still here and
+               -- still carry the text the previous extractor produced. Serving
+               -- them would ground a lecture in output we have already decided
+               -- was worse. Citation resolution reads them anyway, which is
+               -- why they were kept -- see retrieval.citations.
+               AND sc.superseded_at IS NULL
              -- DISTINCT ON keeps one row per chunk; ordering core concepts
              -- first means a chunk curated onto both a core and a fallback
              -- concept is credited to the core one, which is the stronger and
@@ -344,6 +351,7 @@ def vector_search(
                    AND s.deleted_at IS NULL
                    AND s.status <> 'retired'
                    AND sc.chunk_type <> ALL(:excluded)
+                   AND sc.superseded_at IS NULL  -- ingestion §7.3
                    AND (:no_source_filter OR sc.source_id = ANY(:source_ids))
                  -- The CAST is a no-op on the binary path (measured: 2.46ms
                  -- with it, 2.50ms without) and is what lets the text
@@ -412,6 +420,7 @@ def keyword_search(
                    AND s.deleted_at IS NULL
                    AND s.status <> 'retired'
                    AND sc.chunk_type <> ALL(:excluded)
+                   AND sc.superseded_at IS NULL  -- ingestion §7.3
                    AND sc.tsvector_text @@ plainto_tsquery('english', :query_text)
                    AND (:no_source_filter OR sc.source_id = ANY(:source_ids))
                  ORDER BY keyword_score DESC, sc.id
@@ -544,6 +553,11 @@ def expand_atomic_siblings(
                AND sc.chunk_index BETWEEN seed.chunk_index - 1 AND seed.chunk_index + 1
                AND s.deleted_at IS NULL
                AND s.status <> 'retired'
+               -- Ingestion §7.3. Adjacency is only meaningful within one
+               -- generation: after a re-extraction the index space contains
+               -- two runs, and a seed's neighbour by index could be a chunk
+               -- from the superseded pass with unrelated text.
+               AND sc.superseded_at IS NULL
              ORDER BY sc.source_id, sc.chunk_index
              LIMIT :limit
             """

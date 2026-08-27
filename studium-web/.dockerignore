@@ -1,0 +1,22 @@
+# See backend/.dockerignore for the reasoning. The env rules are the important
+# half: a build context carrying .env.local bakes real keys into a layer.
+
+.env
+.env.*
+!.env.example
+
+node_modules/
+.next/
+out/
+coverage/
+playwright-report/
+test-results/
+
+# Vitest and Playwright suites. CI runs them; the image serves the app.
+tests/
+e2e/
+
+.git/
+.github/
+*.md
+!README.md

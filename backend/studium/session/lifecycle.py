@@ -41,6 +41,24 @@ class NoEnrollmentError(LookupError):
     """The learner has no active enrollment to open a session against."""
 
 
+@dataclass(frozen=True, slots=True)
+class OpenedSession:
+    """Which session the learner ended up in, and in what mode.
+
+    ``mode`` is not always the mode that was asked for. §20 allows one active
+    session per learner, so opening a second returns the first -- and the first
+    may have been started in a different mode. Reporting the mode the session
+    *has* rather than the one the caller *sent* is what lets a client render the
+    session it got: the alternative is a learner asking for a lecture, being
+    handed a tutorial, and having no way to find out except by noticing that
+    nobody is lecturing. See DIVERGENCES-RUNTIME (R15).
+    """
+
+    session_id: uuid.UUID
+    mode: str
+    resumed: bool
+
+
 async def open_session(
     *,
     user_id: uuid.UUID,
@@ -48,7 +66,7 @@ async def open_session(
     focus_concept_id: uuid.UUID | None = None,
     learner_subject_id: uuid.UUID | None = None,
     target_duration_minutes: int = 90,
-) -> uuid.UUID:
+) -> OpenedSession:
     """Create the ``learning_sessions`` row (§16 step 2).
 
     Resolves the enrollment when the caller did not name one. §20 allows at
@@ -77,7 +95,7 @@ def _open(
     focus_concept_id: uuid.UUID | None,
     learner_subject_id: uuid.UUID | None,
     target_duration_minutes: int,
-) -> uuid.UUID:
+) -> OpenedSession:
     if learner_subject_id is None:
         enrollment = session.execute(
             select(LearnerSubject)
@@ -97,14 +115,23 @@ def _open(
         focus_concept_id = focus_concept_id or enrollment.current_focus_concept_id
 
     active = session.execute(
-        select(LearningSession.id)
+        select(LearningSession.id, LearningSession.mode)
         .where(LearningSession.user_id == user_id)
         .where(LearningSession.ended_at.is_(None))
         .limit(1)
-    ).scalar_one_or_none()
+    ).first()
     if active is not None:
-        log.info("resuming existing active session %s for user %s", active, user_id)
-        return active
+        if active.mode != mode:
+            # Worth a warning rather than a debug line: the learner asked for
+            # one thing and is getting another, and every downstream routing
+            # decision follows the resumed mode.
+            log.warning(
+                "resuming session %s in mode %s; %s was requested",
+                active.id, active.mode, mode,
+            )
+        else:
+            log.info("resuming existing active session %s for user %s", active.id, user_id)
+        return OpenedSession(session_id=active.id, mode=active.mode, resumed=True)
 
     row = LearningSession(
         user_id=user_id,
@@ -115,7 +142,7 @@ def _open(
     )
     session.add(row)
     session.flush()
-    return row.id
+    return OpenedSession(session_id=row.id, mode=mode, resumed=False)
 
 
 def should_run_retrieval_check(context: SessionContext) -> bool:

@@ -1,18 +1,22 @@
 /**
- * The desk and journal data paths (spec §6.1, §6.4).
+ * The desk and journal data paths (spec §6.1, §6.4, §6.5).
  *
- * **These endpoints do not exist yet.** The rows behind them do -- the data
- * layer ships `journal_entries`, `session_summaries`, `concept_mastery`, and
- * `learner_subjects`, and the runtime writes to all four. What is missing is
- * HTTP: `backend/studium/api/app.py` serves the session lifecycle, the
- * interrupt channel, and citation resolution, and nothing else. See
- * DIVERGENCES-FRONTEND.md F4.
+ * **These endpoints exist now.** `backend/studium/api/reads.py` serves all five,
+ * over the same `journal_entries`, `session_summaries`, `concept_mastery` and
+ * `learner_subjects` rows the runtime was already writing. What used to be
+ * missing was HTTP, and `UNAVAILABLE` is what stood in for it (F4).
  *
- * Rather than let each surface discover that as a 404 and render "Not found"
- * -- which would be a lie, since the learner's journal is neither absent nor
- * forbidden -- the gap is named here. `SURFACE_ENDPOINTS` is the list of what
- * has to exist, at the paths the client already calls. Turning any of them on
- * is deleting one line from `UNAVAILABLE`.
+ * `SURFACE_ENDPOINTS` and `UNAVAILABLE` are kept rather than deleted. The set is
+ * empty and the guard is a no-op, and both stay because they are the mechanism
+ * for the next surface that ships ahead of its server — which §2 promises four
+ * more of. A surface that discovers a missing endpoint as a 404 renders "Not
+ * found" about a learner's own journal, and that is a lie.
+ *
+ * **Identity is not a parameter.** The desk and journal read "me": the Next
+ * proxy resolves the learner server-side and sets `X-Studium-User`, so no
+ * client function can name a different one. That is one place identity can be
+ * acquired rather than one per call site — and it is why `fetchDesk` takes no
+ * argument at all.
  */
 import { ApiError } from "./errors";
 import { request } from "./client";
@@ -30,10 +34,10 @@ import {
 } from "./schemas";
 import { z } from "zod";
 
-/** Every backend route these surfaces need, and whether it is built. */
+/** Every backend route these surfaces need. */
 export const SURFACE_ENDPOINTS = {
-  desk: "GET /api/desk",
-  journalList: "GET /api/journal",
+  desk: "GET /api/user/me/desk",
+  journalList: "GET /api/user/me/journal",
   journalEntry: "GET /api/journal/{entry_id}",
   journalUpdate: "PATCH /api/journal/{entry_id}",
   sessionSummary: "GET /api/session/{session_id}/summary",
@@ -42,19 +46,13 @@ export const SURFACE_ENDPOINTS = {
 export type SurfaceEndpoint = keyof typeof SURFACE_ENDPOINTS;
 
 /**
- * Endpoints not yet served by subsystem 2.
+ * Endpoints not yet served by the backend.
  *
- * Verified against `app.py` at the time of this build. A route that starts
- * answering should be removed from this set; the client call below it is
- * already written against the shape the data layer guarantees.
+ * Empty as of the build that shipped `studium/api/reads.py`. Adding a name here
+ * turns the surface's "not connected yet" state back on without touching the
+ * component.
  */
-export const UNAVAILABLE: ReadonlySet<SurfaceEndpoint> = new Set([
-  "desk",
-  "journalList",
-  "journalEntry",
-  "journalUpdate",
-  "sessionSummary",
-]);
+export const UNAVAILABLE: ReadonlySet<SurfaceEndpoint> = new Set([]);
 
 /**
  * A distinct failure kind, so surfaces can say "not built" rather than
@@ -84,15 +82,20 @@ function guard(endpoint: SurfaceEndpoint): void {
 
 // --- the desk (§6.1) -------------------------------------------------------
 
-export async function fetchDesk(userId: UUID): Promise<DeskResponse> {
+export async function fetchDesk(): Promise<DeskResponse> {
   guard("desk");
-  return request(`/api/desk?user_id=${userId}`, deskResponse);
+  return request("/api/user/me/desk", deskResponse);
 }
 
 // --- the journal (§6.4) ----------------------------------------------------
 
 export interface JournalFilter {
   status?: JournalStatus[];
+  /**
+   * Enrollment ids. Optional, because §6.4 is "all ... entries **across the
+   * learner's subjects**" — the subject picker narrows a view that already has
+   * something in it, rather than being what makes the view load at all.
+   */
   subjectIds?: UUID[];
   conceptIds?: UUID[];
   /** ISO date; §6.4 defaults to the last 30 days. */
@@ -101,16 +104,21 @@ export interface JournalFilter {
 }
 
 export async function fetchJournalEntries(
-  learnerSubjectId: UUID,
   filter: JournalFilter = {},
 ): Promise<JournalEntry[]> {
   guard("journalList");
-  const params = new URLSearchParams({ learner_subject_id: learnerSubjectId });
+  const params = new URLSearchParams();
   if (filter.status?.length) params.set("status", filter.status.join(","));
+  if (filter.subjectIds?.length) params.set("learner_subject_id", filter.subjectIds.join(","));
   if (filter.conceptIds?.length) params.set("concept_ids", filter.conceptIds.join(","));
   if (filter.since) params.set("since", filter.since);
   if (filter.search) params.set("q", filter.search);
-  return request(`/api/journal?${params}`, z.array(journalEntry));
+
+  const query = params.toString();
+  return request(
+    `/api/user/me/journal${query ? `?${query}` : ""}`,
+    z.array(journalEntry),
+  );
 }
 
 export async function fetchJournalEntry(entryId: UUID): Promise<JournalEntryDetail> {

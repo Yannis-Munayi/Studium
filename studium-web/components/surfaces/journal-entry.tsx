@@ -2,14 +2,21 @@
 
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { useEffect, useRef, useState } from "react";
-import { useJournalEntry, useResolveJournalEntry, useSaveLearnerNote } from "@/lib/api/hooks";
+import {
+  useJournalEntry,
+  useResolveJournalEntry,
+  useSaveLearnerNote,
+  useSetJournalStatus,
+} from "@/lib/api/hooks";
 import { isSurfaceUnavailable } from "@/lib/api/surfaces";
+import { ApiError } from "@/lib/api/errors";
 import { JOURNAL } from "@/lib/copy/surfaces";
 import type { JournalEvent } from "@/lib/api/schemas";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/dialog";
 import { StatusPill } from "@/components/ui/verdict";
 import { SurfaceUnavailable } from "@/components/shared/unavailable";
+import { ApiFailureNotice } from "@/components/session/degradation-notice";
 import { relativeAge } from "./journal";
 
 /** §12.1's autosave debounce. */
@@ -27,6 +34,7 @@ const AUTOSAVE_DEBOUNCE_MS = 2000;
 export function JournalEntryDetail({ entryId }: { entryId: string }) {
   const { data: entry, isLoading, error } = useJournalEntry(entryId);
   const resolve = useResolveJournalEntry();
+  const setStatus = useSetJournalStatus(entryId);
   const saveNote = useSaveLearnerNote(entryId);
 
   const [note, setNote] = useState<string | null>(null);
@@ -54,8 +62,23 @@ export function JournalEntryDetail({ entryId }: { entryId: string }) {
       </div>
     );
   }
+  if (error) {
+    // A 404 here also covers "not yours" — the backend refuses to distinguish
+    // them, so neither does this. Everything else is a failure to reach the
+    // server, which is a different sentence and a different remedy.
+    const missing = error instanceof ApiError && error.kind === "not_found";
+    return (
+      <div className="mx-auto max-w-2xl px-normal py-loose">
+        {missing ? (
+          <p className="font-sans text-sm text-muted">{JOURNAL.notFound}</p>
+        ) : (
+          <ApiFailureNotice kind={error instanceof ApiError ? error.kind : "server_error"} />
+        )}
+      </div>
+    );
+  }
   if (isLoading) return <p className="p-normal font-sans text-sm text-muted">Loading…</p>;
-  if (!entry) return <p className="p-normal font-sans text-sm text-muted">Entry not found.</p>;
+  if (!entry) return <p className="p-normal font-sans text-sm text-muted">{JOURNAL.notFound}</p>;
 
   return (
     <Tooltip.Provider delayDuration={300}>
@@ -135,15 +158,48 @@ export function JournalEntryDetail({ entryId }: { entryId: string }) {
           </section>
         ) : null}
 
+        {/* §6.4's actions. Resolve confirms because it is the one that says
+            "this is over"; the rest are one click, because reopening something
+            you reopened by accident costs another click and nothing else. */}
         <div className="mt-loose flex flex-wrap gap-tight border-t border-line pt-normal">
           {entry.status === "open" || entry.status === "partial" ? (
-            <Button variant="primary" onClick={() => setConfirmingResolve(true)}>
-              {JOURNAL.markResolved}
-            </Button>
+            <>
+              <Button
+                variant="primary"
+                disabled={setStatus.isPending}
+                onClick={() => setConfirmingResolve(true)}
+              >
+                {JOURNAL.markResolved}
+              </Button>
+              {entry.status === "open" ? (
+                <Button
+                  variant="secondary"
+                  disabled={setStatus.isPending}
+                  onClick={() => setStatus.mutate("partial")}
+                >
+                  {JOURNAL.markPartial}
+                </Button>
+              ) : null}
+            </>
           ) : (
-            <Button variant="secondary">{JOURNAL.reopen}</Button>
+            <Button
+              variant="secondary"
+              disabled={setStatus.isPending}
+              onClick={() => setStatus.mutate("open")}
+            >
+              {JOURNAL.reopen}
+            </Button>
           )}
-          <Button variant="quiet">{JOURNAL.archive}</Button>
+
+          {entry.status === "archived" ? null : (
+            <Button
+              variant="quiet"
+              disabled={setStatus.isPending}
+              onClick={() => setStatus.mutate("archived")}
+            >
+              {JOURNAL.archive}
+            </Button>
+          )}
         </div>
 
         <ConfirmDialog
@@ -159,10 +215,28 @@ export function JournalEntryDetail({ entryId }: { entryId: string }) {
   );
 }
 
+/**
+ * §6.4's timeline, in words rather than in enum values.
+ *
+ * The kinds are `journal_event_kind` from data layer §6.7. Rendering them raw
+ * put `partially_addressed` on screen for a learner reading their own history —
+ * legible to whoever wrote the migration, and to nobody else.
+ */
+const EVENT_LABEL: Record<JournalEvent["kind"], string> = {
+  created: "Opened",
+  revisited: "Came up again",
+  partially_addressed: "Partly worked through",
+  resolved: "Marked resolved",
+  reopened: "Reopened",
+  archived: "Archived",
+  hypothesis_updated: "The system revised its guess",
+  learner_note_added: "You added a note",
+};
+
 function HistoryRow({ event }: { event: JournalEvent }) {
   return (
     <li className="font-sans text-sm text-muted">
-      <time dateTime={event.at}>{relativeAge(event.at)}</time> — {event.kind}
+      <time dateTime={event.at}>{relativeAge(event.at)}</time> — {EVENT_LABEL[event.kind]}
     </li>
   );
 }

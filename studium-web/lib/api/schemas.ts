@@ -55,6 +55,21 @@ export type SessionMode = z.infer<typeof sessionMode>;
 export const startSessionResponse = z.object({
   session_id: uuid,
   state: sessionState,
+  /**
+   * The mode the session actually has, which is not always the one requested.
+   *
+   * The runtime allows one active session per learner (§20), so opening a
+   * second returns the first — whatever mode *it* was started in. Navigating
+   * with the requested mode instead produced a classroom that believed it was
+   * lecturing while the runtime was running a tutorial, and the two disagreed
+   * about which agent every turn should go to. See DIVERGENCES-FRONTEND.md F22.
+   *
+   * Defaulted rather than required so a backend that predates the field does
+   * not fail the parse; the caller falls back to what it asked for.
+   */
+  mode: sessionMode.optional(),
+  /** True when an existing active session was returned instead of a new one. */
+  resumed: z.boolean().default(false),
 });
 export type StartSessionResponse = z.infer<typeof startSessionResponse>;
 
@@ -144,6 +159,23 @@ export const streamChunk = z.object({
 });
 export type StreamChunk = z.infer<typeof streamChunk>;
 
+/**
+ * The practice problem `let_me_try_one` puts on the bench (§6.3, §9.3).
+ *
+ * **The model answer is not in this shape and must not be added to it.** The
+ * runtime splits `PracticeProblem` before the chunk leaves the process: the
+ * Orchestrator keeps `model_answer` and `expected_key_points` for the Evaluator
+ * that grades the next turn, and sends the client the question. §11.2 withholds
+ * the answer until the learner has attempted, and the bench having no component
+ * that draws it is not the same as the browser never receiving it.
+ */
+export const practiceProblem = z.object({
+  prompt: z.string(),
+  difficulty: z.number().int().min(1).max(5).default(3),
+  hint: z.string().default(""),
+});
+export type PracticeProblem = z.infer<typeof practiceProblem>;
+
 /** The `end` payload shapes the runtime actually emits, all fields optional. */
 export const endPayload = z.object({
   turn_id: z.string().nullable().optional(),
@@ -154,15 +186,50 @@ export const endPayload = z.object({
   stance: z.string().optional(),
   verdict: z.string().optional(),
   refocus_concept_id: z.string().nullable().optional(),
-  problem: z.record(z.unknown()).nullable().optional(),
+  /**
+   * Parsed leniently: a `catch` rather than a hard failure, because the problem
+   * is one field of a chunk whose other fields drive the transcript. A shape
+   * the bench cannot render should cost the bench, not the turn.
+   */
+  problem: practiceProblem.nullable().optional().catch(null),
   note: z.string().optional(),
   /**
-   * Not currently emitted by subsystem 2. Parsed anyway, because it is the one
-   * field that makes §10's hover cards resolvable and the moment the runtime
-   * starts sending it the frontend picks it up with no change here.
-   * See DIVERGENCES-FRONTEND.md F3.
+   * The artifact this turn produced, which is what makes §10's hover cards
+   * resolvable — `GET /api/artifacts/{id}/citations` has nothing to ask about
+   * without it.
+   *
+   * Optional because most turns have none: the Tutor writes no artifact, and
+   * a Lecturer turn whose effect batch rolled back has none to name. Absent
+   * means "no source is linked to this segment", which the card says plainly
+   * rather than spinning. Closed SD5; see DIVERGENCES-FRONTEND.md F3.
    */
   artifact_id: z.string().nullable().optional(),
+  /**
+   * The other four rows a turn can produce (agent runtime v1.0.1 §4).
+   *
+   * Same reason as `artifact_id`, generalised: the effect batch commits before
+   * the end chunk is sent, so by the time the client reads these the rows
+   * exist and are fetchable. Without them the client's only way to find what
+   * a turn wrote is to re-poll a list endpoint and diff it, which is a race
+   * and looks like one — a journal entry that appears a second late, or not
+   * until the next navigation.
+   *
+   * All optional, and for the same reason `artifact_id` is: most turns write
+   * none of these. Absent means "this turn produced no such row", which is the
+   * ordinary case and not an error state.
+   */
+  journal_entry_id: z.string().nullable().optional(),
+  portfolio_item_id: z.string().nullable().optional(),
+  review_card_id: z.string().nullable().optional(),
+  queue_item_id: z.string().nullable().optional(),
+  /**
+   * Which turn this was, for correlating the end chunk with the persisted row.
+   *
+   * Optional rather than required even though §4.2 writes it: a degraded turn
+   * emits an end chunk having written no turn row at all, and a required field
+   * would make the client reject the one chunk that tells it the turn failed.
+   */
+  turn_index: z.number().nullable().optional(),
 });
 export type EndPayload = z.infer<typeof endPayload>;
 
@@ -189,18 +256,17 @@ export const budgetExceededDetail = z.object({
 });
 export type BudgetExceededDetail = z.infer<typeof budgetExceededDetail>;
 
-// --- surfaces the backend does not serve yet -------------------------------
+// --- the desk, the journal and the session summary -------------------------
 
 /**
  * Journal, desk and mastery shapes (spec §6.1, §6.4, §12).
  *
  * These describe the data layer's own columns (`journal_entries`,
- * `session_summaries`, `concept_mastery`), which exist and are populated -- but
- * no HTTP endpoint exposes them, so the queries backing these surfaces have no
- * server to call. See DIVERGENCES-FRONTEND.md F4. Declaring the schemas now is
- * not speculation: it is what lets the components, their tests, and the
- * fixtures be written and verified against the shape the data layer already
- * guarantees, so wiring them is one client function each.
+ * `session_summaries`, `concept_mastery`), and are now served by
+ * `backend/studium/api/reads.py`. They were written before that existed, which
+ * is why wiring the endpoints was one client function each — and why two of
+ * them were wrong in ways only a real response could reveal. Both corrections
+ * are marked below.
  */
 export const journalStatus = z.enum(["open", "partial", "resolved", "archived"]);
 export type JournalStatus = z.infer<typeof journalStatus>;
@@ -212,7 +278,20 @@ export const journalEntry = z.object({
   concept_name: z.string().nullable(),
   status: journalStatus,
   summary: z.string(),
+  /**
+   * §12.1's "written by" attribution. Derived server-side from
+   * `journal_entries.origin`: only `learner_flagged` means the learner wrote
+   * the summary themselves.
+   */
   summary_author: z.enum(["learner", "tutor"]).default("tutor"),
+  /**
+   * The Confusion-Tracker's inference. **Always null today.** Data layer §11
+   * says it is never serialised to a learner; frontend §6.4 asks for it with a
+   * "this is the system's guess" framing. The projection that already shipped
+   * wins — see DIVERGENCES-FRONTEND.md F16 and `reads.SERVE_HYPOTHESIS_TO_LEARNER`.
+   * Kept in the schema because that decision is one constant away from
+   * reversing, and the surfaces already render it `if (entry.hypothesis)`.
+   */
   hypothesis: z.string().nullable(),
   learner_note: z.string().nullable(),
   first_seen_at: z.string(),
@@ -220,9 +299,31 @@ export const journalEntry = z.object({
 });
 export type JournalEntry = z.infer<typeof journalEntry>;
 
+/**
+ * The `journal_event_kind` enum, all eight values (data layer §6.7).
+ *
+ * This list had six and two of them were wrong. `addressed` is not a value the
+ * database has — it is `partially_addressed` — and `hypothesis_updated` and
+ * `learner_note_added` were missing entirely. Since a schema mismatch is a hard
+ * failure at the boundary by design, the first revised hypothesis on any entry
+ * would have taken the whole detail view down with a "malformed response".
+ * Found by serving the endpoint. See DIVERGENCES-FRONTEND.md F17.
+ */
+export const journalEventKind = z.enum([
+  "created",
+  "revisited",
+  "partially_addressed",
+  "resolved",
+  "reopened",
+  "archived",
+  "hypothesis_updated",
+  "learner_note_added",
+]);
+export type JournalEventKind = z.infer<typeof journalEventKind>;
+
 export const journalEvent = z.object({
   id: uuid,
-  kind: z.enum(["created", "revisited", "addressed", "resolved", "reopened", "archived"]),
+  kind: journalEventKind,
   at: z.string(),
   session_id: uuid.nullable(),
 });
@@ -266,7 +367,17 @@ export type RecentSession = z.infer<typeof recentSession>;
 export const conceptMastery = z.object({
   concept_id: uuid,
   concept_name: z.string(),
+  /** The raw BKT posterior after the most recent evidence. */
   p_known: z.number().min(0).max(1),
+  /**
+   * The same value under the forgetting curve, recomputed server-side at read
+   * time. **This is the one to render.** The Curator, the unlock gate and
+   * `suggest_next_unlocked` all read the decayed value (data layer C1), so a
+   * desk showing the raw one would summarise a state no decision was made
+   * against — a learner would see 0.9 on a concept the system had already
+   * decided to revisit. See DIVERGENCES-FRONTEND.md F18.
+   */
+  p_known_decayed: z.number().min(0).max(1),
 });
 export type ConceptMastery = z.infer<typeof conceptMastery>;
 

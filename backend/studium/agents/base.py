@@ -106,6 +106,73 @@ class AgentOutput(BaseModel):
     turn_id: uuid.UUID | None = None
 
 
+class EndPayload(BaseModel):
+    """The ``end`` chunk's payload contract (§20).
+
+    Every field is optional because six paths emit an ``end`` chunk -- a
+    Lecturer segment, a Tutor turn, each primitive handler, a graded lab
+    answer, and the Orchestrator's own ``end_session`` -- and each says a
+    different subset. There is no field every one of them carries, so a
+    required field here would be a lie about at least one caller.
+
+    ``extra="allow"`` for the same reason: the Tutor puts its own ``kind`` on
+    the chunk, and a model that rejected it would turn a documentation aid into
+    a runtime failure. What this *does* buy is a typed home for the fields the
+    client parses, so a caller passing ``segment_index="two"`` fails at the
+    emitting agent rather than at a zod parse in a browser.
+    """
+
+    model_config = {"extra": "allow"}
+
+    #: The ``session_turns`` row this call wrote.
+    #:
+    #: ``UUID`` as well as ``str`` because the SSE encoder already serialises
+    #: either (``orchestration.streaming``'s json default), and a model that
+    #: refused the raw form here would reject chunks the wire handles fine.
+    turn_id: str | uuid.UUID | None = None
+    segment_index: int | None = None
+    anchor: str | None = None
+    #: A :class:`~studium.orchestration.state_machine.State` value, when the
+    #: turn moved the session. Most ``end`` chunks carry none (see F9).
+    next_state: str | None = None
+    primitive: str | None = None
+    stance: str | None = None
+    verdict: str | None = None
+    refocus_concept_id: str | uuid.UUID | None = None
+    #: The practice problem ``let_me_try_one`` selected, as the bench renders
+    #: it. Learner-facing: the model answer and key points are stripped before
+    #: this leaves the Orchestrator (see ``Orchestrator._absorb_end``).
+    problem: dict[str, Any] | None = None
+    note: str | None = None
+    #: The ``content_artifacts`` row this turn produced, once the Orchestrator
+    #: has applied the turn's effects. This is what lets the client call
+    #: ``GET /api/artifacts/{id}/citations`` and resolve the segment's ``[Pn]``
+    #: markers; without it every hover card in the product spins forever.
+    #:
+    #: Optional, not required: a Tutor turn produces no artifact, and declaring
+    #: it required would make the common case the exception.
+    artifact_id: str | uuid.UUID | None = None
+
+    # v1.0.1 §4.2's remaining produced ids. Present only on the turns that
+    # actually wrote the row -- see ``AppliedEffects.end_chunk_ids``, which
+    # omits the absent ones rather than sending nulls. The client uses none of
+    # these yet; they are here because the id exists only inside the effect
+    # transaction, so a later feature that wants one cannot recover it from the
+    # stream afterwards.
+    journal_entry_id: str | uuid.UUID | None = None
+    portfolio_item_id: str | uuid.UUID | None = None
+    review_card_id: str | uuid.UUID | None = None
+    queue_item_id: str | uuid.UUID | None = None
+
+    #: §4.2: "for client-side reconciliation on reconnect".
+    #:
+    #: Optional rather than required as §4.2 writes it, for the reason the rest
+    #: of this model is: a degraded turn emits an ``end`` chunk having written
+    #: no turn row at all, and a required field would make the failure path
+    #: unrepresentable.
+    turn_index: int | None = None
+
+
 class StreamChunk(BaseModel):
     """One unit of streamed output.
 
@@ -113,6 +180,8 @@ class StreamChunk(BaseModel):
     The last carries learner-visible copy when a call failed past its retries;
     it is a normal chunk rather than an exception so the SSE stream closes
     cleanly with the learner told something coherent (§21).
+
+    An ``end`` chunk's payload follows :class:`EndPayload`.
     """
 
     kind: Literal["text", "tool_effect", "trace", "end", "degraded"]
@@ -132,6 +201,15 @@ class StreamChunk(BaseModel):
 
     @classmethod
     def ended(cls, **payload: Any) -> StreamChunk:
+        """Build a terminal chunk, checking it against :class:`EndPayload`.
+
+        The caller's dict is what goes on the wire, not the validated model's
+        dump. Round-tripping through the model would add every unset field as
+        an explicit null and change the shape of every ``end`` chunk in the
+        product to buy nothing; validating and discarding catches the wrong
+        *type* on a field that is present, which is the mistake worth catching.
+        """
+        EndPayload.model_validate(payload)
         return cls(kind="end", payload=payload)
 
 

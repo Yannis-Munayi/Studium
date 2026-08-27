@@ -58,4 +58,12 @@ export const STREAM_ANNOUNCEMENTS = {
   streamComplete: "Response complete",
   reconnecting: "Connection lost. Reconnecting.",
   reconnected: "Reconnected.",
+  /**
+   * §6.3's submit. Assertive, like the other state changes here: the workspace
+   * has just gone read-only and the button has changed label, and a learner not
+   * looking at either needs to be told the attempt went somewhere.
+   */
+  checkingAnswer: "Checking your answer",
+  /** §9.3: the primitive that changes surface, not just content. */
+  movedToBench: "Moving to the bench. A practice problem is ready.",
 } as const;

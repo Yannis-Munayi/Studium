@@ -20,9 +20,15 @@ from __future__ import annotations
 
 import logging
 from collections.abc import AsyncIterator, Callable
+from typing import Any
 
 from studium.agents.base import AgentInput, StreamChunk
-from studium.agents.schemas import PRIMITIVE_NAMES, TutorDiagnostic, VocabularyVerdict
+from studium.agents.schemas import (
+    PRIMITIVE_NAMES,
+    PracticeProblem,
+    TutorDiagnostic,
+    VocabularyVerdict,
+)
 from studium.orchestration.handoff import AgentRegistry
 from studium.orchestration.state_machine import State
 from studium.session.context import SessionContext
@@ -141,6 +147,42 @@ async def _handle_show_worked_example(
     yield StreamChunk.ended(primitive="show_worked_example")
 
 
+def _split_problem(problem: Any) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """Split a selected problem into what the bench renders and what grades it.
+
+    §11.2 and §6.1 both hold the model answer back until the learner has
+    attempted -- the bench has no component that would draw it. That is not the
+    same as it being absent: shipping the whole ``PracticeProblem`` on the
+    ``end`` chunk puts the answer key in the browser's network log next to the
+    question, which is the answer being available to anyone who looks, which is
+    the thing the rule is about.
+
+    v1.0.1 §6.3 moves the filtering out of this function's judgement and into
+    the schema. The public half is now whatever ``PracticeProblemForClient``
+    has fields for -- so a field added to the full model is server-only by
+    default, and reaches the client only when someone adds it to the client
+    model on purpose. Previously the default ran the other way: a new field was
+    public unless it was remembered into a deny-list.
+    """
+    if problem is None:
+        return None, None
+    if not isinstance(problem, PracticeProblem):  # a Curator that returned nothing usable
+        return None, None
+
+    # hints_shown=0: a problem arrives with nothing released. §6.2 grows the
+    # ladder as the learner clicks, so the first render carries no hint at all.
+    public = problem.for_client(hints_shown=0).model_dump()
+    private = {
+        name: getattr(problem, name)
+        for name in PracticeProblem.SERVER_ONLY
+        if getattr(problem, name, None) not in (None, "", [])
+    }
+    # The unreleased ladder travels privately: the Orchestrator holds it so a
+    # later "show hint" can release the next rung without a second Curator call.
+    private["hint_ladder"] = problem.full_hint_ladder()
+    return public, private
+
+
 async def _handle_let_me_try_one(
     agents: AgentRegistry, ctx: SessionContext, utterance: str
 ) -> AsyncIterator[StreamChunk]:
@@ -154,14 +196,17 @@ async def _handle_let_me_try_one(
     )
     yield StreamChunk.text_chunk(problem.text)
 
-    structured = problem.structured
+    public, private = _split_problem(problem.structured)
     yield StreamChunk.ended(
         primitive="let_me_try_one",
         next_state=State.LAB.value,
-        # The Orchestrator holds this for the LAB turn that follows: the
-        # Evaluator needs the key points and the hint to grade against, and
-        # re-deriving them would be a second Curator call for the same problem.
-        problem=structured.model_dump() if structured else None,
+        # What the bench renders: the prompt, the difficulty, the hint.
+        problem=public,
+        # Stripped by the Orchestrator before this chunk leaves the process.
+        # It holds it for the LAB turn that follows -- the Evaluator needs the
+        # key points and the model answer to grade against, and re-deriving
+        # them would be a second Curator call for the same problem.
+        problem_private=private,
     )
 
 

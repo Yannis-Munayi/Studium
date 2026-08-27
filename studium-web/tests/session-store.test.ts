@@ -166,6 +166,117 @@ describe("useSessionStore", () => {
     expect(useSessionStore.getState().reconnectAttempts).toBe(0);
   });
 
+  describe("the lab problem (§6.3, §9.3)", () => {
+    const PROBLEM = {
+      prompt: "Reduce (\\x. x x) (\\y. y).",
+      difficulty: 2,
+      hint: "Start with the outermost redex.",
+    };
+
+    it("takes the problem off the end chunk that moves the session to LAB", () => {
+      const store = useSessionStore.getState();
+      store.open({ sessionId: SESSION, mode: "lecture" });
+      store.beginTurn("tutor");
+      store.applyChunk(
+        end({ primitive: "let_me_try_one", next_state: "LAB", problem: PROBLEM }),
+      );
+
+      const state = useSessionStore.getState();
+      expect(state.runtimeState).toBe("LAB");
+      expect(state.labProblem?.prompt).toBe(PROBLEM.prompt);
+    });
+
+    it("keeps the problem through a wrong answer that still has attempts", () => {
+      // §7: LAB --answer_submitted[incorrect, attempts remain]--> LAB. Clearing
+      // here would take the question away from a learner about to try again.
+      const store = useSessionStore.getState();
+      store.open({ sessionId: SESSION, mode: "lecture" });
+      store.beginTurn("tutor");
+      store.applyChunk(end({ next_state: "LAB", problem: PROBLEM }));
+
+      store.beginTurn("evaluator");
+      store.applyChunk(end({ verdict: "incorrect", next_state: "LAB" }));
+
+      expect(useSessionStore.getState().labProblem?.prompt).toBe(PROBLEM.prompt);
+    });
+
+    it("drops the problem when the session leaves LAB", () => {
+      const store = useSessionStore.getState();
+      store.open({ sessionId: SESSION, mode: "lecture" });
+      store.beginTurn("tutor");
+      store.applyChunk(end({ next_state: "LAB", problem: PROBLEM }));
+
+      store.beginTurn("evaluator");
+      store.applyChunk(end({ verdict: "correct", next_state: "TUTORIAL" }));
+
+      const state = useSessionStore.getState();
+      expect(state.runtimeState).toBe("TUTORIAL");
+      expect(state.labProblem).toBeNull();
+    });
+
+    it("drops the problem when reconciliation says the runtime is not in LAB", () => {
+      // The reconcile against `GET /state` is authoritative (F9). Before the
+      // runtime learned to transition out of LECTURING on this primitive (R13),
+      // this is the step that revealed the disagreement -- and it must resolve
+      // in the runtime's favour, not the chunk's.
+      const store = useSessionStore.getState();
+      store.open({ sessionId: SESSION, mode: "lecture" });
+      store.beginTurn("tutor");
+      store.applyChunk(end({ next_state: "LAB", problem: PROBLEM }));
+
+      store.setRuntimeState("LECTURING");
+
+      expect(useSessionStore.getState().labProblem).toBeNull();
+    });
+
+    it("keeps the problem when reconciliation agrees the runtime is in LAB", () => {
+      const store = useSessionStore.getState();
+      store.open({ sessionId: SESSION, mode: "lecture" });
+      store.beginTurn("tutor");
+      store.applyChunk(end({ next_state: "LAB", problem: PROBLEM }));
+
+      store.setRuntimeState("LAB");
+
+      expect(useSessionStore.getState().labProblem?.prompt).toBe(PROBLEM.prompt);
+    });
+
+    it("a problem the client cannot parse costs the bench, not the turn", () => {
+      const store = useSessionStore.getState();
+      store.open({ sessionId: SESSION, mode: "lecture" });
+      store.beginTurn("tutor");
+      store.applyChunk(text("Here is one to try."));
+      store.applyChunk(end({ next_state: "LAB", problem: { unexpected: true } }));
+
+      const state = useSessionStore.getState();
+      expect(state.turns[0]?.complete).toBe(true);
+      expect(state.turns[0]?.text).toBe("Here is one to try.");
+      expect(state.labProblem).toBeNull();
+    });
+  });
+
+  it("records the artifact id the runtime names on the end chunk", () => {
+    // SD5: the field that makes §10's citation cards resolvable.
+    const ARTIFACT = "7c9e6679-7425-40de-944b-e07fc1f90ae7";
+    const store = useSessionStore.getState();
+    store.open({ sessionId: SESSION, mode: "lecture" });
+    store.beginTurn("lecturer");
+    store.applyChunk(text("A redex is an application [P1]."));
+    store.applyChunk(end({ turn_id: SESSION, artifact_id: ARTIFACT }));
+
+    expect(useSessionStore.getState().turns[0]?.artifactId).toBe(ARTIFACT);
+  });
+
+  it("leaves the artifact id null when the turn produced no artifact", () => {
+    // A Tutor turn, or a Lecturer turn whose effect batch rolled back. The
+    // card says the source is not linked rather than spinning (§3).
+    const store = useSessionStore.getState();
+    store.open({ sessionId: SESSION, mode: "tutorial" });
+    store.beginTurn("tutor");
+    store.applyChunk(end({ turn_id: SESSION }));
+
+    expect(useSessionStore.getState().turns[0]?.artifactId).toBeNull();
+  });
+
   it("wipes everything on reset, so a second session starts clean", () => {
     const store = useSessionStore.getState();
     store.open({ sessionId: SESSION, mode: "lecture" });

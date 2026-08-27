@@ -13,6 +13,8 @@ from typing import Any
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
+    REAL,
+    CheckConstraint,
     Computed,
     ForeignKey,
     Index,
@@ -70,6 +72,18 @@ class Source(Base):
     content_sha256: Mapped[str] = sha256()
     page_count: Mapped[int | None] = mapped_column(Integer)
     token_count: Mapped[int | None] = mapped_column(Integer)
+    #: Ingestion §5 additions 2, migration 0010. Which extractor and which
+    #: normalizer produced the text currently on this source, e.g.
+    #: "pdfplumber/0.11.10" and "studium.normalize/1.0". Nullable because
+    #: sources ingested before 0010 -- the draft carry-forward's corpus -- were
+    #: processed by a pipeline that recorded neither.
+    #:
+    #: These are what make a corpus-wide re-extraction decidable. Without them
+    #: the only way to tell which sources predate an extractor change is to
+    #: re-run every source and diff, which on a real corpus means paying to
+    #: re-embed material that did not change.
+    extractor_version: Mapped[str | None] = mapped_column(Text)
+    normalizer_version: Mapped[str | None] = mapped_column(Text)
     ingested_at: Mapped[dt.datetime | None] = nullable_ts()
     status: Mapped[str] = mapped_column(
         artifact_status, nullable=False, server_default=text("'draft'")
@@ -143,6 +157,18 @@ class SourceChunk(Base):
         Computed("to_tsvector('english', text)", persisted=True),
         nullable=True,
     )
+    #: Ingestion §5 addition 3, migration 0010. The extractor's own confidence
+    #: in this chunk's text. ``1.0`` for extractors that expose no confidence
+    #: at all (pdfplumber), which is most of them -- so the default is not a
+    #: claim that the text is good, only that the extractor had nothing to say
+    #: about it. Read the column together with ``extractor_version``.
+    extraction_confidence: Mapped[float] = mapped_column(
+        REAL, nullable=False, server_default=text("1.0")
+    )
+    #: Ingestion §7.3, migration 0010. Set when the source is re-extracted
+    #: under a different extractor. The row stays so citations written against
+    #: it keep resolving; retrieval filters it out of new results.
+    superseded_at: Mapped[dt.datetime | None] = nullable_ts()
     created_at: Mapped[dt.datetime] = created_at()
 
     source: Mapped[Source] = relationship(back_populates="chunks")
@@ -161,6 +187,29 @@ class SourceChunk(Base):
             "idx_source_chunks_tsvector",
             "tsvector_text",
             postgresql_using="gin",
+        ),
+        CheckConstraint(
+            "extraction_confidence >= 0.0 AND extraction_confidence <= 1.0",
+            name="extraction_confidence_range",
+        ),
+        # Ingestion §5: supports "show me the low-confidence chunks in this
+        # source" without a full scan. Partial, because the rows worth
+        # reviewing are a small minority of a corpus and indexing the other 95%
+        # would cost write throughput on every ingest for nothing.
+        Index(
+            "idx_source_chunks_low_confidence",
+            "source_id",
+            "extraction_confidence",
+            postgresql_where=text("extraction_confidence < 0.7"),
+        ),
+        # Retrieval reads this on every search to exclude superseded chunks
+        # (§7.3). Partial on the *live* rows: they are what queries want, and
+        # after a re-extraction the superseded set can be larger than it.
+        Index(
+            "idx_source_chunks_live",
+            "source_id",
+            "chunk_index",
+            postgresql_where=text("superseded_at IS NULL"),
         ),
     )
 

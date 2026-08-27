@@ -18,6 +18,13 @@ subsystem 2 does not implement.** §18 says the frontend "consumes agent output
 through the SSE contract established in subsystem 2 §20, which is unchanged" —
 that is true of §20's *design*, and not true of the endpoint that shipped.
 
+**Status, 22 August 2026.** F3, F4 and F15 are closed. F16–F22 were added
+closing them, and they have a common shape worth reading as one thing: a
+frontend built against a contract, with no server behind it, is not verified —
+it is only *consistent*. Four of the seven are defects in code that had passing
+unit tests, and the tests were passing because the fixtures agreed with the code
+about a question neither had asked the real system.
+
 ---
 
 ## Load-bearing divergences
@@ -89,81 +96,93 @@ asserts the copy reaches the screen.
 
 ---
 
-### F3 — citations cannot be resolved, because no artifact id reaches the client
+### F3 — citations could not be resolved, because no artifact id reached the client
+
+**Closed, 22 August 2026.** Kept because the shape of the gap is the useful
+part, and because what closed it was an ordering change rather than a field.
 
 **Spec.** §10 builds the whole citation experience on retrieval §12's endpoint,
 `GET /api/artifacts/{artifact_id}/citations`. §8.2 has the marker rendered
 immediately and "the citation resolution fetched lazily on first hover".
 
-**Reality.** The endpoint exists and works. The client has no way to learn the
-`artifact_id`. A lecture segment becomes a `content_artifacts` row via a
-`record_content_artifact` ToolEffect, and effects are *returned* by the agent and
-applied by the Orchestrator **after** the call completes (agent runtime §6, and
-the reason it is done that way is retry safety). So:
+**What was wrong.** The endpoint existed and worked. The client had no way to
+learn the `artifact_id`. A lecture segment becomes a `content_artifacts` row via
+a `record_content_artifact` ToolEffect, and effects are *returned* by the agent
+and applied by the Orchestrator **after** the call completes (agent runtime §6,
+for retry safety). So the `tool_effect` chunk carried the artifact's payload and
+not its id — the row did not exist yet — and the Lecturer's `end` chunk carried
+`turn_id`, `segment_index` and `anchor`, and nothing else.
 
-- the `tool_effect` chunk carries the artifact's *payload*, not its id — the id
-  does not exist yet when the chunk is emitted; and
-- the Lecturer's `end` chunk carries `turn_id`, `segment_index` and `anchor`,
-  and no artifact id (`agents/lecturer.py`).
+**What closed it.** Not one line in `agents/lecturer.py`, as this entry
+originally guessed. The Orchestrator now **holds the `end` chunk** until the
+turn's effects have committed, then emits it carrying the id the batch produced.
+The Lecturer is unchanged. See `backend/SPEC_DEBT.md` SD5 and
+`DIVERGENCES-RUNTIME.md`.
 
-**Code.** Everything on the client side is built and tested: the marker parser,
-the range expansion, the hover card with its 300/100ms delays, keyboard
-activation, the retired-source treatment, and the full-passage modal.
-`Citation` takes an `artifactId` and `lib/api/schemas.ts` already parses
-`artifact_id` off the `end` payload, so the day the runtime sends it, hover
-cards populate with no change here.
+**What did not change here.** Everything on the client side was already built:
+the marker parser, the range expansion, the hover card and its 300/100ms delays,
+keyboard activation, the retired-source treatment, the full-passage modal. The
+`end` payload schema already parsed `artifact_id`, and the store already put it
+on the turn. The day the runtime sent it, the cards populated — which is what
+happened, with no component edit.
 
-Until then the marker still renders — §8.2 requires it visible the instant it
-arrives — and the card says the source is not linked to this segment yet. It
-does not show a spinner. A spinner that never resolves is the failure §3 rules
-out, and it is what "just leave it loading" would produce.
+**What the placeholder bought while it was open.** The marker still rendered —
+§8.2 requires it visible the instant it arrives — and the card said the source
+was not linked yet, rather than spinning. A spinner that never resolves is the
+failure §3 rules out. The Tier 3 case asserted *that copy*, so closing the gap
+broke the test on purpose; it now asserts the resolved card instead.
 
-**If followed literally.** Every hover card in the product would spin forever.
-The citation UI is a substantial share of §10 and of the product's claim to be
-grounded, and it would be inert with no error anywhere.
-
-**The fix, and where it belongs.** One line in `agents/lecturer.py`: once the
-Orchestrator has applied the segment's effects, include the resulting artifact id
-on the `end` chunk. That is subsystem 2's change to make, not this subsystem's —
-deciding it from here would be designing another subsystem's contract from
-outside it, which `backend/SPEC_DEBT.md` SD1 records as how three earlier
-provenance gaps happened. Raised as **SD5**.
-
-The Tier 3 citation case asserts *which* message the card shows, so the day the
-runtime starts sending the id, that test fails and reports that the gap closed.
+**Still true.** A resolvable id is not a resolved citation. Whether the card has
+anything in it depends on the concept being curated — `concept_sources`
+pointers, or embeddings once a vector provider is configured. An ungrounded
+artifact returns an empty list and the card says so, which is correct rather
+than broken.
 
 ---
 
-### F4 — the desk, the journal and the session summary have no endpoints
+### F4 — the desk, the journal and the session summary had no endpoints
+
+**Closed, 22 August 2026.** `backend/studium/api/reads.py` serves all five, and
+`UNAVAILABLE` is now empty.
 
 **Spec.** §6.1 (the desk), §6.4 (the journal), §6.5 (session close) and §12
 describe five surfaces' worth of reading UI over `journal_entries`,
 `session_summaries`, `concept_mastery` and `learner_subjects`.
 
-**Reality.** All four tables exist and are written to. `backend/studium/api/app.py`
-serves the session lifecycle, the interrupt channel, session state, and citation
-resolution. It serves nothing else. There is no `GET /api/journal`, no
-`GET /api/desk`, no session-summary read endpoint.
+**What was wrong.** All four tables existed and were written to; no HTTP
+exposed them. Surfaces rendered `components/shared/unavailable.tsx` rather than
+discovering the gap as a 404 — which would have said "Not found" about a
+learner's own journal, and that is a lie.
 
-**Code.** `lib/api/surfaces.ts` names every route these surfaces need, at the
-paths the client already calls, and marks them unavailable in one set. The
-client functions are written against the shapes the data layer guarantees;
-turning one on is deleting a line from `UNAVAILABLE`.
+**What the mechanism was worth.** `SURFACE_ENDPOINTS` and `UNAVAILABLE` are kept
+rather than deleted: the set is empty and the guard is a no-op, and both stay
+because §2 promises four more deferred surfaces. Turning one off again is adding
+a name to a set.
 
-Surfaces render `components/shared/unavailable.tsx` rather than discovering the
-gap as a 404 — which would say "Not found" about a learner's own journal, and
-that is a lie. The endpoint name is in a `title` attribute for whoever is
-building, not on screen for whoever is studying.
+**Four things only a real response could have shown**, all found by serving the
+endpoints and now recorded separately: F16 (the hypothesis), F17 (the event
+enum), F18 (decayed mastery) and F19 (the optimistic-update crash). The last is
+the one that matters most for how this entry used to read. It ended:
 
-**If followed literally.** Three of the five MVP surfaces would 404 and blame
-the learner for it.
+> The optimistic-update machinery it would exercise is built and unit tested …
+> but nothing has driven it against a server. **That code is unverified against
+> a real backend and should be treated as such.**
 
-**Consequence to carry forward.** §17's Tier 2 case "Journal CRUD: create, view,
-edit, resolve entries; verify optimistic updates and rollback" cannot run
-end-to-end. The optimistic-update machinery it would exercise is built and unit
-tested (`useResolveJournalEntry`, with the `cancelQueries`-then-snapshot-then-
-rollback sequence §14.1 specifies), but nothing has driven it against a server.
-**That code is unverified against a real backend and should be treated as such.**
+It was right to say so. The code was wrong, and in a way its unit tests could
+not see. See F19.
+
+**§17's Tier 2 case now runs.** "Journal CRUD: create, view, edit, resolve
+entries; verify optimistic updates and rollback" is
+`e2e/tier2.surfaces.spec.ts`.
+
+**Identity, and what it is not.** These endpoints answer for "me", and the Next
+proxy is the single place that says who that is: it resolves the learner
+server-side, strips any inbound `X-Studium-User`, and sets its own. That means
+no client code path can forget to identify itself and none can lie about it.
+It does **not** mean the API is authenticated — the backend trusts the header
+exactly as `POST /api/session` trusts a `user_id` in its body (F7). The scoping
+is real and checked (`TestScoping` in `tests/online/test_read_surface.py`); the
+authentication is still absent.
 
 ---
 
@@ -328,20 +347,191 @@ The renderer also holds back a trailing suffix that could still be growing into 
 marker (`[P1` before its `]` arrives). Without it, every citation in every lecture
 renders as literal text and then flickers into a superscript one token later.
 
-### F15 — a `let_me_try_one` problem is not yet routed to the bench
+### F15 — a `let_me_try_one` problem is routed to the bench
+
+**Closed, 22 August 2026.** The entry is kept because its diagnosis was wrong in
+an instructive way.
 
 §9.3 says the primitive moves the session to LAB and the problem renders on the
-bench. The runtime does this correctly: `_handle_let_me_try_one` yields an `end`
-chunk with `next_state: "LAB"` and the Curator's problem in `problem`.
+bench. This entry said "the runtime does this correctly" and that the missing
+piece was the classroom switching surfaces. The classroom was indeed missing —
+`Classroom` now renders `Bench` when the runtime reports LAB and a problem is in
+the store, and §7.2's "the classroom stays mounted, the content changes" is why
+it is a branch rather than a route.
 
-The `Bench` surface is built, tested and accessible, and the `end` payload is
-parsed and stored. What is not built is the classroom handing that payload to it
-and switching surfaces — the classroom currently renders the problem as streamed
-prose, which is legible and is not §6.3's two-column workspace.
+**But the runtime was not correct.** Three defects sat behind this one, none
+visible from the frontend, all found by driving the primitive against the real
+stack:
 
-This is an incomplete implementation rather than a contract problem, and it is
-called out here rather than left to be discovered: **the bench is reachable by
-route and by props, and no code path puts a real Curator problem into it.**
+- The state machine had no `PRIMITIVE_INVOKED` row outside `TUTORIAL`, so from
+  a lecture the chunk said LAB and the machine stayed put (R13).
+- Nothing fired `context_ready`, so no real session ever left `OPENING` — where
+  no primitive can move anything at all (R14).
+- The graded answer was classified as a `comment` and routed to the Tutor, so
+  even a rendered bench was never graded (R16, and F21 below).
+
+**And one defect in the payload.** `_handle_let_me_try_one` sent the whole
+`PracticeProblem` — including `model_answer` and `expected_key_points`. §11.2
+withholds the model answer until the learner has attempted, and the bench having
+no component that draws it is a weaker guarantee than the browser never
+receiving it. The runtime now splits the problem: the Orchestrator keeps the key
+for the Evaluator, the client gets the question. `lib/api/schemas.ts`'s
+`practiceProblem` has no field for the answer, so a runtime that regressed could
+not hand one to a component. Checked on the wire in both Tier 2 and Tier 3.
+
+**What the bench renders and does not invent.** `toBenchProblem` maps `prompt` →
+`statement` and `hint` → a one-element `hints` list. §6.3's `setup`,
+`constraints` and `expectedMinutes` have no source in `PracticeProblem` and are
+left undefined rather than synthesised — a fabricated "about 10 minutes" would
+be the surface making a claim about the learner's work.
+
+---
+
+## Found by serving the endpoints (22 August 2026)
+
+F16–F22 all came out of closing F3, F4 and F15. They are grouped because they
+share a cause: **every one was invisible while the surfaces had no data.** A
+schema nothing parses, a colour nothing paints, a cache updater nothing calls —
+none of them can be wrong until something exercises them.
+
+### F16 — the Tracker's hypothesis is not served to the learner
+
+Two specifications disagree and both are explicit.
+
+Data layer §11, implemented in `studium.acl.project_journal_entry`, says
+`journal_entries.hypothesis` is "a Tutor-facing prompt aid … never serialised to
+the learner" — because it can be wrong and reading it can be dispiriting.
+
+Frontend §6.4 asks for it on the entry list, and §12.1 asks for it on the detail
+view, read-only, behind a "this is the system's inference, not your words"
+framing built precisely to answer that concern.
+
+**Resolved in favour of the projection that already shipped.** Overturning a
+privacy decision from the endpoint that would benefit from overturning it is not
+this build's call. `reads.SERVE_HYPOTHESIS_TO_LEARNER` is a single constant with
+both specs quoted above it; the field stays in the response and in the schema,
+nullable, so flipping the constant is the whole reversal.
+
+**What it costs.** The surfaces render the hypothesis `if (entry.hypothesis)`,
+so they degrade to exactly §6.4's "if it exists" branch and the code that draws
+it is currently dead. Journal search excludes the hypothesis for the same
+reason — matching on text the learner cannot see produces results they cannot
+account for.
+
+### F17 — `journal_event_kind` has eight values, and the schema had six
+
+`lib/api/schemas.ts` listed `["created", "revisited", "addressed", "resolved",
+"reopened", "archived"]`. The database enum (data layer §6.7) has
+`partially_addressed` where the schema had `addressed`, plus
+`hypothesis_updated` and `learner_note_added`, which were absent.
+
+Schema mismatches are a hard failure at the boundary by design (§4, §5.3). So
+the first revised hypothesis on any entry — a thing the Confusion-Tracker does
+routinely — would have taken the whole detail view down with "the server sent a
+response that did not match its schema". Two of the three missing values are
+written by the code paths this build added.
+
+The enum is now the database's, and `journal-entry.tsx` maps each value to a
+sentence: rendering them raw put `partially_addressed` on screen for a learner
+reading their own history.
+
+### F18 — the desk renders decayed mastery, not the raw posterior
+
+`concept_mastery` carries both `p_known` (the BKT posterior after the most
+recent evidence) and its value under the forgetting curve. The Curator, the
+unlock gate and `suggest_next_unlocked` all read the decayed one — data layer
+C1 is explicit, and recomputes it at read time rather than trusting the stored
+column, because that column is only as fresh as the last decay job.
+
+§6.1 says "a small visual … showing overall subject mastery" and does not say
+which number. The desk showing the raw posterior would summarise a state no
+decision was made against: 0.9 on a concept the system had already decided to
+revisit.
+
+The endpoint returns both and recomputes the decayed value in SQL, the same
+expression `session.lifecycle._refresh_touched_decay` uses. `MasterySummary`
+renders `p_known_decayed`. Both fields are in the schema so the difference is
+visible rather than a silent choice of one.
+
+### F19 — the optimistic resolve crashed on the surface it was used from
+
+`useResolveJournalEntry` matched `queryKey: ["journal"]` and mapped over
+whatever it found. That is correct for the list queries and wrong for
+`["journal", "entry", id]`, which holds a single object — `old?.map` on an
+object throws.
+
+**It never fired while the endpoints did not exist**, and its unit tests could
+not see it: they exercised the mutation against list data only. The moment the
+endpoints answered, resolving an entry *from the detail page* — the only place
+the resolve button is — would have thrown inside `onMutate`.
+
+This is the specific thing F4 warned about ("unverified against a real backend
+and should be treated as such"), and it is worth noting the warning was correct
+and still did not prevent the bug. What would have is the Tier 2 case that could
+not run.
+
+The two caches are now patched separately, and both are rolled back separately.
+Query keys were also narrowed to `["journal", "list", filter]` so the two shapes
+cannot be matched by one pattern again.
+
+### F20 — two more status colours fail §13.1 as text
+
+F8's problem, twice more. §16.2 specifies the status colours as *signals* — a
+dot, an icon, a bar — and §13.1 requires 4.5:1 of anything carrying text.
+Measured on the light background: `--color-correct` is 4.08:1 and
+`--color-attention` is 3.60:1. Both are used as small text — §6.4's status pill
+and §11.1's verdict lead ("Nice." / "Close.") are words. `--color-concern`
+measures 5.80:1 and needs no variant, which is why there isn't one.
+
+`--color-correct-strong` and `--color-attention-strong` are the same hue and
+saturation, darkened until they clear 4.5:1 against `--color-surface` — the
+harder of the two grounds these land on. Dark mode measures 8.9:1 and 8.1:1 on
+the plain tokens, so the strong variants alias them there.
+
+**Why it took until now.** The Tier 2 contrast pass has been running since the
+frontend shipped and passed every time, because the desk and the journal had no
+rows and therefore no pills. A colour nothing paints cannot fail a contrast
+check. Found the first time those surfaces had data in them.
+
+### F21 — the classroom declares its intent where the words do not carry it
+
+§8 classifies every turn with a model call over the learner's utterance. That is
+right for typed prose and wrong for a control, and the frontend was relying on
+it for both.
+
+- **The bench's Submit.** "It reduces to the identity." classifies as a
+  `comment`, which in LAB routes to the Tutor and is never graded. The words are
+  not the signal; the button is.
+- **Opening and continuing a lecture.** Both sent an empty utterance, which
+  classifies as `comment`. The runtime routes to the Lecturer on `LECTURING`
+  *and* `intent: "next"`; anything else falls through to the Tutor's generic
+  answer. **A lecture session therefore never called the Lecturer** — no
+  segment, no artifact, and nothing for §10's citations to resolve against. F3
+  was closed and would still have had nothing to show.
+
+The runtime already honoured `LearnerInput.intent` ahead of the classifier;
+`TurnRequest` had no field for it (R16). It does now, and the classroom sends
+`intent: "next"` for the three lecture-advancing calls and `intent: "answer"`
+from the bench. This is the same trade §9.2's primitive buttons already make.
+
+### F22 — the session start navigates with the mode the runtime returned
+
+§20 allows one active session per learner, so `POST /api/session` returns the
+existing session when there is one — whatever mode *it* was started in. The
+start form navigated with the mode it had asked for.
+
+A learner with an unfinished tutorial who asked for a lecture got a classroom
+that believed it was lecturing while the runtime ran a tutorial. Every turn then
+disagreed about which agent should serve it, and nothing reported anything: both
+halves were behaving correctly on their own reading.
+
+The response now carries `mode` and `resumed` (R15) and the form navigates with
+what came back. The field is optional in the schema so a backend that predates
+it does not fail the parse; the caller falls back to what it asked for.
+
+**Not addressed:** whether silently resuming is right at all, as against
+refusing with a 409 and offering to close the old session. That is a product
+question and it is raised in `backend/SPEC_DEBT.md`, not decided here.
 
 ---
 

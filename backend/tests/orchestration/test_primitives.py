@@ -16,6 +16,7 @@ from studium.agents.base import AgentOutput
 from studium.agents.schemas import (
     PRIMITIVE_NAMES,
     PracticeProblem,
+    PracticeProblemForClient,
     TutorDiagnostic,
     VocabularyVerdict,
 )
@@ -148,7 +149,56 @@ class TestLetMeTryOne:
         assert end.payload["next_state"] == State.LAB.value
         # The problem is carried forward so the LAB turn can grade against it
         # without paying for a second Curator call.
-        assert end.payload["problem"]["expected_key_points"] == ["substitute", "reduce"]
+        assert end.payload["problem_private"]["expected_key_points"] == [
+            "substitute",
+            "reduce",
+        ]
+
+    async def test_the_answer_key_is_split_off_from_what_the_bench_renders(self):
+        """§11.2 withholds the model answer until the learner has attempted.
+
+        The bench having no component that draws it is not the same as it being
+        absent: shipping the whole ``PracticeProblem`` on the `end` chunk would
+        put the answer key in the browser next to the question. The split is
+        made here; the Orchestrator strips ``problem_private`` before the chunk
+        leaves the process.
+        """
+        problem = PracticeProblem(
+            prompt="Reduce (\\x. x x) (\\y. y) to normal form.",
+            model_answer="\\y. y",
+            expected_key_points=["substitute", "reduce"],
+            hint="Start with the outermost redex.",
+        )
+        agents = FakeRegistry()
+        agents.curator = FakeAgent(
+            "curator",
+            outputs={"select_practice": AgentOutput(text=problem.prompt, structured=problem)},
+        )
+
+        end = (await _collect("let_me_try_one", agents))[-1]
+
+        public = end.payload["problem"]
+        assert public["prompt"] == problem.prompt
+        assert "model_answer" not in public
+        assert "expected_key_points" not in public
+
+        # v1.0.1 §6.2: the ladder starts empty and grows as the learner clicks.
+        # The first hint is not secret, it is not yet due -- so it is absent
+        # here and held privately for release.
+        assert public["hint_ladder"] == []
+
+        # §6.3's real guarantee: the wire shape *is* the client model's shape,
+        # so a field added to PracticeProblem is server-only by default rather
+        # than public-unless-remembered-into-a-deny-list.
+        assert set(public) == set(PracticeProblemForClient.model_fields)
+
+        private = end.payload["problem_private"]
+        assert private["model_answer"] == "\\y. y"
+
+    async def test_a_curator_that_returned_nothing_structured_carries_no_problem(self):
+        chunks = await _collect("let_me_try_one", FakeRegistry())
+        assert chunks[-1].payload["problem"] is None
+        assert chunks[-1].payload["problem_private"] is None
 
 
 class TestShowWorkedExample:
