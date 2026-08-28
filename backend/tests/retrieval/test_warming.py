@@ -187,9 +187,14 @@ class TestStatus:
 
 
 class TestAppWiring:
-    def test_warming_is_off_unless_explicitly_enabled(self, monkeypatch):
+    def test_warming_is_off_unless_explicitly_enabled(self, healthy_database, monkeypatch):
         """A test run or a developer poking one endpoint should not start
-        billing a reranker on a timer."""
+        billing a reranker on a timer.
+
+        ``healthy_database`` stubs /health's Postgres probe: the claim under
+        test is about the warmer, and reading it off this endpoint should not
+        drag a database into the offline tier.
+        """
         from fastapi.testclient import TestClient
 
         from studium.api.app import WARM_CACHE_ENV, app
