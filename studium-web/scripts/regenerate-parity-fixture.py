@@ -20,14 +20,51 @@ and the port is held to it forever.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import pathlib
 import sys
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO / "backend"))
+STREAMING = REPO / "backend" / "studium" / "orchestration" / "streaming.py"
 
-from studium.orchestration.streaming import find_boundary  # noqa: E402
+
+def _load_find_boundary():
+    """Import ``streaming.py`` without importing its package.
+
+    `from studium.orchestration.streaming import ...` runs the package's
+    ``__init__``, which imports effects, handoff, primitives and the state
+    machine -- and all four now reach SQLAlchemy. That made this script, and
+    the CI step that runs it, need the backend's full dependency set to call
+    one pure function over a list of strings.
+
+    ``streaming.py`` itself imports only the standard library and pydantic and
+    has no relative imports, so loading it by path is faithful to what the
+    runtime executes while keeping this a two-dependency script. It also stops
+    the next import added to ``__init__`` from breaking the frontend workflow.
+    """
+    spec = importlib.util.spec_from_file_location("studium_streaming_parity", STREAMING)
+    if spec is None or spec.loader is None:  # pragma: no cover -- path is checked below
+        raise ImportError(f"could not load {STREAMING}")
+    module = importlib.util.module_from_spec(spec)
+    # Registered before exec_module: streaming.py defines dataclasses, and
+    # @dataclass resolves cls.__module__ through sys.modules while the class
+    # body is being processed. Without this the module executes far enough to
+    # look fine and then dies inside dataclasses with an AttributeError on
+    # NoneType.
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module.find_boundary
+
+
+if not STREAMING.is_file():
+    raise SystemExit(
+        f"{STREAMING} is missing. The parity fixture is generated from the "
+        "runtime's own code; regenerating it against a moved or renamed module "
+        "would silently pin the port to nothing."
+    )
+
+find_boundary = _load_find_boundary()
 
 FIXTURE = pathlib.Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "sentence-boundary-parity.json"
 
