@@ -178,14 +178,22 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.func.now(),
         ),
+        # Bare names, for the same reason the downgrade below drops bare ones:
+        # env.py applies `ck_%(table_name)s_%(constraint_name)s` on the way in
+        # too. Passing the already-prefixed name produced
+        # `ck_ingestion_review_queue_ck_ingestion_review_queue_has_target`, and
+        # the severity one exceeded Postgres' 63-character identifier limit and
+        # was truncated to `..._ck_ingestion_review_queue_sev_f2f9`. Both
+        # disagreed with IngestionReviewQueueItem.__table_args__, which spells
+        # these `has_target` and `severity_range`.
         sa.CheckConstraint(
             "source_id IS NOT NULL OR source_chunk_id IS NOT NULL "
             "OR subject_id IS NOT NULL OR concept_id IS NOT NULL",
-            name="ck_ingestion_review_queue_has_target",
+            name="has_target",
         ),
         sa.CheckConstraint(
             "severity BETWEEN 1 AND 3",
-            name="ck_ingestion_review_queue_severity_range",
+            name="severity_range",
         ),
     )
 
