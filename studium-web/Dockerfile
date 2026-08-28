@@ -47,6 +47,12 @@ WORKDIR /app
 # a code-execution bug into a persistent one.
 USER node
 
+# `public/` is currently empty and is kept in git by a .gitkeep. Next's
+# standalone output does not carry it -- serving static assets means copying it
+# here -- and COPY fails the build outright when the source path is absent, so
+# deleting the directory for looking empty breaks the image. Keeping the line
+# rather than dropping it because the failure it prevents is worse: the first
+# favicon anyone adds would 404 in production with the build still green.
 COPY --from=builder --chown=node:node /app/public ./public
 COPY --from=builder --chown=node:node /app/.next/standalone ./
 COPY --from=builder --chown=node:node /app/.next/static ./.next/static
