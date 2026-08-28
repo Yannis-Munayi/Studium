@@ -280,7 +280,13 @@ def _secrets_render(args: argparse.Namespace) -> int:
 
     rendered = secrets.render_env_example()
     if not args.write:
-        print(rendered)
+        # `end=""` because render_env_example() already ends in exactly one
+        # newline. A bare print() appends a second one, which makes stdout
+        # differ from what --write puts on disk by a trailing blank line --
+        # and §16's Tier 1 check diffs .env.example against this stdout. That
+        # check could never pass, no matter how recently the file was
+        # rendered, and `render --write` produced no diff to explain it.
+        print(rendered, end="")
         return 0
     ENV_EXAMPLE.write_text(rendered, encoding="utf-8", newline="\n")
     print(f"wrote {ENV_EXAMPLE}")

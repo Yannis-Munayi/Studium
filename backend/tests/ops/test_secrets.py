@@ -12,7 +12,10 @@ first twenty minutes.
 
 from __future__ import annotations
 
+import os
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -130,8 +133,9 @@ def test_placeholders_are_not_credentials(variable: secrets.Variable) -> None:
 def test_env_example_matches_the_registry() -> None:
     """§16 Tier 1. The file is generated; a hand-edit is a drift.
 
-    The same check runs in CI. Here so it fails during the edit rather than
-    after the push.
+    This checks the *function*. CI diffs the **CLI's stdout** against the same
+    file, which is a strictly stronger claim -- see the test below, which is
+    the one that would have caught the two differing by a trailing newline.
     """
     assert ENV_EXAMPLE.is_file(), (
         "backend/.env.example is missing. §6.2 requires it committed. "
@@ -141,6 +145,36 @@ def test_env_example_matches_the_registry() -> None:
     on_disk = ENV_EXAMPLE.read_text(encoding="utf-8")
     assert on_disk == rendered, (
         ".env.example is stale. Run: studium ops secrets render --write"
+    )
+
+
+def test_the_cli_prints_exactly_what_is_on_disk() -> None:
+    """What §16's Tier 1 step actually runs: `render` piped through diff.
+
+    The test above compares ``render_env_example()`` to the file and so cannot
+    see the gap this closes: `print(rendered)` appended a second newline, and
+    the CI step diffed *that* against the file. The step therefore failed on a
+    file that was perfectly current, and `render --write` -- the fix its own
+    error message recommends -- produced no diff to explain it. A generator
+    whose two output paths disagree is a check that can never pass.
+
+    Line endings are normalised because Python's text-mode stdout writes CRLF
+    on Windows while CI runs on Linux; the trailing-newline count, which is
+    what broke, survives that normalisation.
+    """
+    result = subprocess.run(
+        [sys.executable, "-m", "studium.ops.cli", "ops", "secrets", "render"],
+        cwd=BACKEND,
+        capture_output=True,
+        env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+        check=True,
+    )
+    stdout = result.stdout.replace(b"\r\n", b"\n")
+    on_disk = ENV_EXAMPLE.read_bytes().replace(b"\r\n", b"\n")
+    assert stdout == on_disk, (
+        "`studium ops secrets render` does not print byte-for-byte what "
+        "`--write` puts in .env.example, so §16's Tier 1 diff cannot pass "
+        "however recently the file was rendered."
     )
 
 
