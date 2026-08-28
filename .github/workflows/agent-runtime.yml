@@ -53,9 +53,18 @@ env:
     tests/agents tests/llm tests/orchestration tests/session tests/api
     tests/online tests/fixtures/runtime.py
 
+  # The two files under tests/online this subsystem owns, named individually
+  # for the same reason every other workflow names its own: `tests/online` is a
+  # shared directory holding each subsystem's Tier 2 suite, so pointing at the
+  # whole of it ran evaluation's, ingestion's, retrieval's and infrastructure's
+  # database tests inside this job. That is the "one green check spanning
+  # several subsystems" the header argues against -- and it went red here for a
+  # missing pynacl and pyyaml, which are the evaluation extra's dependencies
+  # and have nothing to do with the agent runtime. The evaluation workflow
+  # already runs test_evaluation_db.py with the extra installed.
   TEST_PATHS: >-
     tests/agents tests/llm tests/orchestration tests/session tests/api
-    tests/online
+    tests/online/test_read_surface.py tests/online/test_session_e2e.py
 
 jobs:
   offline:
