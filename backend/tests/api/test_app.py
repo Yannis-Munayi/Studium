@@ -48,7 +48,11 @@ def _install(session_id: uuid.UUID, state: State = State.LECTURING) -> Orchestra
 
 
 class TestHealth:
-    def test_reports_the_subsystem(self, client):
+    def test_reports_the_subsystem(self, healthy_database, client):
+        # `healthy_database` stubs the one probe that needs Postgres. Without
+        # it this test is a database test wearing an offline test's clothes:
+        # it passes on a developer's machine with `make db-up` and fails in
+        # Tier 1, where the 503 body has no "status" key at all.
         body = client.get("/health").json()
         assert body["status"] == "ok"
         assert body["subsystem"] == "agent-runtime"

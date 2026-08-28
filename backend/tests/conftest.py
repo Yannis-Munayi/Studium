@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterator
+from typing import Any
 
 import pytest
 from sqlalchemy import create_engine
@@ -35,6 +36,32 @@ def pytest_configure(config: pytest.Config) -> None:
 
 def _test_url() -> str:
     return os.environ.get(TEST_DB_ENV, DEFAULT_TEST_URL)
+
+
+@pytest.fixture
+def healthy_database(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Let ``GET /health`` answer in the offline tier.
+
+    ``/health`` raises 503 when Postgres is unreachable, so that Fly stops
+    routing to an instance that genuinely cannot serve. A consequence worth
+    naming: the 503 body is ``{"detail": {...}}`` rather than the report
+    itself, so an offline test reading ``body["status"]`` gets a ``KeyError``
+    and not a legible assertion failure.
+
+    Two Tier 1 tests took that dependency without meaning to -- one asserts
+    which subsystem answers, the other that cache warming stays off. Neither
+    is about the database; both only need the endpoint to respond. Stubbing
+    the single probe keeps them where the files holding them say they are
+    (``tests/api/test_app.py`` opens "the parts of that surface that do not
+    need a database", and ``test_warming.py`` with "Tier 1"), instead of
+    moving two database-free assertions behind a Postgres service.
+    """
+    from studium.api import app as app_module
+
+    async def reachable() -> dict[str, Any]:
+        return {"reachable": True, "server_version": "stubbed (offline tier)"}
+
+    monkeypatch.setattr(app_module, "_database_health", reachable)
 
 
 @pytest.fixture(scope="session")
