@@ -451,6 +451,26 @@ jobs:
       - name: Tier 2
         run: python -m pytest tests/ops tests/online/test_ops_db.py -q -m "postgres and not anthropic"
 
+      - name: Seed, so verify-restore is asked a question it can answer
+        # `verify-restore` answers §9.2's "is this restored database one the
+        # backend could serve from?", and its whole job is telling "empty
+        # because new" from "empty because the restore dropped it". Against a
+        # database that has only had `alembic upgrade head` run, subjects and
+        # concepts are empty and it correctly reports the restore unusable --
+        # so the step below was failing on a true answer to the wrong question.
+        #
+        # Seeding rather than teaching the command to tolerate empty tables: a
+        # --allow-empty flag that CI always passes would retire the check that
+        # catches a restore which silently lost every subject.
+        #
+        # **This step must stay after Tier 2, not before it.**
+        # test_verify_restore_reports_an_empty_curriculum_as_a_failure asserts
+        # the failure path this step trips over, and it `pytest.skip`s with
+        # "this database already has a curriculum" once rows exist. Seeding
+        # first would take that assertion out of the run without turning
+        # anything red. seed.py is idempotent, so re-running is safe.
+        run: python scripts/seed.py
+
       - name: The ops commands run against a real database
         # Exercising the CLI itself rather than only the functions under it.
         # Exit codes are this subsystem's interface (§10.3's "Failure alerts"
