@@ -150,6 +150,92 @@ class TestEffectApplication:
         with pytest.raises(effects_module.EffectApplicationError):
             await effects_module.apply_effects([good, bad])
 
+    async def test_a_batch_carrying_a_portfolio_item_commits_whole(self, seeded):
+        """E9 the other way round: the rollback rule above, but proving the
+        batch no longer trips it.
+
+        `_record_portfolio_item` never built the `NOT NULL` signature manifest,
+        so it raised at insert and the rule under test above did the rest --
+        the turn lost its mastery evidence and its journal update as well. The
+        handler-level tests in ``test_evaluation_db.py`` call the handler
+        directly and so cannot see that consequence; it needs a mixed batch.
+        See DIVERGENCES-EVALUATION (E9).
+        """
+        db, fixture = seeded["db"], seeded["fixture"]
+        session_id = seeded["session_id"]
+
+        applied = await effects_module.apply_effects(
+            [
+                ToolEffect(
+                    kind="record_mastery_evidence",
+                    payload={
+                        "learner_subject_id": str(fixture.enrollment.id),
+                        "concept_id": str(fixture.concept_id("beta-reduction")),
+                        "session_id": str(session_id),
+                        "kind": "practice_correct",
+                        "correct": True,
+                        "evidence": {"verdict": "correct"},
+                    },
+                ),
+                ToolEffect(
+                    kind="update_journal",
+                    payload={
+                        "action": "create_entry",
+                        "user_id": str(fixture.user.id),
+                        "learner_subject_id": str(fixture.enrollment.id),
+                        "session_id": str(session_id),
+                        "summary": "Confuses beta-reduction with substitution.",
+                        "hypothesis": "Applies the rule without renaming.",
+                    },
+                ),
+                ToolEffect(
+                    kind="record_portfolio_item",
+                    payload={
+                        "user_id": str(fixture.user.id),
+                        "learner_subject_id": str(fixture.enrollment.id),
+                        "session_id": str(session_id),
+                        "body": "A proof the learner wrote.",
+                        "kind": "proof",
+                        "title": "Beta-reduction is confluent",
+                    },
+                ),
+            ]
+        )
+
+        assert set(applied.kinds) == {
+            "record_mastery_evidence",
+            "update_journal",
+            "record_portfolio_item",
+        }
+
+        mastery = db.execute(
+            sql(
+                """
+                SELECT count(*) FROM mastery_events me
+                  JOIN concept_mastery cm ON cm.id = me.concept_mastery_id
+                 WHERE cm.learner_subject_id = :lsid
+                """
+            ),
+            {"lsid": fixture.enrollment.id},
+        ).scalar_one()
+        journal = db.execute(
+            sql("SELECT count(*) FROM journal_entries WHERE learner_subject_id = :lsid"),
+            {"lsid": fixture.enrollment.id},
+        ).scalar_one()
+        signature = db.execute(
+            sql(
+                "SELECT signature FROM portfolio_items WHERE learner_subject_id = :lsid"
+            ),
+            {"lsid": fixture.enrollment.id},
+        ).scalar_one()
+
+        # The two collateral losses are asserted by name: a bare "the item is
+        # there" would still pass if the batch had been rolled back and only
+        # the portfolio write retried.
+        assert mastery == 1, "mastery evidence was rolled back with the batch"
+        assert journal == 1, "journal update was rolled back with the batch"
+        assert signature is not None
+
     async def test_a_persisted_artifact_reports_its_id_and_links_its_turn(
         self, seeded
     ):
