@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m pytest tests/eval/test_summative.py tests/orchestration/test_state_machine.py -q)",
+      "Bash(python -m pytest tests/online/test_evaluation_db.py::TestPortfolioEffectHandler -q)",
+      "Bash(docker info *)",
+      "Bash(python -c ' *)",
+      "Bash(cd \"c:/Users/jtmsb/OneDrive/Desktop/Coding/School/Uni/2026 Summer Internship/backend\" && grep -rn \"signature\" backend/../studium/db/*.py 2>/dev/null | head; echo \"=== find PortfolioItem model ===\"; grep -rn \"class PortfolioItem\" --include=*.py . | head)",
+      "Read(//c/Users/jtmsb/OneDrive/Desktop/Coding/School/Uni/2026 Summer Internship/backend/studium/db/**)",
+      "PowerShell($p = Get-Command pandoc -ErrorAction SilentlyContinue; if \\($p\\) { \"pandoc: $\\($p.Source\\)\"; pandoc --version | Select-Object -First 1 } else { \"pandoc NOT installed\" })"
+    ]
+  }
+}
