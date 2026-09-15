@@ -253,6 +253,104 @@ Found the first time the erasure suite ran against Postgres.
 
 ---
 
+### V15 — credential retention detaches the enrollment, and the amendment does not say so
+
+**Spec:** amendment v1.2.1 §3.1 requires credentials to survive learner
+erasure, and offers two implementations: nulling the owner column (Option A) or
+a reserved anonymised-learner id (Option B). It recommends B "because
+`learner_id` stays NOT NULL", and calls Option A a weakening of the schema.
+
+**Consequence:** Option B alone does not work here, and the reason is a column
+the amendment does not mention. `portfolio_items` hangs off `users` *and* off
+`learner_subjects`, through the composite key `fk_portfolio_items_enrollment
+(learner_subject_id, user_id) ON DELETE CASCADE`. §10 step 4 deletes the
+enrollment. Reassigning `user_id` alone leaves the row attached to a
+`learner_subjects` row that is about to be deleted, and the cascade takes the
+credential with it — the exact loss §3.1 exists to prevent, with the
+recommended fix applied.
+
+The amendment also names the column `learner_id`. It is `user_id` here, and has
+been since 0001.
+
+**Built:** Option B for the owner, plus `learner_subject_id` made nullable and
+nulled on the same UPDATE. The composite key is MATCH SIMPLE, so a row with a
+NULL in it needs no referent and the foreign key does not change; it still
+cascades every item erasure has not detached first. `user_id` does stay NOT
+NULL, so the amendment's stated reason for preferring B holds.
+
+So one column *is* weakened, and it is not the one the amendment weighed. That
+is worth ratifying explicitly rather than leaving as an implementation detail:
+the enrollment is learner-owned data §10 purges, and a credential that outlives
+its learner cannot keep pointing at it under any implementation. Option A had
+the same requirement and the amendment did not notice.
+
+---
+
+### V16 — `is_credential` is a checked denormalisation, not a new fact
+
+**Spec:** amendment v1.2.1 §3.1 adds `is_credential BOOLEAN`, set from the
+item's type, and asks for it to be set to TRUE "where `item_type IN
+('assessment_pass', 'signed_credential')`".
+
+**Consequence:** there is no `item_type` and no `signed_credential`. The column
+is `kind`, and evaluation §12.1's two credential kinds — added to
+`portfolio_item_kind` by migration 0011 — are `assessment_pass` and
+`subject_completion`. `credentials.verify_item` already filters on exactly
+those. So the flag the amendment asks for carries no information the row did
+not already have, and a flag that can disagree with the enum is worse than no
+flag: it decides whether a row survives an irreversible deletion.
+
+**Built:** the column, with `CHECK (is_credential = (kind::text IN (...)))`.
+The redundancy is deliberate and the CHECK is what makes it safe — erasure gets
+a predicate that cannot be misread, and the denormalisation cannot drift.
+Adding a third credential kind now requires a migration that updates both,
+which is the right amount of friction.
+
+The predicate compares `kind::text` rather than enum literals. `ALTER TYPE ...
+ADD VALUE` cannot be followed by a use of the new value in the same
+transaction, 0011 adds both values, and `env.py` wraps `upgrade head` in one —
+so a fresh database migrating from base runs 0011 and 0013 together and
+Postgres refuses. Applying 0013 to an already-migrated database succeeds
+either way, which is why only `test_full_migration_sequence` catches it.
+
+---
+
+### V17 — the erasure-purge audit row is a `retention_actions` row of the shape that table has
+
+**Spec:** amendment v1.2.1 §3.2 asks `purge_expired_soft_deletes` to write a
+`retention_actions` row per completed erasure, and gives the insert as
+`policy_name=`, `rows_affected=`, `metadata=`, `executed_at=`.
+
+**Consequence:** none of those four columns exist. Infrastructure §12.2 wrote
+its DDL out in full and migration 0012 reproduced it verbatim: the table is
+`(id, ran_at, table_name, rows_deleted, duration_ms, metadata)`. The nightly
+worker already writes to it and carries its own policy identity in `metadata`.
+
+**Built:** `table_name='users'`, `rows_deleted=1`, and
+`metadata->>'policy_name' = 'erasure_purge'` — the same convention
+`ops.retention._record` uses, so one query reads both kinds of row.
+
+Two departures from §3.2 beyond the column names, both deliberate:
+
+- **One row per account, not per pass.** The question §3.2 exists for is asked
+  about a person and a date; a single row saying "2" answers it for neither of
+  them. A pass that purges nothing writes nothing, unlike the nightly worker's
+  per-policy zeros — there the zero is the evidence the worker ran, and here
+  the worker's own stage result is that evidence, so a zero row would assert a
+  disposal that did not happen.
+- **Written in the same transaction as the delete.** `ops.retention._record`
+  deliberately swallows its own failures, because losing one line of the trail
+  beats losing ten committed deletes and the nine policies still to run. The
+  trade goes the other way when the deletion is the one with a regulator
+  attached.
+
+`metadata.user_id_sha256` is a hash, per §3.2. The plain id does survive in
+`audit_log`'s `erase_user` row, which §10 keeps deliberately as the
+accountability trail; `metadata.audit_log_ref` is the link to it, resolved
+before the `users` row goes and its `ON DELETE SET NULL` erases it.
+
+---
+
 ## Found on first execution against Postgres
 
 The online tier was written before any database existed to run it against.

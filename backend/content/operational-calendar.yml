@@ -1,0 +1,125 @@
+# The operational calendar (SPEC_DEBT SD10).
+#
+# Nine recurring obligations, one per entry. Read and written by
+# `studium ops calendar`; validated by `studium ops calendar --verify`, which
+# also checks that every `runbook` still resolves to a file.
+#
+# Why a file in the repository rather than a reminder service: it survives the
+# operator, it is diffable, and `--complete` changes exactly two lines, so
+# `git log -p content/operational-calendar.yml` is the record of who said the
+# work was done and when. See `studium/ops/calendar.py` for the reasoning in
+# full.
+#
+# Editing by hand is fine and expected -- for a date change, a new runbook, a
+# handover of `owner`. Use `--complete` for completions so `next_due` advances
+# by the cadence rather than by whatever the editor guessed.
+#
+# `next_due` is null exactly for the event-triggered cadences: there is no date
+# at which "classify a source you have not added yet" becomes late.
+
+obligations:
+  # --- infrastructure §11, §6.3 -------------------------------------------
+  - name: key_rotation
+    description: "Rotate ANTHROPIC_API_KEY and VOYAGE_API_KEY (infrastructure §6.3)"
+    cadence: quarterly
+    next_due: 2026-12-01
+    owner: yannis
+    runbook: docs/ops/secrets.md
+    last_completed: null
+
+  - name: secret_rotation
+    description: >-
+      Rotate the remaining application secrets and re-run `ops secrets check`
+      against production (infrastructure §6.3)
+    cadence: quarterly
+    next_due: 2026-12-01
+    owner: yannis
+    runbook: docs/ops/secrets.md
+    last_completed: null
+
+  - name: backup_drill
+    description: >-
+      Restore the newest snapshot into a scratch cluster, verify it serves, and
+      write the drill up in the log (infrastructure §9.3)
+    cadence: quarterly
+    # Deliberately weeks rather than a quarter out. §9.3's whole argument is
+    # that a backup nobody has restored is unverified, and the first drill is
+    # the one most likely to find something.
+    next_due: 2026-09-18
+    owner: dev
+    runbook: docs/ops/drill-log.md
+    last_completed: null
+
+  - name: signing_key_rotation
+    description: >-
+      Mint, publish and cut over to a new Ed25519 issuer key; destroy the
+      retired private key 90 days later (infrastructure §11.2)
+    cadence: annually
+    # One year from the first production key. Move this to a year after the
+    # real activation date once `ops publish-signing-key` has run against
+    # production -- `ops keys list` reports the authoritative date.
+    next_due: 2027-09-01
+    owner: dev
+    runbook: docs/ops/signing-keys.md
+    last_completed: null
+
+  # --- data layer §12.4 ---------------------------------------------------
+  - name: migration_downgrade_signoff
+    description: >-
+      Before any `alembic downgrade` against production, read the CHANGELOG
+      entry for the migration and record who accepted the data loss it
+      describes (data layer §12.4)
+    # Event-triggered, and the event is the downgrade. The work order listed
+    # this as `on_source_add`, which is the trigger for the entry above it --
+    # a sign-off on a schema downgrade has nothing to do with adding a source,
+    # and an obligation nothing can trigger is one nobody will ever perform.
+    cadence: on_migration_downgrade
+    next_due: null
+    owner: dev
+    runbook: docs/ops/deploy.md
+    last_completed: null
+
+  # --- ingestion §11.2, §11.5 ---------------------------------------------
+  - name: license_review
+    description: >-
+      Classify every newly added source out of `permission_granted` into a
+      specific license, with the permission terms recorded verbatim
+      (ingestion §11.5)
+    cadence: on_source_add
+    next_due: null
+    owner: yannis
+    runbook: docs/ops/content-review.md
+    last_completed: null
+
+  - name: content_review_queue_triage
+    description: >-
+      Work the `ingestion_review_queue` down: resolve, dismiss or escalate
+      every pending item (ingestion §11.2, §12.3)
+    cadence: weekly
+    next_due: 2026-09-11
+    owner: yannis
+    runbook: docs/ops/content-review.md
+    last_completed: null
+
+  # --- evaluation §13.2 ---------------------------------------------------
+  - name: evaluation_regression_audit
+    description: >-
+      Run the golden-dataset regression gate and compare against the last
+      recorded run (evaluation §13.2)
+    cadence: weekly
+    next_due: 2026-09-11
+    owner: dev
+    runbook: docs/ops/evaluation-regression.md
+    last_completed: null
+
+  # --- amendment v1.2.1 §3.1 ----------------------------------------------
+  - name: portfolio_credential_audit
+    description: >-
+      Check the credentials retained through erasure still verify, and that
+      nothing but credentials is held under the anonymised-learner account
+      (amendment v1.2.1 §3.1)
+    cadence: monthly
+    next_due: 2026-10-01
+    owner: yannis
+    runbook: docs/ops/retention.md
+    last_completed: null

@@ -33,6 +33,7 @@ from studium.agents.base import ToolEffect
 from studium.asyncdb import run_db
 from studium.mastery import DEFAULT_BKT, apply_evidence
 from studium.models import (
+    CREDENTIAL_KINDS,
     ConceptMastery,
     ContentArtifact,
     ContentCitation,
@@ -461,13 +462,21 @@ def _record_portfolio_item(
         log.warning("portfolio item written unsigned: %s", exc)
         identity = None
 
+    kind = payload.get("kind") or "prose"
     item = PortfolioItem(
         user_id=user_id,
         learner_subject_id=learner_subject_id,
         chain_index=next_index,
         concept_id=_maybe_uuid(payload.get("concept_id")),
         session_id=session_id,
-        kind=payload.get("kind") or "prose",
+        kind=kind,
+        # Amendment v1.2.1 §3.1: what erasure reads to decide whether this row
+        # outlives the learner. Derived from ``kind`` rather than accepted from
+        # the payload -- an agent that could set it would be an agent that
+        # could exempt a learner's essay from their own erasure request. The
+        # CHECK constraint from migration 0013 rejects the insert if this
+        # disagrees with ``kind``.
+        is_credential=kind in CREDENTIAL_KINDS,
         title=payload.get("title") or "",
         body=body,
         language=payload.get("language"),

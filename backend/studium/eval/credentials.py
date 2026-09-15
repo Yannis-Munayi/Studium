@@ -50,6 +50,8 @@ from typing import Any
 from sqlalchemy import text as sql
 from sqlalchemy.orm import Session
 
+from studium.models.portfolio import CREDENTIAL_KINDS as _MODEL_CREDENTIAL_KINDS
+
 #: §12.2. The issuer name that goes into every credential and is checked on
 #: verification.
 DEFAULT_ISSUER = "studium.app"
@@ -62,7 +64,11 @@ SIGNING_KEY_ID_ENV = "STUDIUM_SIGNING_KEY_ID"
 #: §12.1's two credential kinds. Separated from work-item kinds throughout: a
 #: credential is issued only by the summative flow (§14.1) and is the only
 #: thing the public verify endpoint will serve.
-CREDENTIAL_KINDS = frozenset({"assessment_pass", "subject_completion"})
+#: Re-exported from the model rather than restated. Migration 0013 puts a CHECK
+#: constraint on ``portfolio_items.is_credential`` written against that same
+#: tuple, so a second definition here would be a second answer to a question
+#: the schema now enforces one answer to.
+CREDENTIAL_KINDS = frozenset(_MODEL_CREDENTIAL_KINDS)
 
 
 class SigningKeyUnavailable(RuntimeError):
@@ -480,6 +486,11 @@ def issue_credential(
     """
     identity = identity or load_identity()
 
+    # ``is_credential`` is written as a literal TRUE below rather than derived,
+    # and this is what makes that safe: build_credential refuses any kind
+    # outside CREDENTIAL_KINDS, so every row this function reaches the INSERT
+    # for is one. Migration 0013's CHECK constraint is the backstop if that
+    # ever stops being true.
     payload = build_credential(
         learner_id=user_id,
         subject=subject_slug,
@@ -532,11 +543,11 @@ def issue_credential(
             """
             INSERT INTO portfolio_items
                 (user_id, learner_subject_id, chain_index, concept_id, session_id,
-                 kind, title, body, content_sha256, signature)
+                 kind, title, body, content_sha256, signature, is_credential)
             VALUES
                 (:user_id, :lsid, :chain_index, :concept_id, :session_id,
                  CAST(:kind AS portfolio_item_kind), :title, :body, :digest,
-                 CAST(:signature AS jsonb))
+                 CAST(:signature AS jsonb), TRUE)
             RETURNING id
             """
         ),

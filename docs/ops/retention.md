@@ -124,3 +124,62 @@ intact: recovery needs the identity.
 permanently half-finished. If this deployment predates the infrastructure
 build, the first nightly pass will purge a backlog; `studium ops nightly
 --dry-run` says how many before it does.
+
+### What an erasure leaves behind, deliberately
+
+Two things outlive the account, and both are answers to "prove this was done
+properly" rather than oversights.
+
+**A `retention_actions` row per purged account** (amendment v1.2.1 §3.2),
+written in the same transaction as the delete. It carries a SHA-256 of the
+user id — not the id, which is the thing being disposed of — the original
+`deleted_at`, the window length, and a reference to the `audit_log` row that
+recorded the request. That reference is resolved *before* the `users` row goes,
+because the FK is `ON DELETE SET NULL` and afterwards the request no longer
+says whose it was.
+
+```sh
+studium ops retention log --limit 20    # includes the erasure_purge rows
+```
+
+**Credentials** (amendment v1.2.1 §3.1). A signed `assessment_pass` or
+`subject_completion` survives, reassigned to the reserved anonymised-learner
+account (`…0002`) and detached from the deleted enrollment. A credential a
+third party can no longer verify is not a credential, and §12.4's endpoint is
+public and unauthenticated — an external verifier holding a copy would simply
+get "no such credential".
+
+The learner's own work does **not** survive: proofs, essays and notebooks go
+with the enrollment. Neither does the hash chain around the retained
+credential, so its manifest names a `prev_sha256` that no longer resolves.
+Verification is unaffected — the credential payload is signed in its own right
+and §12.4 never reads the chain.
+
+Neither reserved account can itself be erased; `erase_user` refuses both.
+Erasing `…0002` would cascade away every credential every erased learner ever
+earned.
+
+### The monthly credential audit
+
+Calendar obligation `portfolio_credential_audit`. Two questions:
+
+```sql
+-- 1. What is retained, and is it only credentials?
+SELECT id, kind, is_credential, created_at
+  FROM portfolio_items
+ WHERE user_id = '00000000-0000-7000-8000-000000000002';
+```
+
+Every row must have `is_credential = TRUE`. A CHECK constraint makes the flag
+agree with `kind`, so a `FALSE` here would mean something wrote to the account
+directly rather than through `erase_user`.
+
+2. Each of them still verifies: `GET /api/portfolio/verify/{item_id}` returns
+   `valid: true`. A retained credential that stopped verifying means the
+   issuing key was dropped from `signing_keys`, which is the one loss §9.1 says
+   nothing restores.
+
+```sh
+studium ops keys list                   # every issuer key, and its status
+studium ops calendar --complete portfolio_credential_audit
+```

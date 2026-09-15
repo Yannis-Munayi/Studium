@@ -16,27 +16,59 @@ short, ordered, and specific about which command to type.
 | [`storage-migration.md`](storage-migration.md) | The volume is filling; move to R2 (§14.3) |
 | [`drill-log.md`](drill-log.md) | Recording a quarterly restore drill (§9.3) |
 | [`scaling.md`](scaling.md) | A scaling trigger fired (§14) |
+| [`content-review.md`](content-review.md) | Classifying a source; the weekly queue triage (ingestion §11) |
+| [`evaluation-regression.md`](evaluation-regression.md) | The weekly golden-dataset run (evaluation §13.2) |
 
 ## The operational calendar
 
 §3: "Rotation is scheduled, not reactive. ... skipping rotation 'because
 nothing's wrong' is how the muscle atrophies."
 
+**The calendar is `backend/content/operational-calendar.yml` and the command
+that reads it is `studium ops calendar`.** It is a file in the repository
+rather than a reminder service so that it survives the operator, ships with the
+deployment, and leaves a git history of who said each obligation was done.
+
+```sh
+studium ops calendar --list-all               # everything, by next_due
+studium ops calendar --due-this-week          # next 7 days, overdue included
+studium ops calendar --due-this-month         # next 30 days
+studium ops calendar --on-event on_source_add # what an event triggers
+studium ops calendar --complete backup_drill  # done today; advances next_due
+studium ops calendar --verify                 # schema, and that runbooks resolve
+```
+
+The date queries **exit non-zero when something is overdue**, so the missing
+piece — something that tells you without being asked — is a cron line rather
+than more code:
+
+```sh
+0 9 * * 1  cd /app && studium ops calendar --due-this-week
+```
+
+`--complete` rewrites two lines and leaves the rest of the file alone. Commit
+the change; that commit is the record.
+
 | Cadence | Task | Where |
 |---|---|---|
 | Daily, 02:00 UTC | Retention pass | automatic, in-process (§12.1) |
 | Daily | Cost trend check | `studium ops check-alerts` (§13.3) |
-| Weekly | Full evaluation regression | evaluation §13.3 |
-| Monthly | Reconcile invoices against `cost-report` | §13.2, §16 Tier 3 |
-| Quarterly | API key rotation | `studium ops secrets rotate` (§6.3) |
+| Weekly | Evaluation regression | [`evaluation-regression.md`](evaluation-regression.md) |
+| Weekly | Review-queue triage | [`content-review.md`](content-review.md) |
+| Monthly | Retained-credential audit | [`retention.md`](retention.md) (amendment §3.1) |
+| Quarterly | API key rotation | [`secrets.md`](secrets.md) (§6.3) |
+| Quarterly | Secret rotation | [`secrets.md`](secrets.md) (§6.3) |
 | Quarterly | Restore drill | [`drill-log.md`](drill-log.md) (§9.3) |
-| Quarterly | Alert-accuracy review | §16 Tier 3 |
 | Annually | Signing key rotation | [`signing-keys.md`](signing-keys.md) (§11.2) |
-| On access revocation | Rotate everything that person could reach, within 48h | §6.4 |
+| On source add | License classification | [`content-review.md`](content-review.md) |
+| On schema downgrade | Downgrade sign-off | [`deploy.md`](deploy.md) (data layer §12.4) |
 
-Nothing in the system reminds you about any of these except the daily one.
-That is a real gap and it is named in `backend/SPEC_DEBT.md` (SD10) rather than
-papered over.
+Three obligations from SD10's original table are **not** in the file yet, and
+that is a gap rather than a decision: monthly invoice reconciliation (§13.2),
+the quarterly alert-accuracy review (§16 Tier 3), and destroying the retired
+private key 90 days after a rotation (§11.2 step 6) — which SD10 calls the most
+forgettable item on the list. Add them with `studium ops calendar --add` once
+their owners are settled.
 
 ## First principles, when a runbook does not cover it
 

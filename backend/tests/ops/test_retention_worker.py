@@ -214,27 +214,60 @@ def test_a_failing_stage_does_not_stop_the_nightly_pass() -> None:
     assert len(result.failures) >= 3
 
 
-def test_the_nightly_pass_runs_the_previously_orphaned_jobs() -> None:
+def test_the_nightly_pass_runs_the_previously_orphaned_jobs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """The finding this module exists to pin.
 
     ``purge_expired_soft_deletes``, ``refresh_decay`` and
     ``check_dangling_chunk_refs`` were each written to run on a schedule and
-    called by nothing but a test. A stage removed from this list is that state
-    returning, and the symptom -- an erasure that never completes -- is not one
-    any other test would notice.
-    """
-    import inspect
+    called by nothing but a test. A stage dropped from ``run_nightly`` is that
+    state returning, and the symptom -- an erasure that never completes -- is
+    not one any other test would notice.
 
-    source = inspect.getsource(nightly)
-    for function in (
+    Asserted by patching the three functions and running the pass, rather than
+    by searching ``nightly``'s source for their names. The source search was
+    the first version of this test and it could not fail: all three names
+    appear in that module's own docstring, which describes the orphaning. It
+    would have gone on passing on the prose after the code it documents was
+    deleted -- the same declared-everywhere, executed-nowhere shape as the bug
+    it is here to catch.
+    """
+    import studium.jobs.cost_rollup
+    import studium.jobs.retention
+    import studium.privacy
+
+    called: list[str] = []
+
+    def _recorder(name: str, returns: object):
+        def _fake(_session: object) -> object:
+            called.append(name)
+            return returns
+
+        return _fake
+
+    # Each stage imports its function inside the function body, so patching the
+    # attribute on the owning module is what the call actually resolves.
+    for module, name, returns in (
+        (studium.privacy, "purge_expired_soft_deletes", 0),
+        (studium.jobs.cost_rollup, "refresh_decay", 0),
+        (studium.jobs.retention, "check_dangling_chunk_refs", []),
+    ):
+        monkeypatch.setattr(module, name, _recorder(name, returns))
+
+    result = nightly.run_nightly(_ExplodingSession())  # type: ignore[arg-type]
+
+    assert called == [
         "purge_expired_soft_deletes",
         "refresh_decay",
         "check_dangling_chunk_refs",
-    ):
-        assert function in source, (
-            f"{function} has no caller again. It is scheduled work with no "
-            f"scheduler, and nothing else in the suite would fail."
-        )
+    ], (
+        "a scheduled job lost its only caller. It is scheduled work with no "
+        "scheduler, and nothing else in the suite would fail."
+    )
+    for stage_name in ("erasure_purge", "mastery_decay", "consistency"):
+        stage = next(s for s in result.stages if s.name == stage_name)
+        assert stage.ok, stage.error
 
 
 def test_batch_ceiling_is_finite_and_reported() -> None:

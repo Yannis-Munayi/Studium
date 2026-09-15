@@ -159,6 +159,137 @@ def test_downgrade_to_base_leaves_no_tables(
         assert types == 0, f"{types} enum types survived downgrade to base"
 
 
+def _seed_a_chain_at_0012(conn) -> dict[str, object]:
+    """A learner with one credential and one work item, on the 0012 schema.
+
+    Written as raw SQL against the columns 0012 actually has, rather than
+    through the ORM: the models describe *head*, and a model-driven insert here
+    would try to write `is_credential` into a table that does not have it yet.
+    """
+    user_id = conn.execute(
+        text(
+            "INSERT INTO users (email, display_name) "
+            "VALUES ('backfill@example.com', 'Backfill') RETURNING id"
+        )
+    ).scalar_one()
+    subject_id = conn.execute(
+        text(
+            "INSERT INTO subjects (slug, title) "
+            "VALUES ('backfill-subject', 'Backfill') RETURNING id"
+        )
+    ).scalar_one()
+    enrollment_id = conn.execute(
+        text(
+            "INSERT INTO learner_subjects (user_id, subject_id, subject_version) "
+            "VALUES (:uid, :sid, 1) RETURNING id"
+        ),
+        {"uid": user_id, "sid": subject_id},
+    ).scalar_one()
+
+    ids = {}
+    for index, kind in enumerate(("proof", "assessment_pass", "subject_completion")):
+        ids[kind] = conn.execute(
+            text(
+                """
+                INSERT INTO portfolio_items
+                    (user_id, learner_subject_id, chain_index, kind, title, body,
+                     content_sha256, signature)
+                VALUES (:uid, :lsid, :idx, CAST(:kind AS portfolio_item_kind),
+                        :kind, '{}', repeat('b', 64), '{}'::jsonb)
+                RETURNING id
+                """
+            ),
+            {"uid": user_id, "lsid": enrollment_id, "idx": index, "kind": kind},
+        ).scalar_one()
+    return ids
+
+
+def test_0013_backfills_is_credential_from_existing_rows(
+    alembic_config: Config, clean_database
+) -> None:
+    """The backfill, run over a table that is not empty.
+
+    Every other test migrates to head before any row exists, so the
+    ``UPDATE ... SET is_credential = TRUE`` never touches anything and the CHECK
+    constraint is validated against nothing. On a real deployment it runs over
+    whatever is already in ``portfolio_items``, and a backfill that missed would
+    leave existing credentials flagged FALSE -- which is to say, deleted by the
+    first erasure that reached them.
+    """
+    command.upgrade(alembic_config, "0012")
+    with clean_database.begin() as conn:
+        ids = _seed_a_chain_at_0012(conn)
+
+    command.upgrade(alembic_config, "0013")
+
+    with clean_database.connect() as conn:
+        flags = dict(
+            conn.execute(
+                text("SELECT kind::text, is_credential FROM portfolio_items")
+            ).all()
+        )
+    assert flags == {
+        "proof": False,
+        "assessment_pass": True,
+        "subject_completion": True,
+    }, ids
+
+
+def test_0013_downgrade_refuses_to_destroy_retained_credentials(
+    alembic_config: Config, clean_database
+) -> None:
+    """The one downgrade in the project that stops rather than proceeding.
+
+    Every other test here runs a downgrade against an empty database, where
+    0013's guard is trivially satisfied and therefore never exercised. A
+    retained credential has no enrollment to be re-attached to -- the
+    ``learner_subjects`` row went with the erasure that detached it -- so
+    restoring ``learner_subject_id NOT NULL`` means deleting it, which is the
+    loss the migration exists to prevent. Data layer §12.4's downgrade sign-off
+    is what resolves that; the migration must not resolve it silently.
+    """
+    command.upgrade(alembic_config, "head")
+
+    with clean_database.begin() as conn:
+        user_id = conn.execute(
+            text(
+                """
+                INSERT INTO users (email, display_name)
+                VALUES ('detached@example.com', 'Anonymized former learner')
+                RETURNING id
+                """
+            )
+        ).scalar_one()
+        conn.execute(
+            text(
+                """
+                INSERT INTO portfolio_items
+                    (user_id, learner_subject_id, chain_index, kind, title, body,
+                     content_sha256, signature, is_credential)
+                VALUES (:uid, NULL, 0, 'assessment_pass', 'Assessment passed',
+                        '{}', repeat('a', 64), '{}'::jsonb, TRUE)
+                """
+            ),
+            {"uid": user_id},
+        )
+
+    with pytest.raises(RuntimeError, match="right-to-erasure"):
+        command.downgrade(alembic_config, "0012")
+
+    # And the refusal left the schema alone rather than half-reversing it.
+    with clean_database.connect() as conn:
+        assert conn.execute(
+            text("SELECT count(*) FROM portfolio_items")
+        ).scalar_one() == 1
+        assert conn.execute(
+            text(
+                "SELECT count(*) FROM information_schema.columns "
+                "WHERE table_name = 'portfolio_items' "
+                "  AND column_name = 'is_credential'"
+            )
+        ).scalar_one() == 1
+
+
 def test_uuid_function_round_trips_through_the_database(
     alembic_config: Config, clean_database
 ) -> None:

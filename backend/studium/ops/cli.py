@@ -22,6 +22,12 @@
 
     studium ops erase-user <user_id> [--reason ...] [--yes] # §12.3
 
+    studium ops calendar --list-all                         # SD10
+    studium ops calendar --due-this-week | --due-this-month
+    studium ops calendar --on-event on_source_add
+    studium ops calendar --complete <name>
+    studium ops calendar --add | --verify
+
 argparse and ``python -m studium.ops.cli``, matching ``studium.ingestion.cli``
 and ``studium.eval.cli``. A third CLI is not a reason to take a dependency the
 first two did without.
@@ -166,6 +172,22 @@ def _build_parser() -> argparse.ArgumentParser:
     erase.add_argument("--reason", default="")
     erase.add_argument("--yes", action="store_true")
     erase.set_defaults(handler=_erase_user)
+
+    cal = kinds.add_parser("calendar", help="SD10: the recurring obligations")
+    cal.add_argument("--file", type=Path, default=None, help="a calendar to read")
+    what = cal.add_mutually_exclusive_group()
+    what.add_argument(
+        "--list-all", action="store_true", help="every obligation, by next_due"
+    )
+    what.add_argument("--due-this-week", action="store_true", help="next 7 days")
+    what.add_argument("--due-this-month", action="store_true", help="next 30 days")
+    what.add_argument(
+        "--on-event", metavar="EVENT", help="what an event triggers, e.g. on_source_add"
+    )
+    what.add_argument("--complete", metavar="NAME", help="done today; advances next_due")
+    what.add_argument("--add", action="store_true", help="interactive: a new obligation")
+    what.add_argument("--verify", action="store_true", help="validate the file")
+    cal.set_defaults(handler=_calendar)
 
     return parser
 
@@ -606,6 +628,121 @@ def _timestamp(raw: str) -> dt.datetime:
             f"credentials are affected."
         )
     return parsed
+
+
+def _calendar(args: argparse.Namespace) -> int:
+    """SD10's keeper.
+
+    **Exit codes carry the answer, as everywhere else in this CLI.** The date
+    queries exit 1 when something is *overdue* -- not merely due -- so the line
+    that closes SD10's remaining gap is a cron entry running
+    ``studium ops calendar --due-this-week`` rather than more code here. A
+    listing exits 0 whatever it contains: it was asked what exists, and it
+    answered.
+    """
+    from . import calendar as cal
+
+    path = args.file
+    today = dt.date.today()
+
+    if args.verify:
+        try:
+            obligations = cal.load(path)
+        except cal.CalendarError as exc:
+            for problem in exc.problems:
+                print(f"  {problem}", file=sys.stderr)
+            print(f"\n{len(exc.problems)} problem(s)", file=sys.stderr)
+            return 1
+        missing = cal.check_runbooks(obligations)
+        for problem in missing:
+            print(f"  {problem}", file=sys.stderr)
+        print(f"{len(obligations)} obligation(s) valid, {len(missing)} bad runbook(s)")
+        return 1 if missing else 0
+
+    if args.complete:
+        updated = cal.complete(args.complete, path=path, today=today)
+        print(f"completed {updated.name}; next due {updated.next_due}")
+        print(cal.render([updated], today=today, title="updated entry"))
+        print("\nCommit the change -- git is the audit trail for this calendar.")
+        return 0
+
+    if args.add:
+        obligation = _calendar_prompt(cal)
+        if obligation is None:
+            return 1
+        cal.append(obligation, path=path)
+        print(f"added {obligation.name}")
+        print("\nCommit the change -- git is the audit trail for this calendar.")
+        return 0
+
+    obligations = cal.load(path)
+    if args.on_event:
+        matched = cal.for_event(obligations, args.on_event)
+        print(cal.render(matched, today=today, title=f"triggered by {args.on_event}"))
+        return 0
+
+    if args.due_this_week:
+        selected, title = cal.due_within(obligations, 7, today=today), "due within 7 days"
+    elif args.due_this_month:
+        selected, title = (
+            cal.due_within(obligations, 30, today=today),
+            "due within 30 days",
+        )
+    else:
+        selected, title = cal.in_order(obligations), "every obligation"
+
+    print(cal.render(selected, today=today, title=title))
+    if args.list_all or not (args.due_this_week or args.due_this_month):
+        return 0
+    return 1 if cal.overdue(selected, today=today) else 0
+
+
+def _calendar_prompt(cal):
+    """Read one obligation from a terminal.
+
+    Refuses a non-interactive stdin rather than reading a blank line for every
+    field and writing an entry of empty strings. A script that wants to add an
+    obligation should append to the YAML, which is the format's whole point.
+    """
+    if not sys.stdin.isatty():
+        print(
+            "--add needs a terminal; edit content/operational-calendar.yml "
+            "directly and run --verify",
+            file=sys.stderr,
+        )
+        return None
+
+    def ask(label: str, *, required: bool = True) -> str:
+        while True:
+            value = input(f"{label}: ").strip()
+            if value or not required:
+                return value
+            print("  required")
+
+    name = ask("name (lower_snake_case)")
+    description = ask("description")
+    cadence = ask(f"cadence {sorted(cal.CADENCES)}")
+    if cadence not in cal.CADENCES:
+        print(f"unknown cadence {cadence!r}", file=sys.stderr)
+        return None
+    next_due = None
+    if cadence not in cal.EVENT_CADENCES:
+        raw = ask("next_due (YYYY-MM-DD)")
+        try:
+            next_due = dt.date.fromisoformat(raw)
+        except ValueError:
+            print(f"{raw!r} is not an ISO date", file=sys.stderr)
+            return None
+    owner = ask("owner")
+    runbook = ask("runbook (path from the repo root)")
+    return cal.Obligation(
+        name=name,
+        description=description,
+        cadence=cadence,
+        owner=owner,
+        runbook=runbook,
+        next_due=next_due,
+    )
 
 
 def _confirm(skip: bool, question: str) -> bool:

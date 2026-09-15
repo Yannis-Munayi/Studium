@@ -290,6 +290,75 @@ DIVERGENCES-INFRASTRUCTURE (N4).
 Additive: two new tables, one new column, six new indexes, one new trigger, one
 revoke. Existing rows are untouched.
 
+## For amendment v1.2.1 (§3.1)
+
+### 0013_credential_retention
+
+**A credential now outlives the learner who earned it.** §3.1: the whole point
+of one is that a third party can verify it long after issuance, and the schema
+did the opposite — `portfolio_items` cascades from `users` and from
+`learner_subjects`, and §10's erasure deletes the enrollment. The first learner
+to earn a credential and then exercise right-to-erasure would have lost it, and
+an external verifier holding a copy would find §12.4's endpoint no longer
+resolves the id. Nothing reported this; the erasure succeeded.
+
+`is_credential` is added **with a CHECK tying it to `kind`**. The
+discriminator already existed — `kind IN ('assessment_pass',
+'subject_completion')`, which is what `verify_item` filters on — so the flag is
+redundant by construction and the CHECK is why it is worth adding anyway:
+erasure has to select the surviving rows in the same transaction that deletes
+everything else the learner owns, and `AND is_credential` cannot be misread the
+way an enum membership test can. The redundancy costs nothing because it cannot
+drift. Adding a third credential kind is then a migration that updates both,
+which is the right amount of friction.
+
+The predicate is written `kind::text IN (...)` rather than with enum literals.
+`ALTER TYPE ... ADD VALUE` cannot be followed by a use of the new value in the
+same transaction, 0011 adds both values, and `env.py` wraps `upgrade head` in
+one transaction — so a fresh database migrating from base runs 0011 and 0013
+together and Postgres refuses. Applying 0013 to an already-migrated database
+succeeds either way, which is why only `test_full_migration_sequence` catches
+it.
+
+**`learner_subject_id` becomes nullable.** The concession, and unavoidable
+rather than chosen: the enrollment is learner-owned data that §10 purges, so a
+retained credential cannot keep pointing at it. Nulling the column is also what
+satisfies the composite enrollment key, which is MATCH SIMPLE — a row with any
+NULL in it needs no referent — so the foreign key itself does not change and
+still cascades every item erasure has not detached first.
+`uq_portfolio_chain` tolerates it: NULLs are distinct, so retained credentials
+keep whatever `chain_index` they had without colliding across learners.
+
+**A reserved anonymised-learner account** (`…0002`, beside 0008's system user
+at `…0001`) owns them afterwards. `user_id` stays NOT NULL: the amendment
+offers a nullable owner as the alternative and recommends against it, because
+that weakens the column for every row in the table to serve the few that
+outlive their owner. `privacy.erase_user` refuses both reserved accounts —
+erasing the anonymised one would cascade away every credential every erased
+learner ever earned.
+
+**What is deliberately not preserved.** The hash chain around the credential
+goes with the learner; it is their work, and keeping it to hold a chain
+together would keep exactly what §10 removes. The retained credential's
+`signature.manifest.prev_sha256` therefore names a row that is gone.
+Verification is unaffected — §12.3 signs the credential payload in its own
+right and §12.4 checks that signature against `signing_keys`, never the chain.
+
+**The downgrade refuses** while any detached credential exists, rather than
+choosing between restoring NOT NULL and deleting them. There is no enrollment
+left to re-attach them to and nothing remembers which one it was, so the
+deletion is a decision for §12.4's downgrade sign-off rather than for the
+migration.
+
+Not part of the migration, but landing with it: `purge_expired_soft_deletes`
+now writes a `retention_actions` row per account purged (amendment §3.2). Every
+ordinary retention policy already wrote one; the single deletion carrying a
+statutory deadline wrote none, so "did the erasure request from user X on date
+Y complete by Y+30" was the one retention question the schema could not answer.
+The row carries a hash of the id rather than the id — the identifier is the
+thing being disposed of — plus the `audit_log` reference, resolved before the
+`users` row goes and takes the link with it.
+
 ## Initial build (against spec v1.0)
 
 ### 0001_initial_schema

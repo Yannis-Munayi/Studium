@@ -45,7 +45,7 @@ from .operational import (
     RetentionHold,
     UserBudgetCap,
 )
-from .portfolio import PortfolioItem
+from .portfolio import CREDENTIAL_KINDS, PortfolioItem
 from .review import ReviewCard, ReviewEvent
 from .sessions import AgentTrace, LearningSession, SessionTurn
 
@@ -83,6 +83,7 @@ __all__ = [
     "LearnerSubject",
     "LearningSession",
     "MasteryEvent",
+    "CREDENTIAL_KINDS",
     "PortfolioItem",
     "RetrievalCheck",
     "ReviewCard",

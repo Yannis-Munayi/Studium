@@ -22,7 +22,7 @@ export STUDIUM_MIGRATION_TEST_DATABASE_URL ?= $(MIGRATE_URL)
         lint fmt check migrate-draft eval-validate eval-sync eval-paid eval-gate \
         ingest-report eval-report \
         infra-report ops-secrets ops-render ops-alerts ops-cost ops-nightly ops-verify \
-        ops-smoke deploy-backend deploy-web
+        ops-smoke ops-calendar deploy-backend deploy-web
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -147,6 +147,9 @@ ops-verify: ## §9.2: is this database one the backend could serve from
 
 ops-smoke: ## §10.3: post-deploy verification. `make ops-smoke url=https://...`
 	$(PY) -m studium.ops.cli ops smoke-test $(if $(url),--base-url $(url),)
+
+ops-calendar: ## SD10: recurring obligations. Exits non-zero on anything overdue.
+	$(PY) -m studium.ops.cli ops calendar --due-this-week
 
 ops-nightly: ## §12.1: the retention pass and the other scheduled jobs, now
 	@echo "This deletes rows past their retention window and hard-deletes"

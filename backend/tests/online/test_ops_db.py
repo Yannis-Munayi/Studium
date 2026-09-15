@@ -338,6 +338,64 @@ def test_the_nightly_pass_hard_deletes_an_expired_soft_delete(db: Session) -> No
     assert "1 account" in stage.detail
 
 
+def test_the_nightly_mastery_stage_refreshes_a_stale_decayed_value(
+    db: Session,
+) -> None:
+    """``refresh_decay``'s effect, not just that it runs without raising.
+
+    Every other nightly test runs this stage against an empty
+    ``concept_mastery``, where a no-op and a correct UPDATE are the same
+    observation: zero rows, no error. The orphaning symptom was a *stale
+    column*, so the assertion has to be that a stale value moves.
+
+    Gating is deliberately unaffected -- ``graph.unlock_status`` computes decay
+    in SQL -- which is why nobody noticed the column was frozen. What reads it
+    is sorting and reporting.
+    """
+    subject_id, concept_id = _seed_curriculum(db)
+    user_id = _user(db, f"decay-{uuid.uuid4().hex[:8]}@example.com")
+    enrollment_id = db.execute(
+        sql(
+            """
+            INSERT INTO learner_subjects (user_id, subject_id, subject_version)
+            VALUES (:uid, :sid, 1) RETURNING id
+            """
+        ),
+        {"uid": user_id, "sid": subject_id},
+    ).scalar_one()
+
+    # p_known 0.9, last touched a year ago, and a decayed column still holding
+    # the undecayed value -- exactly the state a year with no scheduler leaves.
+    mastery_id = db.execute(
+        sql(
+            """
+            INSERT INTO concept_mastery (learner_subject_id, concept_id, p_known,
+                                         p_known_decayed, last_evidence_at)
+            VALUES (:lsid, :cid, 0.9, 0.9, NOW() - INTERVAL '365 days')
+            RETURNING id
+            """
+        ),
+        {"lsid": enrollment_id, "cid": concept_id},
+    ).scalar_one()
+    db.flush()
+
+    result = nightly.run_nightly(db)
+
+    stage = next(s for s in result.stages if s.name == "mastery_decay")
+    assert stage.ok, stage.error
+
+    refreshed = db.execute(
+        sql("SELECT p_known, p_known_decayed FROM concept_mastery WHERE id = :id"),
+        {"id": mastery_id},
+    ).one()
+    assert refreshed.p_known == pytest.approx(0.9), "the raw posterior is not decay's to touch"
+    assert refreshed.p_known_decayed < 0.9, (
+        "a year past the last evidence and the decayed value never moved -- "
+        "the stage ran but the column is still what the learner's last write left"
+    )
+    assert 0.0 <= refreshed.p_known_decayed <= 1.0
+
+
 def test_the_nightly_pass_runs_every_stage(db: Session) -> None:
     result = nightly.run_nightly(db)
     assert [s.name for s in result.stages] == [

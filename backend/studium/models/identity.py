@@ -28,6 +28,18 @@ from .base import (
 SYSTEM_USER_ID = uuid.UUID("00000000-0000-7000-8000-000000000001")
 SYSTEM_USER_EMAIL = "system@studium.internal"
 
+#: Owner of record for a credential whose learner has been erased (amendment
+#: v1.2.1 §3.1). ``portfolio_items.user_id`` is NOT NULL and cascades, so a
+#: credential that must outlive its learner needs somewhere to point; this is
+#: it. Reserved in the same block as the system user and seeded by migration
+#: 0013. Neither account may be erased -- ``privacy.erase_user`` refuses both.
+ANONYMIZED_LEARNER_ID = uuid.UUID("00000000-0000-7000-8000-000000000002")
+ANONYMIZED_LEARNER_EMAIL = "anonymized-learner@studium.internal"
+
+#: The accounts that exist for the system's own bookkeeping rather than for a
+#: person. Nothing that acts on "a learner" should act on one of these.
+RESERVED_USER_IDS = frozenset({SYSTEM_USER_ID, ANONYMIZED_LEARNER_ID})
+
 
 class User(Base):
     __tablename__ = "users"

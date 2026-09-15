@@ -534,6 +534,17 @@ naturally in its scope. See DIVERGENCES-EVALUATION (E13).
 
 ## SD10 — the operational calendar has no keeper
 
+**Status:** resolved in mechanism, 6 September 2026, by option 2 below —
+narrowed. `studium ops calendar` reads
+`backend/content/operational-calendar.yml`, which now holds nine obligations
+with owners, cadences and runbooks. The entry stays here, rather than being
+deleted, because **three of the obligations in the table below are still not in
+the file** — see "What was actually built" at the end.
+
+The original entry, unedited:
+
+---
+
 **Status:** open. Found building subsystem 7. Needs a decision, not code.
 
 The infrastructure spec puts nine recurring obligations on the operator, and
@@ -598,6 +609,60 @@ joins" is months or years away, which is not a question this build can answer.
 **Trigger to close:** the next revision of the infrastructure spec, or the
 first missed rotation — whichever comes first. If it is the second, the entry
 will have earned its place.
+
+---
+
+### What was actually built
+
+Option 2, with the durable record in a YAML file rather than the "small table
+nobody has specified". The reasoning for that swap is in
+`studium/ops/calendar.py`; the short version is that a file survives the
+operator, ships with the deployment, and gives `git log -p` as the record of
+who said each obligation was done — which a table would need an actor column
+and a reason column to match.
+
+```sh
+studium ops calendar --list-all | --due-this-week | --due-this-month
+studium ops calendar --on-event on_source_add
+studium ops calendar --complete <name> | --add | --verify
+```
+
+`--complete` rewrites two lines and leaves the rest of the file byte for byte,
+so the diff is readable. `--verify` checks the schema *and* that every
+`runbook` still resolves to a file — a calendar of dead links is this entry's
+failure wearing a different hat.
+
+**The gap that keeps this entry open.** The date queries exit non-zero when
+something is overdue, which is what lets the last step be a cron line. Nothing
+runs that cron line yet. Until something does, this is still a report you have
+to remember to ask for — better than memory, short of an alert.
+
+**Three obligations from the table above are not in the file**, and their
+absence is a gap rather than a decision:
+
+| Missing | Why it matters |
+|---|---|
+| Monthly invoice reconciliation (§13.2) | One of the two SD10 named as having no durable record at all |
+| Quarterly alert-accuracy review (§16 Tier 3) | The other one |
+| Destroy the retired private key, +90 days after a rotation (§11.2 step 6) | **SD10 calls this the single most forgettable item on the list**, and the one whose omission leaves a usable signing key in a password manager indefinitely |
+
+The third is the one to add first. It is not in the file because it is not a
+recurring cadence — it is a one-off follow-up scheduled by an event a year
+earlier, which the current vocabulary (`daily`…`annually`, plus the named
+event cadences) has no way to express. Either the vocabulary grows a
+"+N days after event X" form, or `signing_key_rotation`'s runbook has to make
+the 90-day destruction a step of the rotation itself so it is never a separate
+thing to remember. The second is smaller and probably right.
+
+The nine that *are* in the file are the nine named in the 4 September 2026
+developer work order, which is not the same list as the table above — it adds
+the credential audit from amendment v1.2.1 and the review-queue triage from
+ingestion §11.2, and drops the three named here. Reconciling the two lists is
+the next revision's job, not this build's.
+
+**Trigger to close fully:** all nine of the original table's rows represented
+in the file, and something scheduled that runs `--due-this-week` without being
+asked.
 
 ---
 
